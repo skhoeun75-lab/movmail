@@ -206,7 +206,17 @@
       .avatar{
         width:42px;height:42px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);
         display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;text-transform:uppercase;
+        overflow:hidden;flex:none;
       }
+      .avatar img{width:100%;height:100%;object-fit:cover;display:block;background:#fff}
+      .msg-quick{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:0 20px 12px 74px}
+      .code-chip{display:inline-flex;align-items:center;gap:8px;background:var(--accent-soft);border:1px dashed var(--accent);border-radius:8px;padding:5px 6px 5px 12px;font-weight:700}
+      .code-chip .code{font-size:18px;letter-spacing:2px;color:var(--accent-ink)}
+      .chip-copy{background:var(--accent);color:#fff;border:none;border-radius:7px;padding:6px 12px;font-weight:700;min-height:32px;font-size:13.5px;cursor:pointer}
+      .chip-copy:hover{background:var(--accent-strong)}
+      .confirm-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--accent);color:#fff;text-decoration:none;border-radius:8px;padding:8px 14px;font-weight:700;font-size:14px;min-height:36px;border:none;cursor:pointer}
+      .confirm-btn:hover{background:var(--accent-strong)}
+      @media (max-width:560px){ .msg-quick{padding-left:20px} }
       .msg-main{min-width:0}
       .msg-from{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:8px}
       .unread-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:none}
@@ -287,7 +297,12 @@
         border-radius:16px 16px 0 0;display:flex;flex-direction:column;overflow:hidden;
       }
       @media (min-width:640px){ .reader{border-radius:16px} }
-      .reader-head{padding:18px 22px 12px;border-bottom:1px solid var(--border)}
+      .reader-head{padding:18px 22px 12px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:flex-start}
+      .reader-avatar{margin-top:2px}
+      .reader-head .reader-main{flex:1;min-width:0}
+      .confirm-strip{display:none;margin:14px 22px 0}
+      .confirm-strip.show{display:block}
+      .confirm-strip .confirm-btn{width:100%;padding:12px 16px;font-size:16px}
       .reader-head h3{margin:0 42px 8px 0;font-size:18px;line-height:1.45}
       .reader-meta{font-size:13.5px;color:var(--muted);display:grid;gap:2px}
       .reader-meta b{color:var(--ink)}
@@ -519,12 +534,18 @@
         <div class="reader-wrap">
           <button class="reader-close" id="readerClose" aria-label="បិទ" data-i18n-aria="readerCloseLabel">✕</button>
           <div class="reader-head">
-            <h3 id="readerSubject">(គ្មានចំណងជើង)</h3>
-            <div class="reader-meta">
-              <span><span data-i18n="readerFromLabel">ពី៖</span> <b id="readerFrom">—</b></span>
-              <span><span data-i18n="readerToLabel">ទៅ៖</span> <b id="readerTo">—</b></span>
-              <span><span data-i18n="readerDateLabel">កាលបរិច្ឆេទ៖</span> <b id="readerDate">—</b></span>
+            <span class="avatar reader-avatar" id="readerAvatar">?</span>
+            <div class="reader-main">
+              <h3 id="readerSubject">(គ្មានចំណងជើង)</h3>
+              <div class="reader-meta">
+                <span><span data-i18n="readerFromLabel">ពី៖</span> <b id="readerFrom">—</b></span>
+                <span><span data-i18n="readerToLabel">ទៅ៖</span> <b id="readerTo">—</b></span>
+                <span><span data-i18n="readerDateLabel">កាលបរិច្ឆេទ៖</span> <b id="readerDate">—</b></span>
+              </div>
             </div>
+          </div>
+          <div class="confirm-strip" id="confirmStrip">
+            <a class="confirm-btn" id="readerConfirmBtn" href="#" target="_blank" rel="noopener" data-i18n="confirmEmail">បញ្ជាក់អ៊ីមែល</a>
           </div>
           <div class="otp-strip" id="otpStrip">
             <span class="lbl" data-i18n="otpLabel">លេខកូដរបស់អ្នក៖</span>
@@ -624,6 +645,8 @@ var I18N = {
     "readerLabel": "អានសារ",
     "otpLabel": "លេខកូដរបស់អ្នក៖",
     "otpCopy": "ចម្លងលេខកូដ",
+    "copyCode": "ចម្លង",
+    "confirmEmail": "បញ្ជាក់អ៊ីមែល",
     "noSubject": "(គ្មានចំណងជើង)",
     "readerLoading": "កំពុងផ្ទុកសារ…",
     "readerLoadFailed": "ផ្ទុកសារមិនបានសម្រេច។ សូមព្យាយាមម្តងទៀត។",
@@ -719,6 +742,8 @@ var I18N = {
     "readerLabel": "Read message",
     "otpLabel": "Your code:",
     "otpCopy": "Copy code",
+    "copyCode": "Copy",
+    "confirmEmail": "Confirm Email",
     "noSubject": "(No subject)",
     "readerLoading": "Loading message…",
     "readerLoadFailed": "Failed to load the message. Please try again.",
@@ -861,8 +886,8 @@ var I18N = {
           });
         }
         function relTime(iso){
-          var t = new Date(iso).getTime(), diff = Date.now() - t;
-          if (isNaN(t)) return "";
+          var ts = new Date(iso).getTime(), diff = Date.now() - ts;
+          if (isNaN(ts)) return "";
           var m = Math.floor(diff/60000);
           if (m < 1) return t("relJustNow");
           if (m < 60) return (lang === "en") ? (m === 1 ? "1 minute ago" : m + " minutes ago") : t("relMinutes", {n: m});
@@ -983,6 +1008,100 @@ var I18N = {
           createAccount();
         }
 
+        /* ---------- sender logo ---------- */
+        function senderDomain(addr){
+          var parts = String(addr || "").split("@");
+          return parts.length === 2 ? parts[1].toLowerCase().trim() : "";
+        }
+        function logoUrl(domain){
+          return "https://www.google.com/s2/favicons?domain=" + encodeURIComponent(domain) + "&sz=128";
+        }
+        function makeAvatar(fromAddr, fromName){
+          var av = document.createElement("span");
+          av.className = "avatar";
+          var letter = ((fromName || "").trim()[0] || "?");
+          var domain = senderDomain(fromAddr);
+          if (!domain){ av.textContent = letter; return av; }
+          var img = document.createElement("img");
+          img.src = logoUrl(domain);
+          img.alt = "";
+          img.loading = "lazy";
+          img.referrerPolicy = "no-referrer";
+          img.onerror = function(){ img.remove(); av.textContent = letter; };
+          av.appendChild(img);
+          return av;
+        }
+
+        /* ---------- confirm-link extraction ---------- */
+        function extractConfirmUrl(detail, subject){
+          if (!detail) return "";
+          var htmlArr = detail.html || [];
+          var html = Array.isArray(htmlArr) ? htmlArr.join("\n") : String(htmlArr || "");
+          var text = detail.text || "";
+          var candidates = [];
+          function score(href, linkText){
+            var s = ((href || "") + " " + (linkText || "")).toLowerCase();
+            if (!/confirm|verify|activate/.test(s)) return -1;
+            var sc = 0;
+            var lt = (linkText || "").toLowerCase();
+            if (/confirm/.test(lt)) sc += 3;
+            if (/verify/.test(lt)) sc += 3;
+            if (/activate/.test(lt)) sc += 2;
+            var h = (href || "").toLowerCase();
+            if (/confirm-email|email-confirm|confirm_email/.test(h)) sc += 2;
+            if (/confirm/.test(h)) sc += 1;
+            if (/verify/.test(h)) sc += 1;
+            return sc;
+          }
+          function addCandidate(href, linkText){
+            if (!href) return;
+            href = String(href).trim();
+            if (!/^https?:\/\//i.test(href)) return;
+            candidates.push({ href: href, score: score(href, linkText || "") });
+          }
+          if (html){
+            var parsed = false;
+            try {
+              var doc = new DOMParser().parseFromString(html, "text/html");
+              var links = doc.querySelectorAll("a[href]");
+              for (var i = 0; i < links.length; i++) addCandidate(links[i].getAttribute("href"), links[i].textContent || "");
+              parsed = true;
+            } catch (e) { parsed = false; }
+            if (!parsed){
+              var re = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a\s*>/gi, mm;
+              while ((mm = re.exec(html)) !== null) addCandidate(mm[1], mm[2].replace(/<[^>]+>/g, ""));
+            }
+          }
+          var urlRe = /https?:\/\/[^\s<>"')]+/g, um;
+          var hay = text + " " + (subject || "");
+          while ((um = urlRe.exec(hay)) !== null) addCandidate(um[0].replace(/[.,;]+$/, ""));
+          candidates = candidates.filter(function(c){ return c.score >= 0; });
+          if (!candidates.length) return "";
+          candidates.sort(function(a, b){ return b.score - a.score; });
+          return candidates[0].href;
+        }
+
+        /* ---------- detail enrichment (OTP + confirm link, cached) ---------- */
+        function enrichMessage(m){
+          if (!m || !m.id || m._detailFetched || m._detailFetching) return;
+          if (m._detailNextTry && Date.now() < m._detailNextTry) return;
+          m._detailFetching = true;
+          api("/messages/" + m.id).then(function(detail){
+            m._detailFetching = false;
+            m._detailFetched = true;
+            var text = (detail && detail.text) || "";
+            var otp = extractOtp((m.subject || "") + " " + text);
+            if (otp) m._otp = otp;
+            var url = extractConfirmUrl(detail, m.subject || "");
+            if (url) m._confirmUrl = url;
+            if (otp || url) renderMessages();
+          }).catch(function(){
+            /* quiet: no banner. Allow one retry after 60s, not every poll. */
+            m._detailFetching = false;
+            m._detailNextTry = Date.now() + 60000;
+          });
+        }
+
         /* ---------- messages ---------- */
         function fetchMessages(first){
           if (!state.token || state.checking) return;
@@ -990,8 +1109,20 @@ var I18N = {
           api("/messages?page=1").then(function(data){
             var msgs = memberList(data);
             var hadNew = msgs.length > state.messages.length;
+            var oldById = {};
+            state.messages.forEach(function(old){ if (old && old.id) oldById[old.id] = old; });
+            msgs.forEach(function(nw){
+              var old = oldById[nw.id];
+              if (!old) return;
+              if (old.seen) nw.seen = true;
+              if (old._otp) nw._otp = old._otp;
+              if (old._confirmUrl) nw._confirmUrl = old._confirmUrl;
+              if (old._detailFetched) nw._detailFetched = true;
+              if (old._detailNextTry) nw._detailNextTry = old._detailNextTry;
+            });
             state.messages = msgs;
             renderMessages();
+            state.messages.slice(0, 10).forEach(enrichMessage);
             if (!first && hadNew) showToast(t("toastNewMsg"));
           }).catch(function(){
             /* keep polling quietly */
@@ -1018,11 +1149,9 @@ var I18N = {
             btn.className = "msg-btn";
             btn.type = "button";
 
-            var av = document.createElement("span");
-            av.className = "avatar";
             var fromAddr = (m.from && (m.from.address || "")) || "?";
             var fromName = (m.from && (m.from.name || "")) || fromAddr;
-            av.textContent = (fromName.trim()[0] || "?");
+            var av = makeAvatar(fromAddr, fromName);
 
             var main = document.createElement("span");
             main.className = "msg-main";
@@ -1050,6 +1179,40 @@ var I18N = {
             btn.appendChild(av); btn.appendChild(main); btn.appendChild(time);
             btn.addEventListener("click", function(){ openMessage(m); });
             li.appendChild(btn);
+            if (m._otp || m._confirmUrl){
+              var quick = document.createElement("div");
+              quick.className = "msg-quick";
+              if (m._otp){
+                var chip = document.createElement("span");
+                chip.className = "code-chip";
+                var codeEl = document.createElement("span");
+                codeEl.className = "code mono";
+                codeEl.textContent = m._otp;
+                var copyBtn = document.createElement("button");
+                copyBtn.type = "button";
+                copyBtn.className = "chip-copy";
+                copyBtn.textContent = t("copyCode");
+                copyBtn.addEventListener("click", function(e){
+                  e.stopPropagation();
+                  e.preventDefault();
+                  copyText(m._otp, t("toastCopiedCode"));
+                });
+                chip.appendChild(codeEl);
+                chip.appendChild(copyBtn);
+                quick.appendChild(chip);
+              }
+              if (m._confirmUrl){
+                var confirmLink = document.createElement("a");
+                confirmLink.className = "confirm-btn";
+                confirmLink.href = m._confirmUrl;
+                confirmLink.target = "_blank";
+                confirmLink.rel = "noopener";
+                confirmLink.textContent = t("confirmEmail");
+                confirmLink.addEventListener("click", function(e){ e.stopPropagation(); });
+                quick.appendChild(confirmLink);
+              }
+              li.appendChild(quick);
+            }
             msgList.appendChild(li);
           });
         }
@@ -1067,12 +1230,26 @@ var I18N = {
           overlay.classList.add("open");
           document.body.style.overflow = "hidden";
           $("readerSubject").textContent = m.subject || t("noSubject");
+          var readerAvOld = $("readerAvatar");
+          if (readerAvOld){
+            var readerAv = makeAvatar((m.from && m.from.address) || "", (m.from && (m.from.name || m.from.address)) || "");
+            readerAv.id = "readerAvatar";
+            readerAvOld.parentNode.replaceChild(readerAv, readerAvOld);
+          }
           $("readerFrom").textContent = (m.from ? ((m.from.name ? m.from.name + " <" : "") + (m.from.address || "") + (m.from.name ? ">" : "")) : "—");
           $("readerTo").textContent = state.address;
           $("readerDate").textContent = fullDate(m.createdAt);
           $("readerBody").innerHTML = '<p style="padding:16px 22px;color:var(--muted)">' + t("readerLoading") + '</p>';
           $("otpStrip").classList.remove("show");
           currentOtp = "";
+          var confirmStrip = $("confirmStrip"), readerConfirmBtn = $("readerConfirmBtn");
+          if (m._confirmUrl && confirmStrip && readerConfirmBtn){
+            readerConfirmBtn.href = m._confirmUrl;
+            readerConfirmBtn.textContent = t("confirmEmail");
+            confirmStrip.classList.add("show");
+          } else if (confirmStrip){
+            confirmStrip.classList.remove("show");
+          }
 
           api("/messages/" + m.id).then(function(detail){
             m.seen = true; renderMessages();
@@ -1084,8 +1261,15 @@ var I18N = {
             var otp = extractOtp((m.subject || "") + " " + text);
             if (otp){
               currentOtp = otp;
+              m._otp = otp;
               $("otpCode").textContent = otp;
               $("otpStrip").classList.add("show");
+            }
+            var confirmUrl = extractConfirmUrl(detail, m.subject || "");
+            if (confirmUrl){
+              m._confirmUrl = confirmUrl;
+              var cs = $("confirmStrip"), rb = $("readerConfirmBtn");
+              if (cs && rb){ rb.href = confirmUrl; rb.textContent = t("confirmEmail"); cs.classList.add("show"); }
             }
             if (html){
               var frame = document.createElement("iframe");
