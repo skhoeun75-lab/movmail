@@ -645,6 +645,14 @@
            instead of retrying a dead base first. */
         var API_BASES = [PROXY, PROXY2, DIRECT];
         var apiBaseIdx = 0;
+        /* Fallback domain list, used only when GET /domains cannot be
+           fetched from any base (429/503/network — Mail.tm rate-limiting
+           the shared proxy IPs). euploading.com is the only domain
+           Mail.tm has served for this site, verified repeatedly, so
+           generation can proceed at once instead of waiting on the
+           domain list. The live list is always preferred when it
+           loads. */
+        var FALLBACK_DOMAINS = [{ "domain": "euploading.com", "isActive": true }];
         var POLL_SECONDS = 20;
 
         /* ---------- Language (EN / ខ្មែរ, one language at a time) ---------- */
@@ -1086,7 +1094,17 @@ var I18N = {
           countdownText.textContent = "";
           setBusy(true);
 
-          api("/domains").then(function(data){
+          api("/domains").catch(function(err){
+            /* The domain list could not be fetched from any base
+               (api() already tried primary, backup and direct). If
+               Mail.tm is rate-limiting it (429/503/network), do not
+               wait on it — fall back to the known-good domain and
+               proceed to account creation at once. Non-retryable
+               errors are rethrown for the normal retry handling. */
+            var retryable = !err || !err.status || err.status === 429 || err.status === 503 || err.status >= 500;
+            if (!retryable) throw err;
+            return FALLBACK_DOMAINS;
+          }).then(function(data){
             var domains = memberList(data).filter(function(d){ return d.isActive && !d.isPrivate; });
             if (!domains.length) throw new Error("no domain");
             var domain = domains[Math.floor(Math.random()*domains.length)].domain;
