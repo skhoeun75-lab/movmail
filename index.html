@@ -11,6 +11,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script>try{var __l=localStorage.getItem("movmail-lang");if(__l==="en"||__l==="km"){document.documentElement.lang=__l==="en"?"en":"km";window.__MOVMAIL_LANG=__l;}}catch(e){}</script>
     <style>
       :root{
         --bg:#f3f5f4;
@@ -93,6 +94,11 @@
         padding:10px 12px;border-radius:8px;min-height:44px;display:flex;align-items:center;white-space:nowrap;
       }
       nav a:hover{background:rgba(255,255,255,.08);color:#fff}
+      .lang-switch{display:flex;gap:4px;margin-left:10px;flex:none}
+      .lang-btn{min-height:36px;padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#cfe0d7;font-weight:700;font-size:13.5px;cursor:pointer}
+      .lang-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+      .lang-btn:hover{color:#fff}
+      @media (max-width:560px){ .lang-switch{margin-left:4px} .lang-btn{padding:6px 8px} }
       @media (max-width:560px){ nav a{padding:10px 8px;font-size:13.5px} .brand-sub{display:none} }
 
       main{max-width:1020px;margin:0 auto;padding:26px 16px 56px}
@@ -323,68 +329,68 @@
           </span>
           <span>
             <span class="brand-name">Mov<em>Mail</em>.com</span>
-            <span class="brand-sub">អ៊ីមែលបណ្តោះអាសន្ន ឥតគិតថ្លៃ</span>
+            <span class="brand-sub" data-i18n="brandSub">អ៊ីមែលបណ្តោះអាសន្ន ឥតគិតថ្លៃ</span>
           </span>
         </a>
         <nav>
-          <a href="#inbox">ប្រអប់សារ</a>
-          <a href="#how">របៀបប្រើ</a>
-          <a href="#faq">សំណួរ</a>
+          <a href="#inbox" data-i18n="navInbox">ប្រអប់សារ</a>
+          <a href="#how" data-i18n="navHow">របៀបប្រើ</a>
+          <a href="#faq" data-i18n="navFaq">សំណួរ</a>
         </nav>
+        <div class="lang-switch" role="group" aria-label="Language / ភាសា">
+          <button type="button" class="lang-btn active" id="langKm" aria-pressed="true">ខ្មែរ</button>
+          <button type="button" class="lang-btn" id="langEn" aria-pressed="false">EN</button>
+        </div>
       </div>
     </header>
 
     <main>
       <!-- ===== Email address card ===== -->
       <div class="mail-card">
-        <h1>អ៊ីមែលបណ្តោះអាសន្នរបស់អ្នក
-          <span class="en">Your Temporary Email Address</span>
-        </h1>
+        <h1 data-i18n="cardTitle">អ៊ីមែលបណ្តោះអាសន្នរបស់អ្នក</h1>
 
         <div class="addr-box">
           <span class="addr-text mono loading" id="addrText">កំពុងបង្កើតអ៊ីមែល…</span>
         </div>
 
         <div class="actions">
-          <button class="btn primary" id="generateBtn">
-            បង្កើតអ៊ីមែល / Generate Email
-          </button>
+          <button class="btn primary" id="generateBtn" data-i18n="generate">បង្កើតអ៊ីមែល</button>
           <button class="btn primary" id="copyBtn" disabled>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>
-            ចម្លងអ៊ីមែល
+            <span data-i18n="copy">ចម្លងអ៊ីមែល</span>
           </button>
           <button class="btn" id="qrBtn" disabled>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm13-2h3v3h-3v-3zm-5 0h3v3h-3v-3zm5 5h3v3h-3v-3zm-5 0h3v3h-3v-3z"/></svg>
-            QR Code
+            <span data-i18n="qr">QR Code</span>
           </button>
           <button class="btn" id="refreshBtn" disabled>
             <svg viewBox="0 0 24 24" fill="currentColor" id="refreshIcon"><path d="M17.65 6.35A8 8 0 1 0 19.73 14h-2.08a6 6 0 1 1-1.41-6.65L13 11h7V4l-2.35 2.35z"/></svg>
-            ធ្វើឱ្យស្រស់
+            <span data-i18n="refresh">ធ្វើឱ្យស្រស់</span>
           </button>
           <button class="btn" id="changeBtn" disabled>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V1L7 6l5 5V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></svg>
-            ប្តូរអ៊ីមែលថ្មី
+            <span data-i18n="change">ប្តូរអ៊ីមែលថ្មី</span>
           </button>
           <button class="btn danger" id="deleteBtn" disabled>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-            លុប
+            <span data-i18n="delete">លុប</span>
           </button>
         </div>
 
         <div class="qr-panel" id="qrPanel">
           <div class="qr-holder" id="qrHolder"></div>
-          <p>ស្កេនដើម្បីយកអ៊ីមែលនេះទៅប្រើលើទូរស័ព្ទ</p>
+          <p data-i18n="qrCaption">ស្កេនដើម្បីយកអ៊ីមែលនេះទៅប្រើលើទូរស័ព្ទ</p>
         </div>
 
         <div class="error-banner" id="errorBanner" role="alert">
           <span id="errorText">មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេអ៊ីមែលបានទេ។</span>
-          <button id="retryBtn">ព្យាយាមម្តងទៀត</button>
+          <button id="retryBtn" data-i18n="retry">ព្យាយាមម្តងទៀត</button>
         </div>
 
         <div class="status-row" aria-live="polite">
-          <span><span class="live-dot" aria-hidden="true"></span><span id="statusText">កំពុងភ្ជាប់…</span></span>
+          <span><span class="live-dot" aria-hidden="true"></span><span id="statusText" data-i18n="statusConnectingShort">កំពុងភ្ជាប់…</span></span>
           <span id="countdownText"></span>
-          <span id="expiryText">អ៊ីមែលនេះដំណើរការភ្លាមៗ មិនបាច់ចុះឈ្មោះ</span>
+          <span id="expiryText" data-i18n="expiry">អ៊ីមែលនេះដំណើរការភ្លាមៗ មិនបាច់ចុះឈ្មោះ</span>
         </div>
       </div>
 
@@ -393,16 +399,16 @@
         <div class="inbox-head">
           <h2>
             <svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
-            ប្រអប់សារ <span style="color:var(--faint);font-weight:600;font-size:13px;letter-spacing:1px">INBOX</span>
+            <span data-i18n="inboxTitle">ប្រអប់សារ</span> <span style="color:var(--faint);font-weight:600;font-size:13px;letter-spacing:1px">INBOX</span>
           </h2>
           <span class="count-badge" id="countBadge">0</span>
           <span class="spacer"></span>
-          <button class="icon-btn" id="inboxRefreshBtn" aria-label="ធ្វើឱ្យប្រអប់សារស្រស់" disabled>
+          <button class="icon-btn" id="inboxRefreshBtn" aria-label="ធ្វើឱ្យប្រអប់សារស្រស់" data-i18n-aria="inboxRefreshLabel" disabled>
             <svg viewBox="0 0 24 24" fill="currentColor" id="inboxRefreshIcon"><path d="M17.65 6.35A8 8 0 1 0 19.73 14h-2.08a6 6 0 1 1-1.41-6.65L13 11h7V4l-2.35 2.35z"/></svg>
           </button>
         </div>
         <div class="waiting-bar" id="waitingBar"><i></i></div>
-        <div class="col-head" aria-hidden="true"><span>អ្នកផ្ញើ / ចំណងជើង</span><span>ពេលវេលា</span></div>
+        <div class="col-head" aria-hidden="true"><span data-i18n="colFrom">អ្នកផ្ញើ / ចំណងជើង</span><span data-i18n="colTime">ពេលវេលា</span></div>
         <ul class="msg-list" id="msgList"></ul>
         <div class="empty-state" id="emptyState">
           <svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="m3 7 9 6 9-6" stroke-linejoin="round"/></svg>
@@ -413,28 +419,28 @@
 
       <!-- ===== How to use ===== -->
       <section class="block" id="how">
-        <h2>របៀបប្រើប្រាស់</h2>
-        <p class="lead">ប្រើអ៊ីមែលបណ្តោះអាសន្នដើម្បីទទួលលេខកូដបញ្ជាក់ (OTP) ដោយមិនបាច់បង្ហាញអ៊ីមែលពិតរបស់អ្នក។</p>
+        <h2 data-i18n="howTitle">របៀបប្រើប្រាស់</h2>
+        <p class="lead" data-i18n="howLead">ប្រើអ៊ីមែលបណ្តោះអាសន្នដើម្បីទទួលលេខកូដបញ្ជាក់ (OTP) ដោយមិនបាច់បង្ហាញអ៊ីមែលពិតរបស់អ្នក។</p>
         <div class="steps">
           <div class="step">
             <div class="step-num">1</div>
-            <h3>ចម្លងអ៊ីមែល</h3>
-            <p>ចុចប៊ូតុង «បង្កើតអ៊ីមែល» នៅខាងលើដើម្បីបង្កើតអាសយដ្ឋានថ្មី រួចចុច «ចម្លងអ៊ីមែល» ដើម្បីយកទៅប្រើ។</p>
+            <h3 data-i18n="step1Title">ចម្លងអ៊ីមែល</h3>
+            <p data-i18n-html="step1Text">ចុចប៊ូតុង «បង្កើតអ៊ីមែល» នៅខាងលើដើម្បីបង្កើតអាសយដ្ឋានថ្មី រួចចុច «ចម្លងអ៊ីមែល» ដើម្បីយកទៅប្រើ។</p>
           </div>
           <div class="step">
             <div class="step-num">2</div>
-            <h3>យកទៅចុះឈ្មោះ</h3>
-            <p>បិទភ្ជាប់អ៊ីមែលនេះទៅក្នុងគេហទំព័រ ឬកម្មវិធីដែលអ្នកចង់សាកល្បង រួចស្នើឱ្យគេផ្ញើលេខកូដ។</p>
+            <h3 data-i18n="step2Title">យកទៅចុះឈ្មោះ</h3>
+            <p data-i18n-html="step2Text">បិទភ្ជាប់អ៊ីមែលនេះទៅក្នុងគេហទំព័រ ឬកម្មវិធីដែលអ្នកចង់សាកល្បង រួចស្នើឱ្យគេផ្ញើលេខកូដ។</p>
           </div>
           <div class="step">
             <div class="step-num">3</div>
-            <h3>រង់ចាំសារចូល</h3>
-            <p>ទុកទំព័រនេះចំហរ។ ប្រអប់សារធ្វើបច្ចុប្បន្នភាពរៀងរាល់ ១០ វិនាទី — សារថ្មីនឹងលេចឡើងដោយខ្លួនឯង។</p>
+            <h3 data-i18n="step3Title">រង់ចាំសារចូល</h3>
+            <p data-i18n-html="step3Text">ទុកទំព័រនេះចំហរ។ ប្រអប់សារធ្វើបច្ចុប្បន្នភាពរៀងរាល់ ១០ វិនាទី — សារថ្មីនឹងលេចឡើងដោយខ្លួនឯង។</p>
           </div>
           <div class="step">
             <div class="step-num">4</div>
-            <h3>បើកសារ យកលេខកូដ</h3>
-            <p>ចុចលើសារដើម្បីអាន។ បើមានលេខកូដ OTP ប្រព័ន្ធនឹងបង្ហាញវាធំៗឲ្យអ្នកចម្លងបានភ្លាម។</p>
+            <h3 data-i18n="step4Title">បើកសារ យកលេខកូដ</h3>
+            <p data-i18n-html="step4Text">ចុចលើសារដើម្បីអាន។ បើមានលេខកូដ OTP ប្រព័ន្ធនឹងបង្ហាញវាធំៗឲ្យអ្នកចម្លងបានភ្លាម។</p>
           </div>
         </div>
       </section>
@@ -443,87 +449,87 @@
       <section class="block">
         <div class="split">
           <div class="panel">
-            <h3>ហេតុអ្វីគួរប្រើ MovMail?</h3>
+            <h3 data-i18n="whyTitle">ហេតុអ្វីគួរប្រើ MovMail?</h3>
             <ul class="feat">
               <li>
                 <svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1.5 15.59-4.25-4.25 1.41-1.41 2.84 2.83 6.34-6.34 1.41 1.42-7.75 7.75z"/></svg>
-                <div><b>ការពារឯកជនភាព</b><span>អ៊ីមែលពិតរបស់អ្នកនៅតែជាសម្ងាត់ មិនធ្លាយទៅគេហទំព័រដែលអ្នកមិនទុកចិត្ត។</span></div>
+                <div><b data-i18n="feat1Title">ការពារឯកជនភាព</b><span data-i18n="feat1Text">អ៊ីមែលពិតរបស់អ្នកនៅតែជាសម្ងាត់ មិនធ្លាយទៅគេហទំព័រដែលអ្នកមិនទុកចិត្ត។</span></div>
               </li>
               <li>
                 <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"/></svg>
-                <div><b>គ្មាន Spam</b><span>សារផ្សព្វផ្សាយ និងសាររំខានទាំងអស់ធ្លាក់មកប្រអប់នេះ មិនមែនប្រអប់អ៊ីមែលពិតរបស់អ្នកទេ។</span></div>
+                <div><b data-i18n="feat2Title">គ្មាន Spam</b><span data-i18n="feat2Text">សារផ្សព្វផ្សាយ និងសាររំខានទាំងអស់ធ្លាក់មកប្រអប់នេះ មិនមែនប្រអប់អ៊ីមែលពិតរបស់អ្នកទេ។</span></div>
               </li>
               <li>
                 <svg viewBox="0 0 24 24"><path d="M13 2 4.5 12.5H11L9.5 22 19 10.5h-6.5L13 2z"/></svg>
-                <div><b>លឿន មិនបាច់ចុះឈ្មោះ</b><span>បើកទំព័រភ្លាម បានអ៊ីមែលភ្លាម។ គ្មានឈ្មោះ គ្មានពាក្យសម្ងាត់ គ្មានទម្រង់បំពេញវែងៗ។</span></div>
+                <div><b data-i18n="feat3Title">លឿន មិនបាច់ចុះឈ្មោះ</b><span data-i18n="feat3Text">បើកទំព័រភ្លាម បានអ៊ីមែលភ្លាម។ គ្មានឈ្មោះ គ្មានពាក្យសម្ងាត់ គ្មានទម្រង់បំពេញវែងៗ។</span></div>
               </li>
               <li>
                 <svg viewBox="0 0 24 24"><path d="M18 8h-1V6a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zm-6 9a2.5 2.5 0 0 1-2.5-2.5c0-1.02.62-1.9 1.5-2.29V10.5a1 1 0 1 1 2 0v1.71c.88.39 1.5 1.27 1.5 2.29A2.5 2.5 0 0 1 12 17zm3.5-9H8.5V6a3.5 3.5 0 1 1 7 0v2z"/></svg>
-                <div><b>ប្រើហើយចោល</b><span>ចប់កិច្ចការ ចុច «ប្តូរអ៊ីមែលថ្មី» ឬបិទទំព័រចោល — គ្មានអ្វីត្រូវសម្អាតតាមក្រោយទេ។</span></div>
+                <div><b data-i18n="feat4Title">ប្រើហើយចោល</b><span data-i18n="feat4Text">ចប់កិច្ចការ ចុច «ប្តូរអ៊ីមែលថ្មី» ឬបិទទំព័រចោល — គ្មានអ្វីត្រូវសម្អាតតាមក្រោយទេ។</span></div>
               </li>
             </ul>
           </div>
           <div class="warn" role="note">
             <h3>
               <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
-              ចំណាំសំខាន់
+              <span data-i18n="warnTitle">ចំណាំសំខាន់</span>
             </h3>
-            <p>កុំប្រើអ៊ីមែលបណ្តោះអាសន្នសម្រាប់គណនីសំខាន់ៗ ដូចជា <b>ធនាគារ, PayPal, Google, Apple ID, Facebook ចម្បង</b> ឬគណនីណាដែលអ្នកត្រូវការ Reset Password នៅពេលក្រោយ។</p>
-            <p>ប្រអប់សារនេះជារបស់សាធារណៈតាមលក្ខណៈបច្ចេកទេស — អ្នកណាដែលមានអាសយដ្ឋានដូចគ្នាអាចអានសារបាន។ បើអ្នកបាត់អ៊ីមែលនេះ អ្នកនឹងមិនអាចចូលគណនីដែលបានចុះឈ្មោះជាមួយវាវិញបានទេ។</p>
-            <p>ប្រើវាសម្រាប់តែ៖ ចុះឈ្មោះសាកល្បង, ទាញយកឯកសារ, ឬសេវាដែលអ្នកមិនចង់ឲ្យដឹងអ៊ីមែលពិត។</p>
+            <p data-i18n-html="warnP1">កុំប្រើអ៊ីមែលបណ្តោះអាសន្នសម្រាប់គណនីសំខាន់ៗ ដូចជា <b>ធនាគារ, PayPal, Google, Apple ID, Facebook ចម្បង</b> ឬគណនីណាដែលអ្នកត្រូវការ Reset Password នៅពេលក្រោយ។</p>
+            <p data-i18n-html="warnP2">ប្រអប់សារនេះជារបស់សាធារណៈតាមលក្ខណៈបច្ចេកទេស — អ្នកណាដែលមានអាសយដ្ឋានដូចគ្នាអាចអានសារបាន។ បើអ្នកបាត់អ៊ីមែលនេះ អ្នកនឹងមិនអាចចូលគណនីដែលបានចុះឈ្មោះជាមួយវាវិញបានទេ។</p>
+            <p data-i18n-html="warnP3">ប្រើវាសម្រាប់តែ៖ ចុះឈ្មោះសាកល្បង, ទាញយកឯកសារ, ឬសេវាដែលអ្នកមិនចង់ឲ្យដឹងអ៊ីមែលពិត។</p>
           </div>
         </div>
       </section>
 
       <!-- ===== FAQ ===== -->
       <section class="block" id="faq">
-        <h2>សំណួរដែលគេសួរញឹកញាប់</h2>
+        <h2 data-i18n="faqTitle">សំណួរដែលគេសួរញឹកញាប់</h2>
         <p class="lead"></p>
         <details>
-          <summary>បើ OTP មិនមកដល់ តើត្រូវធ្វើដូចម្តេច?</summary>
-          <div class="faq-body"><p>រង់ចាំប្រហែល ៦០ វិនាទី រួចចុចប៊ូតុង «ធ្វើឱ្យស្រស់»។ បើនៅតែមិនមក សូមចុច Resend code នៅគេហទំព័រដែលអ្នកកំពុងចុះឈ្មោះម្តងទៀត។ បើគេហទំព័រនោះប្រាប់ថា «អ៊ីមែលមិនត្រឹមត្រូវ» មានន័យថាគេបាន Block domain បណ្តោះអាសន្ន — សូមចុច «ប្តូរអ៊ីមែលថ្មី» ដើម្បីសាក domain ផ្សេង ឬប្រើអ៊ីមែលពិតវិញ។</p></div>
+          <summary data-i18n="faqQ1">បើ OTP មិនមកដល់ តើត្រូវធ្វើដូចម្តេច?</summary>
+          <div class="faq-body"><p data-i18n-html="faqA1">រង់ចាំប្រហែល ៦០ វិនាទី រួចចុចប៊ូតុង «ធ្វើឱ្យស្រស់»។ បើនៅតែមិនមក សូមចុច Resend code នៅគេហទំព័រដែលអ្នកកំពុងចុះឈ្មោះម្តងទៀត។ បើគេហទំព័រនោះប្រាប់ថា «អ៊ីមែលមិនត្រឹមត្រូវ» មានន័យថាគេបាន Block domain បណ្តោះអាសន្ន — សូមចុច «ប្តូរអ៊ីមែលថ្មី» ដើម្បីសាក domain ផ្សេង ឬប្រើអ៊ីមែលពិតវិញ។</p></div>
         </details>
         <details>
-          <summary>អ៊ីមែលនេះប្រើបានរយៈពេលប៉ុន្មាន?</summary>
-          <div class="faq-body"><p>អ៊ីមែលដំណើរការពេញមួយពេលដែលអ្នកទុកទំព័រនេះចំហរ។ សារនៅក្នុងប្រអប់ត្រូវបានរក្សាទុកដោយម៉ាស៊ីនមេក្នុងរយៈពេលកំណត់មួយ (ជាទូទៅប្រហែល ២៤ ម៉ោង) រួចនឹងត្រូវលុបដោយស្វ័យប្រវត្តិ។ បើអ្នកបិទទំព័រ ហើយបើកវិញ អ្នកនឹងទទួលបានអ៊ីមែលថ្មីមួយទៀត។</p></div>
+          <summary data-i18n="faqQ2">អ៊ីមែលនេះប្រើបានរយៈពេលប៉ុន្មាន?</summary>
+          <div class="faq-body"><p data-i18n-html="faqA2">អ៊ីមែលដំណើរការពេញមួយពេលដែលអ្នកទុកទំព័រនេះចំហរ។ សារនៅក្នុងប្រអប់ត្រូវបានរក្សាទុកដោយម៉ាស៊ីនមេក្នុងរយៈពេលកំណត់មួយ (ជាទូទៅប្រហែល ២៤ ម៉ោង) រួចនឹងត្រូវលុបដោយស្វ័យប្រវត្តិ។ បើអ្នកបិទទំព័រ ហើយបើកវិញ អ្នកនឹងទទួលបានអ៊ីមែលថ្មីមួយទៀត។</p></div>
         </details>
         <details>
-          <summary>តើត្រូវចុះឈ្មោះ ឬបង់ប្រាក់ទេ?</summary>
-          <div class="faq-body"><p>មិនបាច់ទេ។ គ្មានការចុះឈ្មោះ គ្មានពាក្យសម្ងាត់ និងឥតគិតថ្លៃទាំងស្រុង។ បើកទំព័រភ្លាម អ៊ីមែលត្រូវបានបង្កើតឲ្យភ្លាម។</p></div>
+          <summary data-i18n="faqQ3">តើត្រូវចុះឈ្មោះ ឬបង់ប្រាក់ទេ?</summary>
+          <div class="faq-body"><p data-i18n-html="faqA3">មិនបាច់ទេ។ គ្មានការចុះឈ្មោះ គ្មានពាក្យសម្ងាត់ និងឥតគិតថ្លៃទាំងស្រុង។ បើកទំព័រភ្លាម អ៊ីមែលត្រូវបានបង្កើតឲ្យភ្លាម។</p></div>
         </details>
         <details>
-          <summary>តើខ្ញុំអាចផ្ញើអ៊ីមែលចេញបានទេ?</summary>
-          <div class="faq-body"><p>មិនបានទេ។ សេវានេះសម្រាប់តែ <b>ទទួល</b> សារប៉ុណ្ណោះ — ដូចជាលេខកូដ OTP និងអ៊ីមែលបញ្ជាក់ការចុះឈ្មោះ។ ការផ្ញើចេញត្រូវបានបិទ ដើម្បីការពារការប្រើប្រាស់ខុសគោលបំណង។</p></div>
+          <summary data-i18n="faqQ4">តើខ្ញុំអាចផ្ញើអ៊ីមែលចេញបានទេ?</summary>
+          <div class="faq-body"><p data-i18n-html="faqA4">មិនបានទេ។ សេវានេះសម្រាប់តែ <b>ទទួល</b> សារប៉ុណ្ណោះ — ដូចជាលេខកូដ OTP និងអ៊ីមែលបញ្ជាក់ការចុះឈ្មោះ។ ការផ្ញើចេញត្រូវបានបិទ ដើម្បីការពារការប្រើប្រាស់ខុសគោលបំណង។</p></div>
         </details>
         <details>
-          <summary>បើខ្ញុំចុច «ប្តូរអ៊ីមែលថ្មី» តើសារចាស់ទៅណា?</summary>
-          <div class="faq-body"><p>អ៊ីមែលចាស់ និងសារទាំងអស់របស់វានឹងត្រូវបោះបង់ ហើយអ្នកមិនអាចត្រឡប់ទៅមើលវិញបានទេ។ ដូច្នេះសូមប្រាកដថាអ្នកបានយកលេខកូដ ឬព័ត៌មានដែលត្រូវការរួចរាល់ មុននឹងប្តូរ។</p></div>
+          <summary data-i18n="faqQ5">បើខ្ញុំចុច «ប្តូរអ៊ីមែលថ្មី» តើសារចាស់ទៅណា?</summary>
+          <div class="faq-body"><p data-i18n-html="faqA5">អ៊ីមែលចាស់ និងសារទាំងអស់របស់វានឹងត្រូវបោះបង់ ហើយអ្នកមិនអាចត្រឡប់ទៅមើលវិញបានទេ។ ដូច្នេះសូមប្រាកដថាអ្នកបានយកលេខកូដ ឬព័ត៌មានដែលត្រូវការរួចរាល់ មុននឹងប្តូរ។</p></div>
         </details>
       </section>
     </main>
 
     <footer>
-      <p><b>MovMail.com</b> — អ៊ីមែលបណ្តោះអាសន្នសម្រាប់ការចុះឈ្មោះសាកល្បង និងការពារឯកជនភាព</p>
-      <p>ប្រអប់សារដំណើរការដោយ Mail.tm API · សារត្រូវបានលុបដោយស្វ័យប្រវត្តិបន្ទាប់ពីផុតកំណត់</p>
+      <p><b>MovMail.com</b> — <span data-i18n="footerP1">អ៊ីមែលបណ្តោះអាសន្នសម្រាប់ការចុះឈ្មោះសាកល្បង និងការពារឯកជនភាព</span></p>
+      <p data-i18n="footerP2">ប្រអប់សារដំណើរការដោយ Mail.tm API · សារត្រូវបានលុបដោយស្វ័យប្រវត្តិបន្ទាប់ពីផុតកំណត់</p>
     </footer>
 
     <!-- ===== Message reader ===== -->
-    <div class="overlay" id="readerOverlay" role="dialog" aria-modal="true" aria-label="អានសារ">
+    <div class="overlay" id="readerOverlay" role="dialog" aria-modal="true" aria-label="អានសារ" data-i18n-aria="readerLabel">
       <div class="reader">
         <div class="reader-wrap">
-          <button class="reader-close" id="readerClose" aria-label="បិទ">✕</button>
+          <button class="reader-close" id="readerClose" aria-label="បិទ" data-i18n-aria="readerCloseLabel">✕</button>
           <div class="reader-head">
             <h3 id="readerSubject">(គ្មានចំណងជើង)</h3>
             <div class="reader-meta">
-              <span>ពី៖ <b id="readerFrom">—</b></span>
-              <span>ទៅ៖ <b id="readerTo">—</b></span>
-              <span>កាលបរិច្ឆេទ៖ <b id="readerDate">—</b></span>
+              <span><span data-i18n="readerFromLabel">ពី៖</span> <b id="readerFrom">—</b></span>
+              <span><span data-i18n="readerToLabel">ទៅ៖</span> <b id="readerTo">—</b></span>
+              <span><span data-i18n="readerDateLabel">កាលបរិច្ឆេទ៖</span> <b id="readerDate">—</b></span>
             </div>
           </div>
           <div class="otp-strip" id="otpStrip">
-            <span class="lbl">លេខកូដរបស់អ្នក៖</span>
+            <span class="lbl" data-i18n="otpLabel">លេខកូដរបស់អ្នក៖</span>
             <span class="code mono" id="otpCode"></span>
-            <button id="otpCopyBtn">ចម្លងលេខកូដ</button>
+            <button id="otpCopyBtn" data-i18n="otpCopy">ចម្លងលេខកូដ</button>
           </div>
           <div class="reader-body" id="readerBody">
             <p style="padding:16px 22px;color:var(--muted)">កំពុងផ្ទុកសារ…</p>
@@ -542,10 +548,259 @@
         var API = PROXY;
         var POLL_SECONDS = 10;
 
+        /* ---------- Language (EN / ខ្មែរ, one language at a time) ---------- */
+var I18N = {
+  "km": {
+    "docTitle": "MovMail.com — អ៊ីមែលបណ្តោះអាសន្ន",
+    "metaDesc": "MovMail.com — អ៊ីមែលបណ្តោះអាសន្នឥតគិតថ្លៃ សម្រាប់ទទួលលេខកូដ OTP និងការពារឯកជនភាព មិនបាច់ចុះឈ្មោះ",
+    "brandSub": "អ៊ីមែលបណ្តោះអាសន្ន ឥតគិតថ្លៃ",
+    "navInbox": "ប្រអប់សារ",
+    "navHow": "របៀបប្រើ",
+    "navFaq": "សំណួរ",
+    "cardTitle": "អ៊ីមែលបណ្តោះអាសន្នរបស់អ្នក",
+    "generate": "បង្កើតអ៊ីមែល",
+    "copy": "ចម្លងអ៊ីមែល",
+    "qr": "QR Code",
+    "refresh": "ធ្វើឱ្យស្រស់",
+    "change": "ប្តូរអ៊ីមែលថ្មី",
+    "delete": "លុប",
+    "qrCaption": "ស្កេនដើម្បីយកអ៊ីមែលនេះទៅប្រើលើទូរស័ព្ទ",
+    "retry": "ព្យាយាមម្តងទៀត",
+    "addrGenerating": "កំពុងបង្កើតអ៊ីមែល…",
+    "addrFailed": "បង្កើតអ៊ីមែលមិនបានសម្រេច",
+    "statusConnecting": "កំពុងភ្ជាប់ទៅម៉ាស៊ីនមេ…",
+    "statusConnectingShort": "កំពុងភ្ជាប់…",
+    "statusWaiting": "កំពុងរង់ចាំអ៊ីមែលថ្មី…",
+    "statusNoConn": "គ្មានការតភ្ជាប់",
+    "expiry": "អ៊ីមែលនេះដំណើរការភ្លាមៗ មិនបាច់ចុះឈ្មោះ",
+    "countdown": "ធ្វើបច្ចុប្បន្នភាពដោយស្វ័យប្រវត្តិក្នុង {n} វិនាទី",
+    "inboxTitle": "ប្រអប់សារ",
+    "colFrom": "អ្នកផ្ញើ / ចំណងជើង",
+    "colTime": "ពេលវេលា",
+    "emptyReadyTitle": "ប្រអប់សាររបស់អ្នកទទេ",
+    "emptyReadyText": "ចម្លងអ៊ីមែលខាងលើទៅប្រើនៅគេហទំព័រដែលអ្នកចង់ចុះឈ្មោះ — សារ និងលេខកូដ OTP នឹងលេចឡើងនៅទីនេះដោយស្វ័យប្រវត្តិ។",
+    "emptyPreparingTitle": "កំពុងរៀបចំប្រអប់សារ…",
+    "emptyPreparingText": "សូមរង់ចាំបន្តិច…",
+    "howTitle": "របៀបប្រើប្រាស់",
+    "howLead": "ប្រើអ៊ីមែលបណ្តោះអាសន្នដើម្បីទទួលលេខកូដបញ្ជាក់ (OTP) ដោយមិនបាច់បង្ហាញអ៊ីមែលពិតរបស់អ្នក។",
+    "step1Title": "ចម្លងអ៊ីមែល",
+    "step1Text": "ចុចប៊ូតុង «{generate}» នៅខាងលើដើម្បីបង្កើតអាសយដ្ឋានថ្មី រួចចុច «{copy}» ដើម្បីយកទៅប្រើ។",
+    "step2Title": "យកទៅចុះឈ្មោះ",
+    "step2Text": "បិទភ្ជាប់អ៊ីមែលនេះទៅក្នុងគេហទំព័រ ឬកម្មវិធីដែលអ្នកចង់សាកល្បង រួចស្នើឱ្យគេផ្ញើលេខកូដ។",
+    "step3Title": "រង់ចាំសារចូល",
+    "step3Text": "ទុកទំព័រនេះចំហរ។ ប្រអប់សារធ្វើបច្ចុប្បន្នភាពរៀងរាល់ ១០ វិនាទី — សារថ្មីនឹងលេចឡើងដោយខ្លួនឯង។",
+    "step4Title": "បើកសារ យកលេខកូដ",
+    "step4Text": "ចុចលើសារដើម្បីអាន។ បើមានលេខកូដ OTP ប្រព័ន្ធនឹងបង្ហាញវាធំៗឲ្យអ្នកចម្លងបានភ្លាម។",
+    "whyTitle": "ហេតុអ្វីគួរប្រើ MovMail?",
+    "feat1Title": "ការពារឯកជនភាព",
+    "feat1Text": "អ៊ីមែលពិតរបស់អ្នកនៅតែជាសម្ងាត់ មិនធ្លាយទៅគេហទំព័រដែលអ្នកមិនទុកចិត្ត។",
+    "feat2Title": "គ្មាន Spam",
+    "feat2Text": "សារផ្សព្វផ្សាយ និងសាររំខានទាំងអស់ធ្លាក់មកប្រអប់នេះ មិនមែនប្រអប់អ៊ីមែលពិតរបស់អ្នកទេ។",
+    "feat3Title": "លឿន មិនបាច់ចុះឈ្មោះ",
+    "feat3Text": "បើកទំព័រភ្លាម បានអ៊ីមែលភ្លាម។ គ្មានឈ្មោះ គ្មានពាក្យសម្ងាត់ គ្មានទម្រង់បំពេញវែងៗ។",
+    "feat4Title": "ប្រើហើយចោល",
+    "feat4Text": "ចប់កិច្ចការ ចុច «{change}» ឬបិទទំព័រចោល — គ្មានអ្វីត្រូវសម្អាតតាមក្រោយទេ។",
+    "warnTitle": "ចំណាំសំខាន់",
+    "warnP1": "កុំប្រើអ៊ីមែលបណ្តោះអាសន្នសម្រាប់គណនីសំខាន់ៗ ដូចជា <b>ធនាគារ, PayPal, Google, Apple ID, Facebook ចម្បង</b> ឬគណនីណាដែលអ្នកត្រូវការ Reset Password នៅពេលក្រោយ។",
+    "warnP2": "ប្រអប់សារនេះជារបស់សាធារណៈតាមលក្ខណៈបច្ចេកទេស — អ្នកណាដែលមានអាសយដ្ឋានដូចគ្នាអាចអានសារបាន។ បើអ្នកបាត់អ៊ីមែលនេះ អ្នកនឹងមិនអាចចូលគណនីដែលបានចុះឈ្មោះជាមួយវាវិញបានទេ។",
+    "warnP3": "ប្រើវាសម្រាប់តែ៖ ចុះឈ្មោះសាកល្បង, ទាញយកឯកសារ, ឬសេវាដែលអ្នកមិនចង់ឲ្យដឹងអ៊ីមែលពិត។",
+    "faqTitle": "សំណួរដែលគេសួរញឹកញាប់",
+    "faqQ1": "បើ OTP មិនមកដល់ តើត្រូវធ្វើដូចម្តេច?",
+    "faqA1": "រង់ចាំប្រហែល ៦០ វិនាទី រួចចុចប៊ូតុង «{refresh}»។ បើនៅតែមិនមក សូមចុច Resend code នៅគេហទំព័រដែលអ្នកកំពុងចុះឈ្មោះម្តងទៀត។ បើគេហទំព័រនោះប្រាប់ថា «អ៊ីមែលមិនត្រឹមត្រូវ» មានន័យថាគេបាន Block domain បណ្តោះអាសន្ន — សូមចុច «{change}» ដើម្បីសាក domain ផ្សេង ឬប្រើអ៊ីមែលពិតវិញ។",
+    "faqQ2": "អ៊ីមែលនេះប្រើបានរយៈពេលប៉ុន្មាន?",
+    "faqA2": "អ៊ីមែលដំណើរការពេញមួយពេលដែលអ្នកទុកទំព័រនេះចំហរ។ សារនៅក្នុងប្រអប់ត្រូវបានរក្សាទុកដោយម៉ាស៊ីនមេក្នុងរយៈពេលកំណត់មួយ (ជាទូទៅប្រហែល ២៤ ម៉ោង) រួចនឹងត្រូវលុបដោយស្វ័យប្រវត្តិ។ បើអ្នកបិទទំព័រ ហើយបើកវិញ អ្នកនឹងទទួលបានអ៊ីមែលថ្មីមួយទៀត។",
+    "faqQ3": "តើត្រូវចុះឈ្មោះ ឬបង់ប្រាក់ទេ?",
+    "faqA3": "មិនបាច់ទេ។ គ្មានការចុះឈ្មោះ គ្មានពាក្យសម្ងាត់ និងឥតគិតថ្លៃទាំងស្រុង។ បើកទំព័រភ្លាម អ៊ីមែលត្រូវបានបង្កើតឲ្យភ្លាម។",
+    "faqQ4": "តើខ្ញុំអាចផ្ញើអ៊ីមែលចេញបានទេ?",
+    "faqA4": "មិនបានទេ។ សេវានេះសម្រាប់តែ <b>ទទួល</b> សារប៉ុណ្ណោះ — ដូចជាលេខកូដ OTP និងអ៊ីមែលបញ្ជាក់ការចុះឈ្មោះ។ ការផ្ញើចេញត្រូវបានបិទ ដើម្បីការពារការប្រើប្រាស់ខុសគោលបំណង។",
+    "faqQ5": "បើខ្ញុំចុច «{change}» តើសារចាស់ទៅណា?",
+    "faqA5": "អ៊ីមែលចាស់ និងសារទាំងអស់របស់វានឹងត្រូវបោះបង់ ហើយអ្នកមិនអាចត្រឡប់ទៅមើលវិញបានទេ។ ដូច្នេះសូមប្រាកដថាអ្នកបានយកលេខកូដ ឬព័ត៌មានដែលត្រូវការរួចរាល់ មុននឹងប្តូរ។",
+    "footerP1": "អ៊ីមែលបណ្តោះអាសន្នសម្រាប់ការចុះឈ្មោះសាកល្បង និងការពារឯកជនភាព",
+    "footerP2": "ប្រអប់សារដំណើរការដោយ Mail.tm API · សារត្រូវបានលុបដោយស្វ័យប្រវត្តិបន្ទាប់ពីផុតកំណត់",
+    "readerFromLabel": "ពី៖",
+    "readerToLabel": "ទៅ៖",
+    "readerDateLabel": "កាលបរិច្ឆេទ៖",
+    "readerCloseLabel": "បិទ",
+    "readerLabel": "អានសារ",
+    "otpLabel": "លេខកូដរបស់អ្នក៖",
+    "otpCopy": "ចម្លងលេខកូដ",
+    "noSubject": "(គ្មានចំណងជើង)",
+    "readerLoading": "កំពុងផ្ទុកសារ…",
+    "readerLoadFailed": "ផ្ទុកសារមិនបានសម្រេច។ សូមព្យាយាមម្តងទៀត។",
+    "readerNoBody": "(សារនេះគ្មានខ្លឹមសារ)",
+    "readerIframeTitle": "ខ្លឹមសារសារ",
+    "toastCopiedEmail": "បានចម្លងអ៊ីមែលហើយ — យកទៅបិទភ្ជាប់បានភ្លាម",
+    "toastCopiedCode": "បានចម្លងលេខកូដហើយ",
+    "toastQrUnavailable": "QR មិនអាចប្រើបាននៅពេលនេះ",
+    "toastCopyManual": "សូមចម្លងដោយដៃ៖ ",
+    "toastCreatingNew": "កំពុងបង្កើតអ៊ីមែលថ្មី…",
+    "toastDeleted": "បានលុបអ៊ីមែលចាស់ — កំពុងបង្កើតថ្មី…",
+    "toastNewMsg": "មានសារថ្មីចូលមកដល់!",
+    "errorConnect": "មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេអ៊ីមែលបានទេ។ ({code}) សូមចុច «{generate}» ដើម្បីព្យាយាមម្តងទៀត។",
+    "errorDefault": "មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេអ៊ីមែលបានទេ។",
+    "retrying": "ម៉ាស៊ីនមេរវល់ — កំពុងព្យាយាមម្តងទៀត (លើកទី {n}/3)…",
+    "relJustNow": "មុននេះបន្តិច",
+    "relMinutes": "{n} នាទីមុន",
+    "relHours": "{n} ម៉ោងមុន",
+    "relDays": "{n} ថ្ងៃមុន",
+    "inboxRefreshLabel": "ធ្វើឱ្យប្រអប់សារស្រស់"
+  },
+  "en": {
+    "docTitle": "MovMail.com — Temporary Email",
+    "metaDesc": "MovMail.com — free temporary email for receiving OTP codes and protecting your privacy, no sign-up needed",
+    "brandSub": "Free temporary email",
+    "navInbox": "Inbox",
+    "navHow": "How to use",
+    "navFaq": "FAQ",
+    "cardTitle": "Your Temporary Email Address",
+    "generate": "Generate Email",
+    "copy": "Copy Email",
+    "qr": "QR Code",
+    "refresh": "Refresh",
+    "change": "New Email",
+    "delete": "Delete",
+    "qrCaption": "Scan to use this email on your phone",
+    "retry": "Try again",
+    "addrGenerating": "Generating email…",
+    "addrFailed": "Failed to create email",
+    "statusConnecting": "Connecting to server…",
+    "statusConnectingShort": "Connecting…",
+    "statusWaiting": "Waiting for new email…",
+    "statusNoConn": "No connection",
+    "expiry": "Works instantly, no sign-up needed",
+    "countdown": "Auto-refresh in {n} seconds",
+    "inboxTitle": "Inbox",
+    "colFrom": "Sender / Subject",
+    "colTime": "Time",
+    "emptyReadyTitle": "Your inbox is empty",
+    "emptyReadyText": "Copy the email above and use it on the site you want to sign up for — messages and OTP codes will appear here automatically.",
+    "emptyPreparingTitle": "Preparing your inbox…",
+    "emptyPreparingText": "Please wait a moment…",
+    "howTitle": "How to use",
+    "howLead": "Use a temporary email to receive verification codes (OTP) without revealing your real email.",
+    "step1Title": "Copy Email",
+    "step1Text": "Click “{generate}” above to create a new address, then click “{copy}” to use it.",
+    "step2Title": "Sign up with it",
+    "step2Text": "Paste this email into the website or app you want to try, then ask it to send you a code.",
+    "step3Title": "Wait for the message",
+    "step3Text": "Keep this page open. The inbox refreshes every 10 seconds — new messages appear on their own.",
+    "step4Title": "Open the message, get the code",
+    "step4Text": "Click a message to read it. If it contains an OTP code, it will be shown large so you can copy it right away.",
+    "whyTitle": "Why use MovMail?",
+    "feat1Title": "Protect your privacy",
+    "feat1Text": "Your real email stays private and is never exposed to sites you don't trust.",
+    "feat2Title": "No spam",
+    "feat2Text": "Ads and unwanted messages land in this inbox, not your real one.",
+    "feat3Title": "Fast, no sign-up",
+    "feat3Text": "Open the page and get an email instantly. No name, no password, no long forms.",
+    "feat4Title": "Use and throw away",
+    "feat4Text": "When you're done, click “{change}” or just close the page — nothing to clean up.",
+    "warnTitle": "Important note",
+    "warnP1": "Do not use a temporary email for important accounts such as <b>banking, PayPal, Google, Apple ID, your main Facebook</b> or any account you may need to reset the password for later.",
+    "warnP2": "Technically this inbox is public — anyone with the same address can read its messages. If you lose this email, you will not be able to get back into accounts registered with it.",
+    "warnP3": "Use it only for: trial sign-ups, downloads, or services you don't want to know your real email.",
+    "faqTitle": "Frequently asked questions",
+    "faqQ1": "What if the OTP doesn't arrive?",
+    "faqA1": "Wait about 60 seconds, then click “{refresh}”. If it still doesn't arrive, click Resend code on the site you're signing up for. If that site says the email is invalid, it has blocked temporary domains — click “{change}” to try another domain, or use your real email.",
+    "faqQ2": "How long does this email last?",
+    "faqA2": "The email works for as long as you keep this page open. Messages in the inbox are kept by the server for a limited time (usually about 24 hours) and are then deleted automatically. If you close the page and reopen it, you will get a new email.",
+    "faqQ3": "Do I need to sign up or pay?",
+    "faqA3": "No. No sign-up, no password, and completely free. Open the page and an email is created right away.",
+    "faqQ4": "Can I send emails from it?",
+    "faqA4": "No. This service is for <b>receiving</b> messages only — such as OTP codes and sign-up confirmation emails. Sending is disabled to prevent abuse.",
+    "faqQ5": "If I click “{change}”, what happens to the old messages?",
+    "faqA5": "The old email and all of its messages will be discarded, and you cannot get them back. So make sure you have copied the code or information you need before switching.",
+    "footerP1": "Temporary email for trial sign-ups and protecting your privacy",
+    "footerP2": "Inbox powered by Mail.tm API · Messages are deleted automatically after expiry",
+    "readerFromLabel": "From:",
+    "readerToLabel": "To:",
+    "readerDateLabel": "Date:",
+    "readerCloseLabel": "Close",
+    "readerLabel": "Read message",
+    "otpLabel": "Your code:",
+    "otpCopy": "Copy code",
+    "noSubject": "(No subject)",
+    "readerLoading": "Loading message…",
+    "readerLoadFailed": "Failed to load the message. Please try again.",
+    "readerNoBody": "(This message has no content)",
+    "readerIframeTitle": "Message content",
+    "toastCopiedEmail": "Email copied — paste it anywhere",
+    "toastCopiedCode": "Code copied",
+    "toastQrUnavailable": "QR is not available right now",
+    "toastCopyManual": "Please copy manually: ",
+    "toastCreatingNew": "Creating a new email…",
+    "toastDeleted": "Old email deleted — creating a new one…",
+    "toastNewMsg": "A new message arrived!",
+    "errorConnect": "Cannot connect to the email server. ({code}) Click “{generate}” to try again.",
+    "errorDefault": "Cannot connect to the email server.",
+    "retrying": "Server is busy — retrying (attempt {n}/3)…",
+    "relJustNow": "Just now",
+    "relMinutes": "{n} minutes ago",
+    "relHours": "{n} hours ago",
+    "relDays": "{n} days ago",
+    "inboxRefreshLabel": "Refresh inbox"
+  }
+};
+        var lang = "km";
+        try {
+          var __saved = window.__MOVMAIL_LANG || localStorage.getItem("movmail-lang");
+          if (__saved === "en" || __saved === "km") lang = __saved;
+        } catch(e) {}
+        function t(key, vars){
+          var s = (I18N[lang] && I18N[lang][key]) || I18N.km[key] || key;
+          if (vars) for (var k in vars) s = s.split("{" + k + "}").join(vars[k]);
+          return s;
+        }
+        function expand(s){
+          return s.split("{generate}").join(t("generate"))
+                   .split("{copy}").join(t("copy"))
+                   .split("{refresh}").join(t("refresh"))
+                   .split("{change}").join(t("change"));
+        }
+        function applyLang(next){
+          lang = (next === "en") ? "en" : "km";
+          try { localStorage.setItem("movmail-lang", lang); } catch(e) {}
+          document.documentElement.lang = (lang === "en") ? "en" : "km";
+          document.title = t("docTitle");
+          var meta = document.querySelector('meta[name="description"]');
+          if (meta) meta.setAttribute("content", t("metaDesc"));
+          var els = document.querySelectorAll("[data-i18n]");
+          for (var i = 0; i < els.length; i++) els[i].textContent = expand(t(els[i].getAttribute("data-i18n")));
+          var htmlEls = document.querySelectorAll("[data-i18n-html]");
+          for (var j = 0; j < htmlEls.length; j++) htmlEls[j].innerHTML = expand(t(htmlEls[j].getAttribute("data-i18n-html")));
+          var ariaEls = document.querySelectorAll("[data-i18n-aria]");
+          for (var k = 0; k < ariaEls.length; k++) ariaEls[k].setAttribute("aria-label", t(ariaEls[k].getAttribute("data-i18n-aria")));
+          var kmBtn = $("langKm"), enBtn = $("langEn");
+          if (kmBtn && enBtn){
+            kmBtn.classList.toggle("active", lang === "km");
+            enBtn.classList.toggle("active", lang === "en");
+            kmBtn.setAttribute("aria-pressed", lang === "km" ? "true" : "false");
+            enBtn.setAttribute("aria-pressed", lang === "en" ? "true" : "false");
+          }
+          /* re-render dynamic state in the active language */
+          if (state.creating){
+            addrText.textContent = t("addrGenerating");
+            statusText.textContent = state.retrying ? t("retrying", {n: state.retryCount || 1}) : t("statusConnecting");
+          } else if (state.address){
+            addrText.textContent = state.address;
+            statusText.textContent = t("statusWaiting");
+          } else if (state.failed){
+            addrText.textContent = t("addrFailed");
+            statusText.textContent = t("statusNoConn");
+          }
+          if (errorBanner.classList.contains("show") && state.lastErrorCode)
+            errorText.textContent = t("errorConnect", {code: state.lastErrorCode, generate: t("generate")});
+          expiryText.textContent = t("expiry");
+          updateCountdown();
+          renderMessages();
+        }
+        function setLang(next){ applyLang(next); }
+
         var state = {
           address: "", password: "", token: "", accountId: "",
           messages: [], timer: null, countdown: POLL_SECONDS,
-          creating: false, checking: false
+          creating: false, checking: false, retryCount: 0,
+          failed: false, retrying: false, lastErrorCode: ""
         };
 
         var $ = function(id){ return document.getElementById(id); };
@@ -609,16 +864,17 @@
           var t = new Date(iso).getTime(), diff = Date.now() - t;
           if (isNaN(t)) return "";
           var m = Math.floor(diff/60000);
-          if (m < 1) return "មុននេះបន្តិច";
-          if (m < 60) return m + " នាទីមុន";
+          if (m < 1) return t("relJustNow");
+          if (m < 60) return (lang === "en") ? (m === 1 ? "1 minute ago" : m + " minutes ago") : t("relMinutes", {n: m});
           var h = Math.floor(m/60);
-          if (h < 24) return h + " ម៉ោងមុន";
-          return Math.floor(h/24) + " ថ្ងៃមុន";
+          if (h < 24) return (lang === "en") ? (h === 1 ? "1 hour ago" : h + " hours ago") : t("relHours", {n: h});
+          var d = Math.floor(h/24);
+          return (lang === "en") ? (d === 1 ? "1 day ago" : d + " days ago") : t("relDays", {n: d});
         }
         function fullDate(iso){
           var d = new Date(iso);
           if (isNaN(d.getTime())) return iso || "—";
-          try { return d.toLocaleString("km-KH", { dateStyle:"medium", timeStyle:"short" }); }
+          try { return d.toLocaleString(lang === "en" ? "en-US" : "km-KH", { dateStyle:"medium", timeStyle:"short" }); }
           catch(e){ return d.toLocaleString(); }
         }
         function copyText(text, okMsg){
@@ -631,7 +887,7 @@
             ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
             document.body.appendChild(ta); ta.select();
             try { document.execCommand("copy"); done(); }
-            catch(e){ showToast("សូមចម្លងដោយដៃ៖ " + text); }
+            catch(e){ showToast(t("toastCopyManual") + text); }
             document.body.removeChild(ta);
           }
         }
@@ -656,13 +912,15 @@
         function createAccount(){
           if (state.creating) return;
           state.creating = true;
+          state.failed = false;
+          state.retrying = false;
           hideError();
           stopPolling();
           state.token = ""; state.messages = [];
           renderMessages();
-          addrText.textContent = "កំពុងបង្កើតអ៊ីមែល…";
+          addrText.textContent = t("addrGenerating");
           addrText.classList.add("loading");
-          statusText.textContent = "កំពុងភ្ជាប់ទៅម៉ាស៊ីនមេ…";
+          statusText.textContent = t("statusConnecting");
           countdownText.textContent = "";
           setBusy(true);
 
@@ -683,9 +941,11 @@
           }).then(function(){
             state.creating = false;
             state.retryCount = 0;
+            state.failed = false;
+            state.retrying = false;
             addrText.textContent = state.address;
             addrText.classList.remove("loading");
-            statusText.textContent = "កំពុងរង់ចាំអ៊ីមែលថ្មី…";
+            statusText.textContent = t("statusWaiting");
             setBusy(false);
             buildQr();
             fetchMessages(true);
@@ -694,17 +954,21 @@
             state.creating = false;
             if ((err.status === 429 || err.status === 503) && (state.retryCount || 0) < 3){
               state.retryCount = (state.retryCount || 0) + 1;
-              addrText.textContent = "កំពុងបង្កើតអ៊ីមែល…";
-              statusText.textContent = "ម៉ាស៊ីនមេរវល់ — កំពុងព្យាយាមម្តងទៀត (លើកទី " + state.retryCount + "/3)…";
+              state.retrying = true;
+              addrText.textContent = t("addrGenerating");
+              statusText.textContent = t("retrying", {n: state.retryCount});
               setTimeout(createAccount, 6000);
               return;
             }
             state.retryCount = 0;
-            addrText.textContent = "បង្កើតអ៊ីមែលមិនបានសម្រេច";
-            statusText.textContent = "គ្មានការតភ្ជាប់";
+            state.failed = true;
+            state.retrying = false;
+            state.lastErrorCode = String(err.status || err.message || "network");
+            addrText.textContent = t("addrFailed");
+            statusText.textContent = t("statusNoConn");
             setBusy(true);
             $("retryBtn").disabled = false;
-            showError("មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេអ៊ីមែលបានទេ។ (" + (err.status || err.message || "network") + ") សូមចុច «បង្កើតអ៊ីមែល» ដើម្បីព្យាយាមម្តងទៀត។");
+            showError(t("errorConnect", {code: state.lastErrorCode, generate: t("generate")}));
           });
         }
 
@@ -715,7 +979,7 @@
             api("/accounts/" + oldId, { method:"DELETE" }).catch(function(){});
             state.token = keep;
           }
-          showToast("បានលុបអ៊ីមែលចាស់ — កំពុងបង្កើតថ្មី…");
+          showToast(t("toastDeleted"));
           createAccount();
         }
 
@@ -728,7 +992,7 @@
             var hadNew = msgs.length > state.messages.length;
             state.messages = msgs;
             renderMessages();
-            if (!first && hadNew) showToast("មានសារថ្មីចូលមកដល់!");
+            if (!first && hadNew) showToast(t("toastNewMsg"));
           }).catch(function(){
             /* keep polling quietly */
           }).then(function(){
@@ -740,10 +1004,8 @@
           msgList.innerHTML = "";
           if (!state.messages.length){
             emptyState.style.display = "block";
-            emptyTitle.textContent = state.token ? "ប្រអប់សាររបស់អ្នកទទេ" : "កំពុងរៀបចំប្រអប់សារ…";
-            emptyText.textContent = state.token
-              ? "ចម្លងអ៊ីមែលខាងលើទៅប្រើនៅគេហទំព័រដែលអ្នកចង់ចុះឈ្មោះ — សារ និងលេខកូដ OTP នឹងលេចឡើងនៅទីនេះដោយស្វ័យប្រវត្តិ។"
-              : "សូមរង់ចាំបន្តិច…";
+            emptyTitle.textContent = state.token ? t("emptyReadyTitle") : t("emptyPreparingTitle");
+            emptyText.textContent = state.token ? t("emptyReadyText") : t("emptyPreparingText");
             waitingBar.style.display = state.token ? "block" : "none";
             return;
           }
@@ -774,7 +1036,7 @@
             fTxt.textContent = fromName; f.appendChild(fTxt);
             var s = document.createElement("span");
             s.className = "msg-subject";
-            s.textContent = m.subject || "(គ្មានចំណងជើង)";
+            s.textContent = m.subject || t("noSubject");
             var intro = document.createElement("span");
             intro.className = "msg-intro";
             intro.textContent = m.intro || "";
@@ -804,11 +1066,11 @@
         function openMessage(m){
           overlay.classList.add("open");
           document.body.style.overflow = "hidden";
-          $("readerSubject").textContent = m.subject || "(គ្មានចំណងជើង)";
+          $("readerSubject").textContent = m.subject || t("noSubject");
           $("readerFrom").textContent = (m.from ? ((m.from.name ? m.from.name + " <" : "") + (m.from.address || "") + (m.from.name ? ">" : "")) : "—");
           $("readerTo").textContent = state.address;
           $("readerDate").textContent = fullDate(m.createdAt);
-          $("readerBody").innerHTML = '<p style="padding:16px 22px;color:var(--muted)">កំពុងផ្ទុកសារ…</p>';
+          $("readerBody").innerHTML = '<p style="padding:16px 22px;color:var(--muted)">' + t("readerLoading") + '</p>';
           $("otpStrip").classList.remove("show");
           currentOtp = "";
 
@@ -828,17 +1090,17 @@
             if (html){
               var frame = document.createElement("iframe");
               frame.setAttribute("sandbox", "");
-              frame.setAttribute("title", "ខ្លឹមសារសារ");
+              frame.setAttribute("title", t("readerIframeTitle"));
               frame.srcdoc = html;
               body.appendChild(frame);
             } else {
               var div = document.createElement("div");
               div.className = "text-body";
-              div.textContent = text || "(សារនេះគ្មានខ្លឹមសារ)";
+              div.textContent = text || t("readerNoBody");
               body.appendChild(div);
             }
           }).catch(function(){
-            $("readerBody").innerHTML = '<p style="padding:16px 22px;color:var(--red)">ផ្ទុកសារមិនបានសម្រេច។ សូមព្យាយាមម្តងទៀត។</p>';
+            $("readerBody").innerHTML = '<p style="padding:16px 22px;color:var(--red)">' + t("readerLoadFailed") + '</p>';
           });
         }
         function closeMessage(){
@@ -849,7 +1111,7 @@
         overlay.addEventListener("click", function(e){ if (e.target === overlay) closeMessage(); });
         document.addEventListener("keydown", function(e){ if (e.key === "Escape") closeMessage(); });
         $("otpCopyBtn").addEventListener("click", function(){
-          if (currentOtp) copyText(currentOtp, "បានចម្លងលេខកូដហើយ");
+          if (currentOtp) copyText(currentOtp, t("toastCopiedCode"));
         });
 
         /* ---------- polling ---------- */
@@ -871,7 +1133,7 @@
         }
         function updateCountdown(){
           countdownText.textContent = state.token
-            ? "ធ្វើបច្ចុប្បន្នភាពដោយស្វ័យប្រវត្តិក្នុង " + state.countdown + " វិនាទី"
+            ? t("countdown", {n: state.countdown})
             : "";
         }
         document.addEventListener("visibilitychange", function(){
@@ -890,15 +1152,15 @@
 
         /* ---------- buttons ---------- */
         $("generateBtn").addEventListener("click", function(){
-          showToast("កំពុងបង្កើតអ៊ីមែលថ្មី…");
+          showToast(t("toastCreatingNew"));
           createAccount();
         });
         $("copyBtn").addEventListener("click", function(){
-          if (state.address) copyText(state.address, "បានចម្លងអ៊ីមែលហើយ — យកទៅបិទភ្ជាប់បានភ្លាម");
+          if (state.address) copyText(state.address, t("toastCopiedEmail"));
         });
         $("qrBtn").addEventListener("click", function(){
           var p = $("qrPanel");
-          if (typeof QRCode === "undefined"){ showToast("QR មិនអាចប្រើបាននៅពេលនេះ"); return; }
+          if (typeof QRCode === "undefined"){ showToast(t("toastQrUnavailable")); return; }
           p.classList.toggle("open");
         });
         function manualRefresh(iconEl){
@@ -911,13 +1173,18 @@
         $("refreshBtn").addEventListener("click", function(){ manualRefresh($("refreshIcon")); });
         $("inboxRefreshBtn").addEventListener("click", function(){ manualRefresh($("inboxRefreshIcon")); });
         $("changeBtn").addEventListener("click", function(){
-          showToast("កំពុងបង្កើតអ៊ីមែលថ្មី…");
+          showToast(t("toastCreatingNew"));
           createAccount();
         });
         $("deleteBtn").addEventListener("click", deleteAndRecreate);
         $("retryBtn").addEventListener("click", createAccount);
 
+        /* ---------- language toggle ---------- */
+        $("langKm").addEventListener("click", function(){ setLang("km"); });
+        $("langEn").addEventListener("click", function(){ setLang("en"); });
+
         /* ---------- go ---------- */
+        applyLang(lang);
         createAccount();
       })();
     </script>
