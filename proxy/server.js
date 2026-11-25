@@ -211,6 +211,14 @@ async function handleSavedOne(req, res, url) {
   }
 }
 
+/* ---------- GET /domains cache (5 minutes) ----------
+   The domain list almost never changes, but the site asks for it on
+   every account creation. Cache successful upstream answers in
+   memory so repeated lookups do not hit Mail.tm at all. Only
+   successful (2xx) answers are cached; failures are never cached. */
+const DOMAINS_CACHE_TTL_MS = 5 * 60 * 1000;
+let domainsCache = { at: 0, data: null };
+
 /* ---------- HTTP plumbing ---------- */
 
 function sendJson(res, status, obj) {
@@ -264,6 +272,14 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // GET /domains: serve from the 5-minute cache when it is fresh,
+  // without touching Mail.tm at all.
+  const isDomains = req.method === "GET" && url.pathname === "/domains";
+  if (isDomains && domainsCache.data !== null && Date.now() - domainsCache.at < DOMAINS_CACHE_TTL_MS) {
+    sendJson(res, 200, domainsCache.data);
+    return;
+  }
+
   const chunks = [];
   req.on("data", (chunk) => chunks.push(chunk));
   req.on("error", () => sendJson(res, 500, { error: "request read failed" }));
@@ -297,6 +313,11 @@ const server = http.createServer((req, res) => {
           "Content-Length": Buffer.byteLength(text),
         });
         res.end(text);
+      }
+
+      // Cache successful /domains answers for 5 minutes.
+      if (isDomains && data !== null && upstreamRes.status >= 200 && upstreamRes.status < 300) {
+        domainsCache = { at: Date.now(), data };
       }
 
       // Auto-save (fire-and-forget, never delays or fails the reply):

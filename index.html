@@ -333,6 +333,55 @@
         transition:transform .25s ease;pointer-events:none;max-width:calc(100vw - 32px);text-align:center;
       }
       .toast.show{transform:translate(-50%,0)}
+
+      /* ---------- Mobile layout: no horizontal overflow on phones ---------- */
+      html,body{overflow-x:clip}
+      @supports not (overflow-x:clip){ html,body{overflow-x:hidden} }
+      img{max-width:100%}
+      /* Inbox rows: subject/intro are inline spans, so they need
+         display:block for text-overflow:ellipsis to work; the sender
+         name (flex row)
+         needs its inner span to shrink (min-width:0) or the unread dot
+         and name push the row off-screen. */
+      .msg-subject,.msg-intro{display:block}
+      .msg-from>span:not(.unread-dot){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      /* Long unbroken strings (addresses, URLs, codes) must break inside
+         their boxes instead of forcing the page wider. */
+      .addr-text{overflow-wrap:anywhere;min-width:0;max-width:100%}
+      .addr-box{min-width:0}
+      .reader-meta{grid-template-columns:minmax(0,1fr);overflow-wrap:anywhere}
+      .reader-meta b,.reader-meta span{overflow-wrap:anywhere}
+      .reader-head h3{overflow-wrap:anywhere}
+      .reader-body .text-body{overflow-wrap:anywhere}
+      .toast{overflow-wrap:anywhere}
+      .error-banner{overflow-wrap:anywhere}
+      summary{overflow-wrap:anywhere}
+      /* Header: on phones the brand + 4 nav links + language buttons do
+         not fit one row, so let the nav drop to a second, horizontally
+         scrollable row instead of widening the whole page. */
+      @media (max-width:720px){
+        .header-in{flex-wrap:wrap;gap:6px 10px;padding:10px 12px}
+        nav{order:3;flex:1 1 100%;margin-left:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+        nav::-webkit-scrollbar{display:none}
+        nav a{flex:none}
+      }
+      @media (max-width:560px){
+        .brand-name{font-size:18px}
+      }
+      @media (max-width:480px){
+        main{padding:20px 12px 48px}
+        .mail-card{padding:20px 16px 16px}
+        .btn{padding:10px 14px;font-size:14.5px}
+        .msg-btn{padding:13px 14px;gap:10px}
+        .inbox-head{padding:13px 14px}
+        .inbox-head h2{font-size:16px}
+        .reader-head{padding:16px 16px 10px}
+        .reader-head h3{font-size:17px}
+        .confirm-strip{margin:12px 16px 0}
+        .otp-strip{margin:12px 16px 4px}
+        .reader-body .text-body{padding:14px 16px}
+        .error-banner button{margin:8px 0 0}
+      }
     </style>
   </head>
   <body>
@@ -587,8 +636,15 @@
       (function(){
         "use strict";
         var PROXY = "https://movmail-proxy.onrender.com";
+        var PROXY2 = "https://movmail-proxy-2.onrender.com";
         var DIRECT = "https://api.mail.tm";
-        var API = PROXY;
+        /* Failover bases, in order: primary proxy, backup proxy, then
+           direct Mail.tm (usually CORS-blocked from a browser, kept as
+           a last resort). apiBaseIdx remembers the base that last
+           answered, so later requests go straight to the working one
+           instead of retrying a dead base first. */
+        var API_BASES = [PROXY, PROXY2, DIRECT];
+        var apiBaseIdx = 0;
         var POLL_SECONDS = 20;
 
         /* ---------- Language (EN / ខ្មែរ, one language at a time) ---------- */
@@ -682,9 +738,10 @@ var I18N = {
     "toastCreatingNew": "កំពុងបង្កើតអ៊ីមែលថ្មី…",
     "toastDeleted": "បានលុបអ៊ីមែលចាស់ — កំពុងបង្កើតថ្មី…",
     "toastNewMsg": "មានសារថ្មីចូលមកដល់!",
-    "errorConnect": "មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេអ៊ីមែលបានទេ។ ({code}) សូមចុច «{generate}» ដើម្បីព្យាយាមម្តងទៀត។",
+    "errorConnect": "មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេអ៊ីមែលបានទេ។ ({code}) កំពុងព្យាយាមភ្ជាប់ឡើងវិញដោយស្វ័យប្រវត្តិ…",
     "errorDefault": "មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេអ៊ីមែលបានទេ។",
-    "retrying": "ម៉ាស៊ីនមេរវល់ — កំពុងព្យាយាមម្តងទៀត (លើកទី {n}/3)…",
+    "retrying": "ម៉ាស៊ីនមេរវល់ — កំពុងព្យាយាមម្តងទៀត (លើកទី {n})…",
+    "reconnecting": "កំពុងភ្ជាប់ឡើងវិញដោយស្វ័យប្រវត្តិ…",
     "relJustNow": "មុននេះបន្តិច",
     "relMinutes": "{n} នាទីមុន",
     "relHours": "{n} ម៉ោងមុន",
@@ -787,9 +844,10 @@ var I18N = {
     "toastCreatingNew": "Creating a new email…",
     "toastDeleted": "Old email deleted — creating a new one…",
     "toastNewMsg": "A new message arrived!",
-    "errorConnect": "Cannot connect to the email server. ({code}) Click “{generate}” to try again.",
+    "errorConnect": "Cannot connect to the email server. ({code}) Reconnecting automatically…",
     "errorDefault": "Cannot connect to the email server.",
-    "retrying": "Server is busy — retrying (attempt {n}/3)…",
+    "retrying": "Server is busy — retrying (attempt {n})…",
+    "reconnecting": "Reconnecting automatically…",
     "relJustNow": "Just now",
     "relMinutes": "{n} minutes ago",
     "relHours": "{n} hours ago",
@@ -841,7 +899,7 @@ var I18N = {
             enBtn.setAttribute("aria-pressed", lang === "en" ? "true" : "false");
           }
           /* re-render dynamic state in the active language */
-          if (state.creating){
+          if (state.creating || state.retrying){
             addrText.textContent = t("addrGenerating");
             statusText.textContent = state.retrying ? t("retrying", {n: state.retryCount || 1}) : t("statusConnecting");
           } else if (state.address){
@@ -864,7 +922,8 @@ var I18N = {
           address: "", password: "", token: "", accountId: "",
           messages: [], timer: null, countdown: POLL_SECONDS,
           creating: false, checking: false, retryCount: 0,
-          failed: false, retrying: false, lastErrorCode: ""
+          failed: false, retrying: false, lastErrorCode: "",
+          createTimer: null, pollFailed: false
         };
 
         /* Saved messages live in the server database, not in Mail.tm,
@@ -936,13 +995,31 @@ var I18N = {
           }
           // Mail.tm does not send Access-Control-Allow-Origin, so browser
           // fetch to it directly is blocked by CORS. Go through our
-          // Render proxy first; only on a network error retry once
-          // directly against api.mail.tm (best effort, usually CORS-blocked).
-          return doFetch(API).catch(function(err){
-            if (err && err.status) throw err;
-            if (API === PROXY) return doFetch(DIRECT);
-            throw err;
-          });
+          // Render proxies first (primary, then backup), and only as a
+          // last resort try api.mail.tm directly (best effort, usually
+          // CORS-blocked). A 429/5xx/network failure on one base falls
+          // through to the next base for this request; the base that
+          // answers becomes the remembered base for later requests.
+          // Other HTTP errors (e.g. 401/404) fail at once — another
+          // base would answer the same way.
+          function failoverRetryable(err){
+            return !err || !err.status || err.status === 429 || err.status >= 500;
+          }
+          var order = [];
+          for (var i = 0; i < API_BASES.length; i++) order.push(API_BASES[(apiBaseIdx + i) % API_BASES.length]);
+          var attempt = 0;
+          function tryNext(lastErr){
+            if (attempt >= order.length) throw lastErr;
+            var base = order[attempt++];
+            return doFetch(base).then(function(data){
+              apiBaseIdx = API_BASES.indexOf(base);
+              return data;
+            }).catch(function(err){
+              if (failoverRetryable(err) && attempt < order.length) return tryNext(err);
+              throw err;
+            });
+          }
+          return tryNext(null);
         }
         function relTime(iso){
           var ts = new Date(iso).getTime(), diff = Date.now() - ts;
@@ -995,6 +1072,7 @@ var I18N = {
         /* ---------- account lifecycle ---------- */
         function createAccount(){
           if (state.creating) return;
+          if (state.createTimer){ clearTimeout(state.createTimer); state.createTimer = null; }
           state.creating = true;
           state.failed = false;
           state.retrying = false;
@@ -1038,23 +1116,27 @@ var I18N = {
             fetchSavedMessages();
           }).catch(function(err){
             state.creating = false;
-            if ((err.status === 429 || err.status === 503) && (state.retryCount || 0) < 3){
-              state.retryCount = (state.retryCount || 0) + 1;
-              state.retrying = true;
-              addrText.textContent = t("addrGenerating");
-              statusText.textContent = t("retrying", {n: state.retryCount});
-              setTimeout(createAccount, 6000);
-              return;
-            }
-            state.retryCount = 0;
-            state.failed = true;
-            state.retrying = false;
-            state.lastErrorCode = String(err.status || err.message || "network");
-            addrText.textContent = t("addrFailed");
-            statusText.textContent = t("statusNoConn");
+            /* Auto-reconnect forever: the user must never have to click
+               anything to recover from a dropped connection. Backoff:
+               5s, then 10s, then every 20s. Retryable errors (429/503/
+               network) retry silently with the retrying status; other
+               errors also retry, with the banner shown only as
+               information (its text says reconnecting automatically)
+               and the manual Retry button kept as a backup. */
+            var retryable = !err || !err.status || err.status === 429 || err.status === 503;
+            state.retryCount = (state.retryCount || 0) + 1;
+            state.retrying = true;
+            var delay = state.retryCount === 1 ? 5000 : state.retryCount === 2 ? 10000 : 20000;
+            addrText.textContent = t("addrGenerating");
+            addrText.classList.add("loading");
+            statusText.textContent = t("retrying", {n: state.retryCount});
             setBusy(true);
-            $("retryBtn").disabled = false;
-            showError(t("errorConnect", {code: state.lastErrorCode, generate: t("generate")}));
+            if (!retryable){
+              state.failed = true;
+              state.lastErrorCode = String(err.status || err.message || "network");
+              showError(t("errorConnect", {code: state.lastErrorCode, generate: t("generate")}));
+            }
+            state.createTimer = setTimeout(createAccount, delay);
           });
         }
 
@@ -1182,8 +1264,9 @@ var I18N = {
             /* quiet: no banner. On a rate-limit (429/503) or network
                error, retry after 10s, up to 3 times — that is what makes
                the Copy-code chip and Confirm Email button appear. After
-               that, fall back to one retry after 60s. Other HTTP errors
-               (e.g. 404) go straight to the 60s window. */
+               that, keep retrying in a 60s window on every later poll,
+               forever: a failed enrich never needs a manual refresh.
+               Other HTTP errors (e.g. 404) go straight to the 60s window. */
             m._detailFetching = false;
             if ((!err || !err.status || err.status === 429 || err.status === 503) && (m._detailRetries || 0) < 3){
               m._detailRetries = (m._detailRetries || 0) + 1;
@@ -1215,12 +1298,17 @@ var I18N = {
               if (old._detailNextTry) nw._detailNextTry = old._detailNextTry;
             });
             state.messages = msgs;
+            if (state.pollFailed){ state.pollFailed = false; statusText.textContent = t("statusWaiting"); }
             renderMessages();
             state.messages.slice(0, 10).forEach(enrichMessage);
             fetchSavedMessages();
             if (!first && hadNew) showToast(t("toastNewMsg"));
           }).catch(function(){
-            /* keep polling quietly */
+            /* Self-healing: the 20s timer keeps running and the next
+               poll retries automatically — no click needed. Just show
+               a small reconnecting status instead of an error. */
+            state.pollFailed = true;
+            statusText.textContent = t("reconnecting");
           }).then(function(){
             state.checking = false;
           });
@@ -1469,13 +1557,16 @@ var I18N = {
               showDetail(detail);
             }).catch(function(err){
             if (readerSeq !== state.readerSeq) return;
-            /* Rate-limit / server-busy / network error: retry up to 3
-               more times, 5s apart, instead of failing at once. Other
-               HTTP errors (e.g. 404) fail immediately. */
-            if ((!err || !err.status || err.status === 429 || err.status === 503) && readerAttempts < 3){
+            /* Rate-limit / server-busy / network error: retry forever
+               with backoff instead of failing at once — the reader must
+               never get stuck on a failure that needs the user to close
+               and reopen the message. Other HTTP errors (e.g. 404,
+               message deleted) fail immediately. */
+            if (!err || !err.status || err.status === 429 || err.status === 503){
               readerAttempts++;
+              var retryDelay = readerAttempts === 1 ? 5000 : readerAttempts === 2 ? 10000 : 20000;
               $("readerBody").innerHTML = '<p style="padding:16px 22px;color:var(--muted)">' + t("readerRetrying") + '</p>';
-              setTimeout(loadDetail, 5000);
+              setTimeout(loadDetail, retryDelay);
               return;
             }
             readerAttempts = 0;
