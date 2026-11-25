@@ -346,6 +346,9 @@
         </div>
 
         <div class="actions">
+          <button class="btn primary" id="generateBtn">
+            បង្កើតអ៊ីមែល / Generate Email
+          </button>
           <button class="btn primary" id="copyBtn" disabled>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>
             ចម្លងអ៊ីមែល
@@ -416,7 +419,7 @@
           <div class="step">
             <div class="step-num">1</div>
             <h3>ចម្លងអ៊ីមែល</h3>
-            <p>ចុចប៊ូតុង «ចម្លងអ៊ីមែល» នៅខាងលើ ដើម្បីយកអាសយដ្ឋានដែលបានបង្កើតដោយស្វ័យប្រវត្តិ។</p>
+            <p>ចុចប៊ូតុង «បង្កើតអ៊ីមែល» នៅខាងលើដើម្បីបង្កើតអាសយដ្ឋានថ្មី រួចចុច «ចម្លងអ៊ីមែល» ដើម្បីយកទៅប្រើ។</p>
           </div>
           <div class="step">
             <div class="step-num">2</div>
@@ -534,7 +537,9 @@
     <script>
       (function(){
         "use strict";
-        var API = "https://api.mail.tm";
+        var PROXY = "https://movmail-proxy.onrender.com";
+        var DIRECT = "https://api.mail.tm";
+        var API = PROXY;
         var POLL_SECONDS = 10;
 
         var state = {
@@ -577,16 +582,27 @@
           var headers = { "Accept": "application/json" };
           if (state.token) headers["Authorization"] = "Bearer " + state.token;
           if (opts.body) headers["Content-Type"] = "application/json";
-          return fetch(API + path, {
-            method: opts.method || "GET",
-            headers: headers,
-            body: opts.body ? JSON.stringify(opts.body) : undefined
-          }).then(function(res){
-            if (res.status === 204) return null;
-            return res.json().catch(function(){ return null; }).then(function(data){
-              if (!res.ok) { var e = new Error("HTTP " + res.status); e.status = res.status; e.data = data; throw e; }
-              return data;
+          function doFetch(base){
+            return fetch(base + path, {
+              method: opts.method || "GET",
+              headers: headers,
+              body: opts.body ? JSON.stringify(opts.body) : undefined
+            }).then(function(res){
+              if (res.status === 204) return null;
+              return res.json().catch(function(){ return null; }).then(function(data){
+                if (!res.ok) { var e = new Error("HTTP " + res.status); e.status = res.status; e.data = data; throw e; }
+                return data;
+              });
             });
+          }
+          // Mail.tm does not send Access-Control-Allow-Origin, so browser
+          // fetch to it directly is blocked by CORS. Go through our
+          // Render proxy first; only on a network error retry once
+          // directly against api.mail.tm (best effort, usually CORS-blocked).
+          return doFetch(API).catch(function(err){
+            if (err && err.status) throw err;
+            if (API === PROXY) return doFetch(DIRECT);
+            throw err;
           });
         }
         function relTime(iso){
@@ -620,9 +636,15 @@
           }
         }
         function setBusy(busy){
-          ["copyBtn","qrBtn","refreshBtn","changeBtn","deleteBtn","inboxRefreshBtn"].forEach(function(id){
+          // Only copy/QR/refresh/delete need a live mailbox. Generate,
+          // Change and Try again must stay clickable at all times so
+          // the user can always retry after a failure.
+          ["copyBtn","qrBtn","refreshBtn","deleteBtn","inboxRefreshBtn"].forEach(function(id){
             $(id).disabled = busy || !state.token;
           });
+          $("generateBtn").disabled = false;
+          $("changeBtn").disabled = false;
+          $("retryBtn").disabled = false;
         }
         function showError(msg){
           errorText.textContent = msg;
@@ -673,7 +695,7 @@
             statusText.textContent = "គ្មានការតភ្ជាប់";
             setBusy(true);
             $("retryBtn").disabled = false;
-            showError("មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេអ៊ីមែលបានទេ។ សូមពិនិត្យអ៊ីនធឺណិត រួចព្យាយាមម្តងទៀត។");
+            showError("មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេអ៊ីមែលបានទេ។ (" + (err.status || err.message || "network") + ") សូមចុច «បង្កើតអ៊ីមែល» ដើម្បីព្យាយាមម្តងទៀត។");
           });
         }
 
@@ -858,6 +880,10 @@
         }
 
         /* ---------- buttons ---------- */
+        $("generateBtn").addEventListener("click", function(){
+          showToast("កំពុងបង្កើតអ៊ីមែលថ្មី…");
+          createAccount();
+        });
         $("copyBtn").addEventListener("click", function(){
           if (state.address) copyText(state.address, "បានចម្លងអ៊ីមែលហើយ — យកទៅបិទភ្ជាប់បានភ្លាម");
         });
