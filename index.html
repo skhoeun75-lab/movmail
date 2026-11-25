@@ -349,6 +349,7 @@
         </a>
         <nav>
           <a href="#inbox" data-i18n="navInbox">ប្រអប់សារ</a>
+          <a href="#savedBox" data-i18n="navSaved">សាររក្សាទុក</a>
           <a href="#how" data-i18n="navHow">របៀបប្រើ</a>
           <a href="#faq" data-i18n="navFaq">សំណួរ</a>
         </nav>
@@ -429,6 +430,27 @@
           <svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="m3 7 9 6 9-6" stroke-linejoin="round"/></svg>
           <h3 id="emptyTitle">ប្រអប់សាររបស់អ្នកទទេ</h3>
           <p id="emptyText">ចម្លងអ៊ីមែលខាងលើទៅប្រើនៅគេហទំព័រដែលអ្នកចង់ចុះឈ្មោះ — សារ និងលេខកូដ OTP នឹងលេចឡើងនៅទីនេះដោយស្វ័យប្រវត្តិ។</p>
+        </div>
+      </div>
+
+      <!-- ===== Saved messages (kept forever) ===== -->
+      <div class="inbox" id="savedBox">
+        <div class="inbox-head">
+          <h2>
+            <svg viewBox="0 0 24 24"><path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10v4z"/></svg>
+            <span data-i18n="savedTitle">សារដែលបានរក្សាទុក</span> <span style="color:var(--faint);font-weight:600;font-size:13px;letter-spacing:1px">SAVED</span>
+          </h2>
+          <span class="count-badge" id="savedCountBadge">0</span>
+          <span class="spacer"></span>
+          <button class="icon-btn" id="savedRefreshBtn" aria-label="ធ្វើឱ្យសារដែលបានរក្សាទុកស្រស់" data-i18n-aria="savedRefreshLabel">
+            <svg viewBox="0 0 24 24" fill="currentColor" id="savedRefreshIcon"><path d="M17.65 6.35A8 8 0 1 0 19.73 14h-2.08a6 6 0 1 1-1.41-6.65L13 11h7V4l-2.35 2.35z"/></svg>
+          </button>
+        </div>
+        <ul class="msg-list" id="savedList"></ul>
+        <div class="empty-state" id="savedEmptyState">
+          <svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="m3 7 9 6 9-6" stroke-linejoin="round"/></svg>
+          <h3 id="savedEmptyTitle">មិនទាន់មានសារដែលបានរក្សាទុក</h3>
+          <p id="savedEmptyText">សារដែលចូលមកក្នុងប្រអប់សារនឹងត្រូវបានរក្សាទុកដោយស្វ័យប្រវត្តិនៅទីនេះ — ទោះបីជាអ្នកប្តូរអ៊ីមែលថ្មី ឬបិទទំព័រចោលក៏ដោយ។</p>
         </div>
       </div>
 
@@ -635,7 +657,7 @@ var I18N = {
     "faqQ4": "តើខ្ញុំអាចផ្ញើអ៊ីមែលចេញបានទេ?",
     "faqA4": "មិនបានទេ។ សេវានេះសម្រាប់តែ <b>ទទួល</b> សារប៉ុណ្ណោះ — ដូចជាលេខកូដ OTP និងអ៊ីមែលបញ្ជាក់ការចុះឈ្មោះ។ ការផ្ញើចេញត្រូវបានបិទ ដើម្បីការពារការប្រើប្រាស់ខុសគោលបំណង។",
     "faqQ5": "បើខ្ញុំចុច «{change}» តើសារចាស់ទៅណា?",
-    "faqA5": "អ៊ីមែលចាស់ និងសារទាំងអស់របស់វានឹងត្រូវបោះបង់ ហើយអ្នកមិនអាចត្រឡប់ទៅមើលវិញបានទេ។ ដូច្នេះសូមប្រាកដថាអ្នកបានយកលេខកូដ ឬព័ត៌មានដែលត្រូវការរួចរាល់ មុននឹងប្តូរ។",
+    "faqA5": "អ៊ីមែលចាស់នឹងត្រូវបោះបង់ តែសារទាំងអស់របស់វាត្រូវបានរក្សាទុកដោយស្វ័យប្រវត្តិនៅក្នុងផ្នែក «សារដែលបានរក្សាទុក» ខាងក្រោម — អ្នកអាចត្រឡប់ទៅមើលវិញបានគ្រប់ពេល។",
     "footerP1": "អ៊ីមែលបណ្តោះអាសន្នសម្រាប់ការចុះឈ្មោះសាកល្បង និងការពារឯកជនភាព",
     "footerP2": "ប្រអប់សារដំណើរការដោយ Mail.tm API · សារត្រូវបានលុបដោយស្វ័យប្រវត្តិបន្ទាប់ពីផុតកំណត់",
     "readerFromLabel": "ពី៖",
@@ -667,7 +689,14 @@ var I18N = {
     "relMinutes": "{n} នាទីមុន",
     "relHours": "{n} ម៉ោងមុន",
     "relDays": "{n} ថ្ងៃមុន",
-    "inboxRefreshLabel": "ធ្វើឱ្យប្រអប់សារស្រស់"
+    "inboxRefreshLabel": "ធ្វើឱ្យប្រអប់សារស្រស់",
+    "navSaved": "សាររក្សាទុក",
+    "savedTitle": "សារដែលបានរក្សាទុក",
+    "savedEmptyTitle": "មិនទាន់មានសារដែលបានរក្សាទុក",
+    "savedEmptyText": "សារដែលចូលមកក្នុងប្រអប់សារនឹងត្រូវបានរក្សាទុកដោយស្វ័យប្រវត្តិនៅទីនេះ — ទោះបីជាអ្នកប្តូរអ៊ីមែលថ្មី ឬបិទទំព័រចោលក៏ដោយ។",
+    "savedLoading": "កំពុងផ្ទុកសារដែលបានរក្សាទុក…",
+    "savedLoadFailed": "ផ្ទុកសារដែលបានរក្សាទុកមិនបានសម្រេច។ សូមព្យាយាមម្តងទៀត។",
+    "savedRefreshLabel": "ធ្វើឱ្យសារដែលបានរក្សាទុកស្រស់"
   },
   "en": {
     "docTitle": "MovMail.com — Temporary Email",
@@ -733,7 +762,7 @@ var I18N = {
     "faqQ4": "Can I send emails from it?",
     "faqA4": "No. This service is for <b>receiving</b> messages only — such as OTP codes and sign-up confirmation emails. Sending is disabled to prevent abuse.",
     "faqQ5": "If I click “{change}”, what happens to the old messages?",
-    "faqA5": "The old email and all of its messages will be discarded, and you cannot get them back. So make sure you have copied the code or information you need before switching.",
+    "faqA5": "The old email is discarded, but all of its messages are saved automatically in the “Saved messages” section below — you can go back and read them any time.",
     "footerP1": "Temporary email for trial sign-ups and protecting your privacy",
     "footerP2": "Inbox powered by Mail.tm API · Messages are deleted automatically after expiry",
     "readerFromLabel": "From:",
@@ -765,7 +794,14 @@ var I18N = {
     "relMinutes": "{n} minutes ago",
     "relHours": "{n} hours ago",
     "relDays": "{n} days ago",
-    "inboxRefreshLabel": "Refresh inbox"
+    "inboxRefreshLabel": "Refresh inbox",
+    "navSaved": "Saved",
+    "savedTitle": "Saved messages",
+    "savedEmptyTitle": "No saved messages yet",
+    "savedEmptyText": "Messages that arrive in the inbox are saved here automatically — even after you change to a new email or close this page.",
+    "savedLoading": "Loading saved messages…",
+    "savedLoadFailed": "Could not load saved messages. Please try again.",
+    "savedRefreshLabel": "Refresh saved messages"
   }
 };
         var lang = "km";
@@ -820,6 +856,7 @@ var I18N = {
           expiryText.textContent = t("expiry");
           updateCountdown();
           renderMessages();
+          renderSavedMessages();
         }
         function setLang(next){ applyLang(next); }
 
@@ -829,6 +866,25 @@ var I18N = {
           creating: false, checking: false, retryCount: 0,
           failed: false, retrying: false, lastErrorCode: ""
         };
+
+        /* Saved messages live in the server database, not in Mail.tm,
+           so they survive an address change. This device remembers
+           the addresses it has used, so the Saved section can show
+           messages from all of them, newest first. */
+        var savedState = { messages: [], fetching: false, loaded: false, lastFetch: 0 };
+        function knownAddresses(){
+          var list = [];
+          try {
+            var raw = localStorage.getItem("movmail-addresses");
+            if (raw) list = JSON.parse(raw) || [];
+          } catch(e) {}
+          if (state.address && list.indexOf(state.address) === -1) list.unshift(state.address);
+          return list.slice(0, 10);
+        }
+        function rememberAddress(){
+          if (!state.address) return;
+          try { localStorage.setItem("movmail-addresses", JSON.stringify(knownAddresses())); } catch(e) {}
+        }
 
         var $ = function(id){ return document.getElementById(id); };
         var addrText = $("addrText"), statusText = $("statusText"),
@@ -863,6 +919,7 @@ var I18N = {
           opts = opts || {};
           var headers = { "Accept": "application/json" };
           if (state.token) headers["Authorization"] = "Bearer " + state.token;
+          if (state.address) headers["X-Movmail-Address"] = state.address;
           if (opts.body) headers["Content-Type"] = "application/json";
           function doFetch(base){
             return fetch(base + path, {
@@ -977,6 +1034,8 @@ var I18N = {
             buildQr();
             fetchMessages(true);
             startPolling();
+            rememberAddress();
+            fetchSavedMessages();
           }).catch(function(err){
             state.creating = false;
             if ((err.status === 429 || err.status === 503) && (state.retryCount || 0) < 3){
@@ -1158,6 +1217,7 @@ var I18N = {
             state.messages = msgs;
             renderMessages();
             state.messages.slice(0, 10).forEach(enrichMessage);
+            fetchSavedMessages();
             if (!first && hadNew) showToast(t("toastNewMsg"));
           }).catch(function(){
             /* keep polling quietly */
@@ -1165,19 +1225,7 @@ var I18N = {
             state.checking = false;
           });
         }
-        function renderMessages(){
-          countBadge.textContent = state.messages.length;
-          msgList.innerHTML = "";
-          if (!state.messages.length){
-            emptyState.style.display = "block";
-            emptyTitle.textContent = state.token ? t("emptyReadyTitle") : t("emptyPreparingTitle");
-            emptyText.textContent = state.token ? t("emptyReadyText") : t("emptyPreparingText");
-            waitingBar.style.display = state.token ? "block" : "none";
-            return;
-          }
-          emptyState.style.display = "none";
-          waitingBar.style.display = "none";
-          state.messages.forEach(function(m){
+        function buildMsgItem(m){
             var li = document.createElement("li");
             li.className = "msg-item" + (m.seen ? " seen" : "");
             var btn = document.createElement("button");
@@ -1248,7 +1296,90 @@ var I18N = {
               }
               li.appendChild(quick);
             }
-            msgList.appendChild(li);
+            return li;
+        }
+
+        function renderMessages(){
+          countBadge.textContent = state.messages.length;
+          msgList.innerHTML = "";
+          if (!state.messages.length){
+            emptyState.style.display = "block";
+            emptyTitle.textContent = state.token ? t("emptyReadyTitle") : t("emptyPreparingTitle");
+            emptyText.textContent = state.token ? t("emptyReadyText") : t("emptyPreparingText");
+            waitingBar.style.display = state.token ? "block" : "none";
+            return;
+          }
+          emptyState.style.display = "none";
+          waitingBar.style.display = "none";
+          state.messages.forEach(function(m){ msgList.appendChild(buildMsgItem(m)); });
+        }
+
+
+        /* ---------- saved messages (server database, never lost) ---------- */
+        function savedToMessage(row){
+          var raw = row.raw || {};
+          var text = row.text_body || raw.text || "";
+          var html = row.html_body || (Array.isArray(raw.html) ? raw.html.join("\n") : (raw.html || ""));
+          var m = {
+            id: row.id,
+            from: { address: row.sender_address || (raw.from && raw.from.address) || "", name: row.sender_name || (raw.from && raw.from.name) || "" },
+            subject: row.subject || raw.subject || "",
+            intro: row.intro || raw.intro || "",
+            createdAt: row.received_at || raw.createdAt || row.created_at,
+            seen: true,
+            _saved: true,
+            _accountAddress: row.account_address || "",
+            _textBody: text,
+            _htmlBody: html
+          };
+          var otp = extractOtp((m.subject || "") + " " + text);
+          if (otp) m._otp = otp;
+          var detailObj = (raw && (raw.text || raw.html)) ? raw : { text: text, html: html ? [html] : [] };
+          var url = extractConfirmUrl(detailObj, m.subject || "");
+          if (url) m._confirmUrl = url;
+          return m;
+        }
+        function renderSavedMessages(){
+          var list = $("savedList"), empty = $("savedEmptyState");
+          if (!list || !empty) return;
+          $("savedCountBadge").textContent = savedState.messages.length;
+          list.innerHTML = "";
+          if (!savedState.messages.length){
+            empty.style.display = "block";
+            $("savedEmptyTitle").textContent = savedState.loaded ? t("savedEmptyTitle") : t("savedLoading");
+            $("savedEmptyText").textContent = savedState.loaded ? t("savedEmptyText") : "";
+            return;
+          }
+          empty.style.display = "none";
+          savedState.messages.forEach(function(m){ list.appendChild(buildMsgItem(m)); });
+        }
+        function fetchSavedMessages(){
+          if (savedState.fetching) return;
+          if (Date.now() - savedState.lastFetch < 15000) return;
+          var addrs = knownAddresses();
+          if (!addrs.length) return;
+          savedState.fetching = true;
+          savedState.lastFetch = Date.now();
+          var jobs = addrs.map(function(a){
+            return api("/saved?address=" + encodeURIComponent(a)).catch(function(){ return []; });
+          });
+          Promise.all(jobs).then(function(results){
+            var byId = {};
+            results.forEach(function(rows){
+              (Array.isArray(rows) ? rows : []).forEach(function(row){
+                if (row && row.id) byId[row.id] = row;
+              });
+            });
+            var rows = Object.keys(byId).map(function(k){ return byId[k]; });
+            rows.sort(function(a, b){
+              var ta = new Date(a.received_at || a.created_at || 0).getTime() || 0;
+              var tb = new Date(b.received_at || b.created_at || 0).getTime() || 0;
+              return tb - ta;
+            });
+            savedState.messages = rows.map(savedToMessage);
+            savedState.loaded = true;
+            savedState.fetching = false;
+            renderSavedMessages();
           });
         }
 
@@ -1272,7 +1403,7 @@ var I18N = {
             readerAvOld.parentNode.replaceChild(readerAv, readerAvOld);
           }
           $("readerFrom").textContent = (m.from ? ((m.from.name ? m.from.name + " <" : "") + (m.from.address || "") + (m.from.name ? ">" : "")) : "—");
-          $("readerTo").textContent = state.address;
+          $("readerTo").textContent = m._accountAddress || state.address;
           $("readerDate").textContent = fullDate(m.createdAt);
           $("readerBody").innerHTML = '<p style="padding:16px 22px;color:var(--muted)">' + t("readerLoading") + '</p>';
           $("otpStrip").classList.remove("show");
@@ -1288,10 +1419,7 @@ var I18N = {
 
           var readerSeq = (state.readerSeq = (state.readerSeq || 0) + 1);
           var readerAttempts = 0;
-          function loadDetail(){
-            if (readerSeq !== state.readerSeq) return;
-            if (!overlay.classList.contains("open")) return;
-            api("/messages/" + m.id).then(function(detail){
+          function showDetail(detail){
             if (readerSeq !== state.readerSeq) return;
             m.seen = true; renderMessages();
             var body = $("readerBody");
@@ -1325,7 +1453,21 @@ var I18N = {
               body.appendChild(div);
             }
             readerAttempts = 0;
-          }).catch(function(err){
+            fetchSavedMessages();
+          }
+          function loadDetail(){
+            if (readerSeq !== state.readerSeq) return;
+            if (!overlay.classList.contains("open")) return;
+            if (m._saved){
+              /* Saved message: the body is already stored locally,
+                 no Mail.tm fetch needed — it opens even after the
+                 temporary mailbox is gone. */
+              showDetail({ text: m._textBody || "", html: m._htmlBody ? [m._htmlBody] : [] });
+              return;
+            }
+            api("/messages/" + m.id).then(function(detail){
+              showDetail(detail);
+            }).catch(function(err){
             if (readerSeq !== state.readerSeq) return;
             /* Rate-limit / server-busy / network error: retry up to 3
                more times, 5s apart, instead of failing at once. Other
@@ -1412,6 +1554,7 @@ var I18N = {
         }
         $("refreshBtn").addEventListener("click", function(){ manualRefresh($("refreshIcon")); });
         $("inboxRefreshBtn").addEventListener("click", function(){ manualRefresh($("inboxRefreshIcon")); });
+        $("savedRefreshBtn").addEventListener("click", function(){ savedState.lastFetch = 0; fetchSavedMessages(); });
         $("changeBtn").addEventListener("click", function(){
           showToast(t("toastCreatingNew"));
           createAccount();
