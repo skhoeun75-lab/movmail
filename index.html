@@ -450,7 +450,7 @@
           <div class="step">
             <div class="step-num">3</div>
             <h3 data-i18n="step3Title">រង់ចាំសារចូល</h3>
-            <p data-i18n-html="step3Text">ទុកទំព័រនេះចំហរ។ ប្រអប់សារធ្វើបច្ចុប្បន្នភាពរៀងរាល់ ១០ វិនាទី — សារថ្មីនឹងលេចឡើងដោយខ្លួនឯង។</p>
+            <p data-i18n-html="step3Text">ទុកទំព័រនេះចំហរ។ ប្រអប់សារធ្វើបច្ចុប្បន្នភាពរៀងរាល់ ២០ វិនាទី — សារថ្មីនឹងលេចឡើងដោយខ្លួនឯង។</p>
           </div>
           <div class="step">
             <div class="step-num">4</div>
@@ -567,7 +567,7 @@
         var PROXY = "https://movmail-proxy.onrender.com";
         var DIRECT = "https://api.mail.tm";
         var API = PROXY;
-        var POLL_SECONDS = 10;
+        var POLL_SECONDS = 20;
 
         /* ---------- Language (EN / ខ្មែរ, one language at a time) ---------- */
 var I18N = {
@@ -609,7 +609,7 @@ var I18N = {
     "step2Title": "យកទៅចុះឈ្មោះ",
     "step2Text": "បិទភ្ជាប់អ៊ីមែលនេះទៅក្នុងគេហទំព័រ ឬកម្មវិធីដែលអ្នកចង់សាកល្បង រួចស្នើឱ្យគេផ្ញើលេខកូដ។",
     "step3Title": "រង់ចាំសារចូល",
-    "step3Text": "ទុកទំព័រនេះចំហរ។ ប្រអប់សារធ្វើបច្ចុប្បន្នភាពរៀងរាល់ ១០ វិនាទី — សារថ្មីនឹងលេចឡើងដោយខ្លួនឯង។",
+    "step3Text": "ទុកទំព័រនេះចំហរ។ ប្រអប់សារធ្វើបច្ចុប្បន្នភាពរៀងរាល់ ២០ វិនាទី — សារថ្មីនឹងលេចឡើងដោយខ្លួនឯង។",
     "step4Title": "បើកសារ យកលេខកូដ",
     "step4Text": "ចុចលើសារដើម្បីអាន។ បើមានលេខកូដ OTP ប្រព័ន្ធនឹងបង្ហាញវាធំៗឲ្យអ្នកចម្លងបានភ្លាម។",
     "whyTitle": "ហេតុអ្វីគួរប្រើ MovMail?",
@@ -649,6 +649,7 @@ var I18N = {
     "confirmEmail": "បញ្ជាក់អ៊ីមែល",
     "noSubject": "(គ្មានចំណងជើង)",
     "readerLoading": "កំពុងផ្ទុកសារ…",
+    "readerRetrying": "កំពុងព្យាយាមផ្ទុកសារម្តងទៀត…",
     "readerLoadFailed": "ផ្ទុកសារមិនបានសម្រេច។ សូមព្យាយាមម្តងទៀត។",
     "readerNoBody": "(សារនេះគ្មានខ្លឹមសារ)",
     "readerIframeTitle": "ខ្លឹមសារសារ",
@@ -706,7 +707,7 @@ var I18N = {
     "step2Title": "Sign up with it",
     "step2Text": "Paste this email into the website or app you want to try, then ask it to send you a code.",
     "step3Title": "Wait for the message",
-    "step3Text": "Keep this page open. The inbox refreshes every 10 seconds — new messages appear on their own.",
+    "step3Text": "Keep this page open. The inbox refreshes every 20 seconds — new messages appear on their own.",
     "step4Title": "Open the message, get the code",
     "step4Text": "Click a message to read it. If it contains an OTP code, it will be shown large so you can copy it right away.",
     "whyTitle": "Why use MovMail?",
@@ -746,6 +747,7 @@ var I18N = {
     "confirmEmail": "Confirm Email",
     "noSubject": "(No subject)",
     "readerLoading": "Loading message…",
+    "readerRetrying": "Retrying to load the message…",
     "readerLoadFailed": "Failed to load the message. Please try again.",
     "readerNoBody": "(This message has no content)",
     "readerIframeTitle": "Message content",
@@ -1013,8 +1015,17 @@ var I18N = {
           var parts = String(addr || "").split("@");
           return parts.length === 2 ? parts[1].toLowerCase().trim() : "";
         }
+        /* Root domain: mail.app.supabase.io -> supabase.io. Subdomains
+           usually have no favicon of their own; the root domain does. */
+        function rootDomain(domain){
+          var d = String(domain || "").toLowerCase().trim().replace(/\.$/, "");
+          if (!d || /^\d+\.\d+\.\d+\.\d+$/.test(d)) return d;
+          var parts = d.split(".");
+          if (parts.length <= 2) return d;
+          return parts.slice(-2).join(".");
+        }
         function logoUrl(domain){
-          return "https://www.google.com/s2/favicons?domain=" + encodeURIComponent(domain) + "&sz=128";
+          return "https://www.google.com/s2/favicons?domain=" + encodeURIComponent(rootDomain(domain)) + "&sz=128";
         }
         function makeAvatar(fromAddr, fromName){
           var av = document.createElement("span");
@@ -1022,12 +1033,24 @@ var I18N = {
           var letter = ((fromName || "").trim()[0] || "?");
           var domain = senderDomain(fromAddr);
           if (!domain){ av.textContent = letter; return av; }
+          var root = rootDomain(domain);
+          /* Try the real logo: Clearbit first (real brand logo), then
+             Google favicons for the root domain, then the initial letter. */
+          var sources = [
+            "https://logo.clearbit.com/" + encodeURIComponent(root),
+            "https://www.google.com/s2/favicons?domain=" + encodeURIComponent(root) + "&sz=128"
+          ];
           var img = document.createElement("img");
-          img.src = logoUrl(domain);
+          img.src = sources[0];
           img.alt = "";
           img.loading = "lazy";
           img.referrerPolicy = "no-referrer";
-          img.onerror = function(){ img.remove(); av.textContent = letter; };
+          img.dataset.logoIdx = "0";
+          img.onerror = function(){
+            var idx = parseInt(img.dataset.logoIdx || "0", 10) + 1;
+            if (idx < sources.length){ img.dataset.logoIdx = String(idx); img.src = sources[idx]; }
+            else { img.remove(); av.textContent = letter; }
+          };
           av.appendChild(img);
           return av;
         }
@@ -1089,16 +1112,27 @@ var I18N = {
           api("/messages/" + m.id).then(function(detail){
             m._detailFetching = false;
             m._detailFetched = true;
+            m._detailRetries = 0;
             var text = (detail && detail.text) || "";
             var otp = extractOtp((m.subject || "") + " " + text);
             if (otp) m._otp = otp;
             var url = extractConfirmUrl(detail, m.subject || "");
             if (url) m._confirmUrl = url;
             if (otp || url) renderMessages();
-          }).catch(function(){
-            /* quiet: no banner. Allow one retry after 60s, not every poll. */
+          }).catch(function(err){
+            /* quiet: no banner. On a rate-limit (429/503) or network
+               error, retry after 10s, up to 3 times — that is what makes
+               the Copy-code chip and Confirm Email button appear. After
+               that, fall back to one retry after 60s. Other HTTP errors
+               (e.g. 404) go straight to the 60s window. */
             m._detailFetching = false;
-            m._detailNextTry = Date.now() + 60000;
+            if ((!err || !err.status || err.status === 429 || err.status === 503) && (m._detailRetries || 0) < 3){
+              m._detailRetries = (m._detailRetries || 0) + 1;
+              m._detailNextTry = Date.now() + 10000;
+            } else {
+              m._detailRetries = 0;
+              m._detailNextTry = Date.now() + 60000;
+            }
           });
         }
 
@@ -1118,6 +1152,7 @@ var I18N = {
               if (old._otp) nw._otp = old._otp;
               if (old._confirmUrl) nw._confirmUrl = old._confirmUrl;
               if (old._detailFetched) nw._detailFetched = true;
+              if (old._detailRetries) nw._detailRetries = old._detailRetries;
               if (old._detailNextTry) nw._detailNextTry = old._detailNextTry;
             });
             state.messages = msgs;
@@ -1251,7 +1286,13 @@ var I18N = {
             confirmStrip.classList.remove("show");
           }
 
-          api("/messages/" + m.id).then(function(detail){
+          var readerSeq = (state.readerSeq = (state.readerSeq || 0) + 1);
+          var readerAttempts = 0;
+          function loadDetail(){
+            if (readerSeq !== state.readerSeq) return;
+            if (!overlay.classList.contains("open")) return;
+            api("/messages/" + m.id).then(function(detail){
+            if (readerSeq !== state.readerSeq) return;
             m.seen = true; renderMessages();
             var body = $("readerBody");
             body.innerHTML = "";
@@ -1283,11 +1324,26 @@ var I18N = {
               div.textContent = text || t("readerNoBody");
               body.appendChild(div);
             }
-          }).catch(function(){
+            readerAttempts = 0;
+          }).catch(function(err){
+            if (readerSeq !== state.readerSeq) return;
+            /* Rate-limit / server-busy / network error: retry up to 3
+               more times, 5s apart, instead of failing at once. Other
+               HTTP errors (e.g. 404) fail immediately. */
+            if ((!err || !err.status || err.status === 429 || err.status === 503) && readerAttempts < 3){
+              readerAttempts++;
+              $("readerBody").innerHTML = '<p style="padding:16px 22px;color:var(--muted)">' + t("readerRetrying") + '</p>';
+              setTimeout(loadDetail, 5000);
+              return;
+            }
+            readerAttempts = 0;
             $("readerBody").innerHTML = '<p style="padding:16px 22px;color:var(--red)">' + t("readerLoadFailed") + '</p>';
           });
+          }
+          loadDetail();
         }
         function closeMessage(){
+          state.readerSeq = (state.readerSeq || 0) + 1;
           overlay.classList.remove("open");
           document.body.style.overflow = "";
         }
