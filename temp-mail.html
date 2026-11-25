@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="km">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="MovMail.com — អ៊ីមែលបណ្តោះអាសន្នឥតគិតថ្លៃ សម្រាប់ទទួលលេខកូដ OTP និងការពារឯកជនភាព មិនបាច់ចុះឈ្មោះ" />
+    <link rel="icon" href="data:," />
+    <title>MovMail.com — អ៊ីមែលបណ្តោះអាសន្ន</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+      :root{
+        --bg:#f3f5f4;
+        --surface:#ffffff;
+        --surface-2:#eef2f0;
+        --ink:#15211b;
+        --muted:#5c6f65;
+        --faint:#84978c;
+        --border:#dce4df;
+        --accent:#087f5b;
+        --accent-strong:#066e4f;
+        --accent-soft:#e3f2ec;
+        --accent-ink:#065f46;
+        --amber-bg:#fdf3e0;
+        --amber-border:#ecd9a8;
+        --amber-ink:#7a5410;
+        --red:#c0392b;
+        --red-bg:#fdecea;
+        --header:#101613;
+        --header-ink:#eef4f1;
+        --shadow:0 1px 2px rgba(16,30,24,.05),0 10px 30px -18px rgba(16,30,24,.25);
+        --radius:14px;
+      }
+      @media (prefers-color-scheme: dark){
+        :root{
+          --bg:#0d1210;
+          --surface:#161e1a;
+          --surface-2:#1d2721;
+          --ink:#e9f0ec;
+          --muted:#9db1a5;
+          --faint:#71857a;
+          --border:#27332c;
+          --accent:#2fbf8f;
+          --accent-strong:#4ad3a4;
+          --accent-soft:#17352a;
+          --accent-ink:#7fe3c0;
+          --amber-bg:#2c2410;
+          --amber-border:#57481c;
+          --amber-ink:#ecc979;
+          --red:#f0938a;
+          --red-bg:#38201d;
+          --header:#0a0e0c;
+          --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -18px rgba(0,0,0,.6);
+        }
+      }
+      *{box-sizing:border-box}
+      html{scroll-behavior:smooth}
+      body{
+        margin:0;background:var(--bg);color:var(--ink);
+        font-family:"Noto Sans Khmer",-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+        font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased;
+      }
+      button{font:inherit;cursor:pointer;min-height:44px}
+      a{color:var(--accent)}
+      .mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+
+      /* ---------- Header ---------- */
+      header{
+        background:var(--header);color:var(--header-ink);
+        position:sticky;top:0;z-index:40;
+        border-bottom:3px solid var(--accent);
+      }
+      .header-in{
+        max-width:1020px;margin:0 auto;padding:10px 16px;
+        display:flex;align-items:center;gap:14px;
+      }
+      .brand{display:flex;align-items:center;gap:11px;text-decoration:none;color:var(--header-ink)}
+      .brand-mark{
+        width:40px;height:40px;border-radius:10px;background:var(--accent);
+        display:flex;align-items:center;justify-content:center;flex:none;
+      }
+      .brand-mark svg{width:23px;height:23px;fill:#fff}
+      .brand-name{font-weight:800;font-size:20px;letter-spacing:.4px;line-height:1.15}
+      .brand-name em{font-style:normal;color:var(--accent)}
+      @media (prefers-color-scheme: dark){ .brand-name em{color:var(--accent)} }
+      .brand-sub{display:block;font-size:12px;color:#9db1a5;line-height:1.2}
+      nav{margin-left:auto;display:flex;gap:2px}
+      nav a{
+        color:#cfe0d7;text-decoration:none;font-size:14.5px;font-weight:600;
+        padding:10px 12px;border-radius:8px;min-height:44px;display:flex;align-items:center;white-space:nowrap;
+      }
+      nav a:hover{background:rgba(255,255,255,.08);color:#fff}
+      @media (max-width:560px){ nav a{padding:10px 8px;font-size:13.5px} .brand-sub{display:none} }
+
+      main{max-width:1020px;margin:0 auto;padding:26px 16px 56px}
+
+      /* ---------- Email card ---------- */
+      .mail-card{
+        background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+        box-shadow:var(--shadow);padding:26px 26px 20px;text-align:center;
+      }
+      .mail-card h1{font-size:15px;font-weight:600;color:var(--muted);margin:0 0 4px}
+      .mail-card h1 .en{font-size:12.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--faint);display:block;margin-top:2px}
+      .addr-box{
+        margin:14px auto 6px;max-width:640px;background:var(--surface-2);
+        border:1.5px dashed var(--faint);border-radius:10px;
+        padding:16px 14px;display:flex;align-items:center;justify-content:center;gap:10px;
+      }
+      .addr-text{
+        font-size:clamp(16px,4.4vw,24px);font-weight:700;word-break:break-all;line-height:1.35;color:var(--ink);
+      }
+      .addr-text.loading{color:var(--faint);font-family:"Noto Sans Khmer",sans-serif;font-weight:500;font-size:16px}
+      .actions{
+        display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:16px;
+      }
+      .btn{
+        display:inline-flex;align-items:center;gap:8px;border-radius:9px;
+        padding:10px 18px;font-weight:700;font-size:15px;border:1px solid var(--border);
+        background:var(--surface);color:var(--ink);transition:background .15s,transform .05s;
+      }
+      .btn svg{width:18px;height:18px;flex:none}
+      .btn:hover{background:var(--surface-2)}
+      .btn:active{transform:scale(.98)}
+      .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+      .btn.primary:hover{background:var(--accent-strong)}
+      .btn.danger:hover{background:var(--red-bg);border-color:var(--red);color:var(--red)}
+      .btn:disabled{opacity:.55;cursor:wait}
+      .btn .spin{animation:rot 1s linear infinite}
+      @keyframes rot{to{transform:rotate(360deg)}}
+      .status-row{
+        margin-top:16px;padding-top:14px;border-top:1px solid var(--border);
+        display:flex;flex-wrap:wrap;gap:8px 22px;justify-content:center;align-items:center;
+        font-size:14px;color:var(--muted);
+      }
+      .live-dot{width:9px;height:9px;border-radius:50%;background:var(--accent);display:inline-block;margin-right:7px;animation:pulse 1.8s ease-in-out infinite;vertical-align:1px}
+      @keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(8,127,91,.35)}50%{opacity:.65;box-shadow:0 0 0 6px rgba(8,127,91,0)}}
+      @media (prefers-reduced-motion: reduce){
+        .live-dot,.btn .spin{animation:none}
+        html{scroll-behavior:auto}
+      }
+      .qr-panel{display:none;margin:18px auto 4px;max-width:240px}
+      .qr-panel.open{display:block}
+      .qr-panel .qr-holder{
+        background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px;
+        display:flex;justify-content:center;
+      }
+      .qr-panel p{font-size:13.5px;color:var(--muted);margin:8px 0 0}
+      .error-banner{
+        display:none;margin-top:16px;background:var(--red-bg);color:var(--red);
+        border:1px solid var(--red);border-radius:9px;padding:12px 16px;font-size:14.5px;
+      }
+      .error-banner.show{display:block}
+      .error-banner button{
+        margin-left:10px;background:var(--red);color:#fff;border:none;border-radius:7px;
+        padding:6px 14px;font-weight:700;min-height:36px;
+      }
+
+      /* ---------- Inbox ---------- */
+      .inbox{
+        margin-top:22px;background:var(--surface);border:1px solid var(--border);
+        border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;
+      }
+      .inbox-head{
+        display:flex;align-items:center;gap:12px;padding:15px 20px;
+        border-bottom:1px solid var(--border);background:var(--surface-2);
+      }
+      .inbox-head h2{margin:0;font-size:17px;font-weight:800;display:flex;align-items:center;gap:9px}
+      .inbox-head h2 svg{width:20px;height:20px;fill:var(--accent)}
+      .count-badge{
+        background:var(--accent);color:#fff;font-size:12.5px;font-weight:700;
+        min-width:24px;height:24px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;padding:0 7px;
+      }
+      .inbox-head .spacer{flex:1}
+      .icon-btn{
+        width:44px;height:44px;border-radius:9px;border:1px solid var(--border);
+        background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--ink);
+      }
+      .icon-btn svg{width:19px;height:19px}
+      .icon-btn:hover{background:var(--accent-soft)}
+      .icon-btn .spin{animation:rot 1s linear infinite}
+      .col-head{
+        display:grid;grid-template-columns:1fr 130px;gap:10px;
+        padding:9px 20px;font-size:12.5px;font-weight:700;letter-spacing:.4px;
+        color:var(--faint);text-transform:uppercase;border-bottom:1px solid var(--border);
+      }
+      .col-head span:last-child{text-align:right}
+      @media (max-width:560px){ .col-head{display:none} }
+      .msg-list{list-style:none;margin:0;padding:0}
+      .msg-item{border-bottom:1px solid var(--border)}
+      .msg-item:last-child{border-bottom:none}
+      .msg-btn{
+        width:100%;background:none;border:none;text-align:left;color:var(--ink);
+        display:grid;grid-template-columns:42px 1fr auto;gap:12px;align-items:center;
+        padding:13px 20px;min-height:64px;
+      }
+      .msg-btn:hover{background:var(--surface-2)}
+      .avatar{
+        width:42px;height:42px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);
+        display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;text-transform:uppercase;
+      }
+      .msg-main{min-width:0}
+      .msg-from{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:8px}
+      .unread-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:none}
+      .msg-subject{font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .msg-intro{font-size:13.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .msg-item.seen .msg-from,.msg-item.seen .msg-subject{font-weight:500;color:var(--muted)}
+      .msg-time{font-size:13px;color:var(--faint);white-space:nowrap;text-align:right}
+      .empty-state{padding:52px 24px 58px;text-align:center;color:var(--muted)}
+      .empty-state svg{width:74px;height:74px;stroke:var(--faint);fill:none;stroke-width:1.1;margin-bottom:6px}
+      .empty-state h3{margin:6px 0 4px;font-size:17px;color:var(--ink);font-weight:700}
+      .empty-state p{margin:0 auto;max-width:430px;font-size:14.5px}
+      .waiting-bar{height:3px;background:var(--accent-soft);overflow:hidden}
+      .waiting-bar i{display:block;height:100%;width:40%;background:var(--accent);animation:slide 1.6s ease-in-out infinite}
+      @keyframes slide{0%{transform:translateX(-110%)}100%{transform:translateX(280%)}}
+      @media (prefers-reduced-motion: reduce){ .waiting-bar i{animation:none;width:100%} }
+
+      /* ---------- Sections ---------- */
+      section.block{margin-top:44px}
+      section.block>h2{font-size:23px;font-weight:800;margin:0 0 6px}
+      section.block>.lead{color:var(--muted);margin:0 0 20px;max-width:640px}
+      .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+      @media (max-width:860px){ .steps{grid-template-columns:repeat(2,1fr)} }
+      @media (max-width:480px){ .steps{grid-template-columns:1fr} }
+      .step{
+        background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;
+      }
+      .step-num{
+        width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;
+        font-weight:800;display:flex;align-items:center;justify-content:center;font-size:16px;margin-bottom:10px;
+      }
+      .step h3{margin:0 0 4px;font-size:16px}
+      .step p{margin:0;font-size:14px;color:var(--muted)}
+      .split{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;align-items:start}
+      @media (max-width:760px){ .split{grid-template-columns:1fr} }
+      .panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px 22px}
+      .panel h3{margin:0 0 12px;font-size:17px}
+      .feat{list-style:none;margin:0;padding:0}
+      .feat li{display:flex;gap:12px;padding:9px 0;border-bottom:1px solid var(--border)}
+      .feat li:last-child{border-bottom:none;padding-bottom:0}
+      .feat li:first-child{padding-top:0}
+      .feat svg{width:21px;height:21px;flex:none;fill:var(--accent);margin-top:3px}
+      .feat b{display:block;font-size:15px}
+      .feat span{font-size:14px;color:var(--muted)}
+      .warn{background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:12px;padding:20px 22px;color:var(--amber-ink)}
+      .warn h3{margin:0 0 8px;font-size:17px;display:flex;gap:9px;align-items:center}
+      .warn h3 svg{width:21px;height:21px;fill:var(--amber-ink);flex:none}
+      .warn p{margin:0 0 8px;font-size:14.5px}
+      .warn p:last-child{margin-bottom:0}
+      details{
+        background:var(--surface);border:1px solid var(--border);border-radius:10px;
+        margin-bottom:10px;overflow:hidden;
+      }
+      summary{
+        padding:15px 20px;font-weight:700;font-size:15.5px;cursor:pointer;list-style:none;
+        display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:52px;
+      }
+      summary::-webkit-details-marker{display:none}
+      summary::after{content:"+";font-size:22px;font-weight:400;color:var(--accent);line-height:1;flex:none}
+      details[open ] summary::after{content:"–"}
+      details .faq-body{padding:0 20px 16px;color:var(--muted);font-size:14.5px}
+      details .faq-body p{margin:0}
+
+      footer{
+        border-top:1px solid var(--border);margin-top:52px;padding:22px 16px 30px;
+        text-align:center;color:var(--faint);font-size:13.5px;
+      }
+      footer p{margin:3px 0}
+
+      /* ---------- Reader modal ---------- */
+      .overlay{
+        position:fixed;inset:0;background:rgba(8,14,11,.62);z-index:60;
+        display:none;align-items:flex-end;justify-content:center;
+      }
+      .overlay.open{display:flex}
+      @media (min-width:640px){ .overlay{align-items:center;padding:24px} }
+      .reader{
+        background:var(--surface);color:var(--ink);width:100%;max-width:760px;max-height:88vh;
+        border-radius:16px 16px 0 0;display:flex;flex-direction:column;overflow:hidden;
+      }
+      @media (min-width:640px){ .reader{border-radius:16px} }
+      .reader-head{padding:18px 22px 12px;border-bottom:1px solid var(--border)}
+      .reader-head h3{margin:0 42px 8px 0;font-size:18px;line-height:1.45}
+      .reader-meta{font-size:13.5px;color:var(--muted);display:grid;gap:2px}
+      .reader-meta b{color:var(--ink)}
+      .reader-close{
+        position:absolute;top:12px;right:14px;width:44px;height:44px;border-radius:50%;
+        border:1px solid var(--border);background:var(--surface);font-size:19px;line-height:1;color:var(--ink);
+      }
+      .reader-wrap{position:relative}
+      .reader-body{overflow:auto;padding:6px 0 10px}
+      .reader-body iframe{width:100%;height:52vh;border:none;background:#fff;display:block}
+      .reader-body .text-body{padding:16px 22px;white-space:pre-wrap;word-break:break-word;font-size:15px}
+      .otp-strip{
+        margin:14px 22px 4px;background:var(--accent-soft);border:1px dashed var(--accent);
+        border-radius:10px;padding:12px 16px;display:none;align-items:center;gap:14px;flex-wrap:wrap;
+      }
+      .otp-strip.show{display:flex}
+      .otp-strip .code{font-size:26px;font-weight:700;letter-spacing:3px;color:var(--accent-ink)}
+      .otp-strip button{
+        background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-weight:700;min-height:40px;
+      }
+      .otp-strip span.lbl{font-size:13.5px;color:var(--accent-ink);font-weight:600}
+
+      /* ---------- Toast ---------- */
+      .toast{
+        position:fixed;left:50%;bottom:26px;transform:translate(-50%,80px);z-index:80;
+        background:var(--header);color:#eef4f1;padding:12px 22px;border-radius:10px;
+        font-weight:600;font-size:15px;box-shadow:0 12px 30px rgba(0,0,0,.35);
+        transition:transform .25s ease;pointer-events:none;max-width:calc(100vw - 32px);text-align:center;
+      }
+      .toast.show{transform:translate(-50%,0)}
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="header-in">
+        <a class="brand" href="#" aria-label="MovMail.com">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
+          </span>
+          <span>
+            <span class="brand-name">Mov<em>Mail</em>.com</span>
+            <span class="brand-sub">អ៊ីមែលបណ្តោះអាសន្ន ឥតគិតថ្លៃ</span>
+          </span>
+        </a>
+        <nav>
+          <a href="#inbox">ប្រអប់សារ</a>
+          <a href="#how">របៀបប្រើ</a>
+          <a href="#faq">សំណួរ</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <!-- ===== Email address card ===== -->
+      <div class="mail-card">
+        <h1>អ៊ីមែលបណ្តោះអាសន្នរបស់អ្នក
+          <span class="en">Your Temporary Email Address</span>
+        </h1>
+
+        <div class="addr-box">
+          <span class="addr-text mono loading" id="addrText">កំពុងបង្កើតអ៊ីមែល…</span>
+        </div>
+
+        <div class="actions">
+          <button class="btn primary" id="copyBtn" disabled>
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>
+            ចម្លងអ៊ីមែល
+          </button>
+          <button class="btn" id="qrBtn" disabled>
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm13-2h3v3h-3v-3zm-5 0h3v3h-3v-3zm5 5h3v3h-3v-3zm-5 0h3v3h-3v-3z"/></svg>
+            QR Code
+          </button>
+          <button class="btn" id="refreshBtn" disabled>
+            <svg viewBox="0 0 24 24" fill="currentColor" id="refreshIcon"><path d="M17.65 6.35A8 8 0 1 0 19.73 14h-2.08a6 6 0 1 1-1.41-6.65L13 11h7V4l-2.35 2.35z"/></svg>
+            ធ្វើឱ្យស្រស់
+          </button>
+          <button class="btn" id="changeBtn" disabled>
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V1L7 6l5 5V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></svg>
+            ប្តូរអ៊ីមែលថ្មី
+          </button>
+          <button class="btn danger" id="deleteBtn" disabled>
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            លុប
+          </button>
+        </div>
+
+        <div class="qr-panel" id="qrPanel">
+          <div class="qr-holder" id="qrHolder"></div>
+          <p>ស្កេនដើម្បីយកអ៊ីមែលនេះទៅប្រើលើទូរស័ព្ទ</p>
+        </div>
+
+        <div class="error-banner" id="errorBanner" role="alert">
+          <span id="errorText">មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេអ៊ីមែលបានទេ។</span>
+          <button id="retryBtn">ព្យាយាមម្តងទៀត</button>
+        </div>
+
+        <div class="status-row" aria-live="polite">
+          <span><span class="live-dot" aria-hidden="true"></span><span id="statusText">កំពុងភ្ជាប់…</span></span>
+          <span id="countdownText"></span>
+          <span id="expiryText">អ៊ីមែលនេះដំណើរការភ្លាមៗ មិនបាច់ចុះឈ្មោះ</span>
+        </div>
+      </div>
+
+      <!-- ===== Inbox ===== -->
+      <div class="inbox" id="inbox">
+        <div class="inbox-head">
+          <h2>
+            <svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
+            ប្រអប់សារ <span style="color:var(--faint);font-weight:600;font-size:13px;letter-spacing:1px">INBOX</span>
+          </h2>
+          <span class="count-badge" id="countBadge">0</span>
+          <span class="spacer"></span>
+          <button class="icon-btn" id="inboxRefreshBtn" aria-label="ធ្វើឱ្យប្រអប់សារស្រស់" disabled>
+            <svg viewBox="0 0 24 24" fill="currentColor" id="inboxRefreshIcon"><path d="M17.65 6.35A8 8 0 1 0 19.73 14h-2.08a6 6 0 1 1-1.41-6.65L13 11h7V4l-2.35 2.35z"/></svg>
+          </button>
+        </div>
+        <div class="waiting-bar" id="waitingBar"><i></i></div>
+        <div class="col-head" aria-hidden="true"><span>អ្នកផ្ញើ / ចំណងជើង</span><span>ពេលវេលា</span></div>
+        <ul class="msg-list" id="msgList"></ul>
+        <div class="empty-state" id="emptyState">
+          <svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="m3 7 9 6 9-6" stroke-linejoin="round"/></svg>
+          <h3 id="emptyTitle">ប្រអប់សាររបស់អ្នកទទេ</h3>
+          <p id="emptyText">ចម្លងអ៊ីមែលខាងលើទៅប្រើនៅគេហទំព័រដែលអ្នកចង់ចុះឈ្មោះ — សារ និងលេខកូដ OTP នឹងលេចឡើងនៅទីនេះដោយស្វ័យប្រវត្តិ។</p>
+        </div>
+      </div>
+
+      <!-- ===== How to use ===== -->
+      <section class="block" id="how">
+        <h2>របៀបប្រើប្រាស់</h2>
+        <p class="lead">ប្រើអ៊ីមែលបណ្តោះអាសន្នដើម្បីទទួលលេខកូដបញ្ជាក់ (OTP) ដោយមិនបាច់បង្ហាញអ៊ីមែលពិតរបស់អ្នក។</p>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <h3>ចម្លងអ៊ីមែល</h3>
+            <p>ចុចប៊ូតុង «ចម្លងអ៊ីមែល» នៅខាងលើ ដើម្បីយកអាសយដ្ឋានដែលបានបង្កើតដោយស្វ័យប្រវត្តិ។</p>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <h3>យកទៅចុះឈ្មោះ</h3>
+            <p>បិទភ្ជាប់អ៊ីមែលនេះទៅក្នុងគេហទំព័រ ឬកម្មវិធីដែលអ្នកចង់សាកល្បង រួចស្នើឱ្យគេផ្ញើលេខកូដ។</p>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <h3>រង់ចាំសារចូល</h3>
+            <p>ទុកទំព័រនេះចំហរ។ ប្រអប់សារធ្វើបច្ចុប្បន្នភាពរៀងរាល់ ១០ វិនាទី — សារថ្មីនឹងលេចឡើងដោយខ្លួនឯង។</p>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <h3>បើកសារ យកលេខកូដ</h3>
+            <p>ចុចលើសារដើម្បីអាន។ បើមានលេខកូដ OTP ប្រព័ន្ធនឹងបង្ហាញវាធំៗឲ្យអ្នកចម្លងបានភ្លាម។</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Why + warning ===== -->
+      <section class="block">
+        <div class="split">
+          <div class="panel">
+            <h3>ហេតុអ្វីគួរប្រើ MovMail?</h3>
+            <ul class="feat">
+              <li>
+                <svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1.5 15.59-4.25-4.25 1.41-1.41 2.84 2.83 6.34-6.34 1.41 1.42-7.75 7.75z"/></svg>
+                <div><b>ការពារឯកជនភាព</b><span>អ៊ីមែលពិតរបស់អ្នកនៅតែជាសម្ងាត់ មិនធ្លាយទៅគេហទំព័រដែលអ្នកមិនទុកចិត្ត។</span></div>
+              </li>
+              <li>
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"/></svg>
+                <div><b>គ្មាន Spam</b><span>សារផ្សព្វផ្សាយ និងសាររំខានទាំងអស់ធ្លាក់មកប្រអប់នេះ មិនមែនប្រអប់អ៊ីមែលពិតរបស់អ្នកទេ។</span></div>
+              </li>
+              <li>
+                <svg viewBox="0 0 24 24"><path d="M13 2 4.5 12.5H11L9.5 22 19 10.5h-6.5L13 2z"/></svg>
+                <div><b>លឿន មិនបាច់ចុះឈ្មោះ</b><span>បើកទំព័រភ្លាម បានអ៊ីមែលភ្លាម។ គ្មានឈ្មោះ គ្មានពាក្យសម្ងាត់ គ្មានទម្រង់បំពេញវែងៗ។</span></div>
+              </li>
+              <li>
+                <svg viewBox="0 0 24 24"><path d="M18 8h-1V6a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zm-6 9a2.5 2.5 0 0 1-2.5-2.5c0-1.02.62-1.9 1.5-2.29V10.5a1 1 0 1 1 2 0v1.71c.88.39 1.5 1.27 1.5 2.29A2.5 2.5 0 0 1 12 17zm3.5-9H8.5V6a3.5 3.5 0 1 1 7 0v2z"/></svg>
+                <div><b>ប្រើហើយចោល</b><span>ចប់កិច្ចការ ចុច «ប្តូរអ៊ីមែលថ្មី» ឬបិទទំព័រចោល — គ្មានអ្វីត្រូវសម្អាតតាមក្រោយទេ។</span></div>
+              </li>
+            </ul>
+          </div>
+          <div class="warn" role="note">
+            <h3>
+              <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+              ចំណាំសំខាន់
+            </h3>
+            <p>កុំប្រើអ៊ីមែលបណ្តោះអាសន្នសម្រាប់គណនីសំខាន់ៗ ដូចជា <b>ធនាគារ, PayPal, Google, Apple ID, Facebook ចម្បង</b> ឬគណនីណាដែលអ្នកត្រូវការ Reset Password នៅពេលក្រោយ។</p>
+            <p>ប្រអប់សារនេះជារបស់សាធារណៈតាមលក្ខណៈបច្ចេកទេស — អ្នកណាដែលមានអាសយដ្ឋានដូចគ្នាអាចអានសារបាន។ បើអ្នកបាត់អ៊ីមែលនេះ អ្នកនឹងមិនអាចចូលគណនីដែលបានចុះឈ្មោះជាមួយវាវិញបានទេ។</p>
+            <p>ប្រើវាសម្រាប់តែ៖ ចុះឈ្មោះសាកល្បង, ទាញយកឯកសារ, ឬសេវាដែលអ្នកមិនចង់ឲ្យដឹងអ៊ីមែលពិត។</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== FAQ ===== -->
+      <section class="block" id="faq">
+        <h2>សំណួរដែលគេសួរញឹកញាប់</h2>
+        <p class="lead"></p>
+        <details>
+          <summary>បើ OTP មិនមកដល់ តើត្រូវធ្វើដូចម្តេច?</summary>
+          <div class="faq-body"><p>រង់ចាំប្រហែល ៦០ វិនាទី រួចចុចប៊ូតុង «ធ្វើឱ្យស្រស់»។ បើនៅតែមិនមក សូមចុច Resend code នៅគេហទំព័រដែលអ្នកកំពុងចុះឈ្មោះម្តងទៀត។ បើគេហទំព័រនោះប្រាប់ថា «អ៊ីមែលមិនត្រឹមត្រូវ» មានន័យថាគេបាន Block domain បណ្តោះអាសន្ន — សូមចុច «ប្តូរអ៊ីមែលថ្មី» ដើម្បីសាក domain ផ្សេង ឬប្រើអ៊ីមែលពិតវិញ។</p></div>
+        </details>
+        <details>
+          <summary>អ៊ីមែលនេះប្រើបានរយៈពេលប៉ុន្មាន?</summary>
+          <div class="faq-body"><p>អ៊ីមែលដំណើរការពេញមួយពេលដែលអ្នកទុកទំព័រនេះចំហរ។ សារនៅក្នុងប្រអប់ត្រូវបានរក្សាទុកដោយម៉ាស៊ីនមេក្នុងរយៈពេលកំណត់មួយ (ជាទូទៅប្រហែល ២៤ ម៉ោង) រួចនឹងត្រូវលុបដោយស្វ័យប្រវត្តិ។ បើអ្នកបិទទំព័រ ហើយបើកវិញ អ្នកនឹងទទួលបានអ៊ីមែលថ្មីមួយទៀត។</p></div>
+        </details>
+        <details>
+          <summary>តើត្រូវចុះឈ្មោះ ឬបង់ប្រាក់ទេ?</summary>
+          <div class="faq-body"><p>មិនបាច់ទេ។ គ្មានការចុះឈ្មោះ គ្មានពាក្យសម្ងាត់ និងឥតគិតថ្លៃទាំងស្រុង។ បើកទំព័រភ្លាម អ៊ីមែលត្រូវបានបង្កើតឲ្យភ្លាម។</p></div>
+        </details>
+        <details>
+          <summary>តើខ្ញុំអាចផ្ញើអ៊ីមែលចេញបានទេ?</summary>
+          <div class="faq-body"><p>មិនបានទេ។ សេវានេះសម្រាប់តែ <b>ទទួល</b> សារប៉ុណ្ណោះ — ដូចជាលេខកូដ OTP និងអ៊ីមែលបញ្ជាក់ការចុះឈ្មោះ។ ការផ្ញើចេញត្រូវបានបិទ ដើម្បីការពារការប្រើប្រាស់ខុសគោលបំណង។</p></div>
+        </details>
+        <details>
+          <summary>បើខ្ញុំចុច «ប្តូរអ៊ីមែលថ្មី» តើសារចាស់ទៅណា?</summary>
+          <div class="faq-body"><p>អ៊ីមែលចាស់ និងសារទាំងអស់របស់វានឹងត្រូវបោះបង់ ហើយអ្នកមិនអាចត្រឡប់ទៅមើលវិញបានទេ។ ដូច្នេះសូមប្រាកដថាអ្នកបានយកលេខកូដ ឬព័ត៌មានដែលត្រូវការរួចរាល់ មុននឹងប្តូរ។</p></div>
+        </details>
+      </section>
+    </main>
+
+    <footer>
+      <p><b>MovMail.com</b> — អ៊ីមែលបណ្តោះអាសន្នសម្រាប់ការចុះឈ្មោះសាកល្បង និងការពារឯកជនភាព</p>
+      <p>ប្រអប់សារដំណើរការដោយ Mail.tm API · សារត្រូវបានលុបដោយស្វ័យប្រវត្តិបន្ទាប់ពីផុតកំណត់</p>
+    </footer>
+
+    <!-- ===== Message reader ===== -->
+    <div class="overlay" id="readerOverlay" role="dialog" aria-modal="true" aria-label="អានសារ">
+      <div class="reader">
+        <div class="reader-wrap">
+          <button class="reader-close" id="readerClose" aria-label="បិទ">✕</button>
+          <div class="reader-head">
+            <h3 id="readerSubject">(គ្មានចំណងជើង)</h3>
+            <div class="reader-meta">
+              <span>ពី៖ <b id="readerFrom">—</b></span>
+              <span>ទៅ៖ <b id="readerTo">—</b></span>
+              <span>កាលបរិច្ឆេទ៖ <b id="readerDate">—</b></span>
+            </div>
+          </div>
+          <div class="otp-strip" id="otpStrip">
+            <span class="lbl">លេខកូដរបស់អ្នក៖</span>
+            <span class="code mono" id="otpCode"></span>
+            <button id="otpCopyBtn">ចម្លងលេខកូដ</button>
+          </div>
+          <div class="reader-body" id="readerBody">
+            <p style="padding:16px 22px;color:var(--muted)">កំពុងផ្ទុកសារ…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" role="status"></div>
+
+    <script>
+      (function(){
+        "use strict";
+        var API = "https://api.mail.tm";
+        var POLL_SECONDS = 10;
+
+        var state = {
+          address: "", password: "", token: "", accountId: "",
+          messages: [], timer: null, countdown: POLL_SECONDS,
+          creating: false, checking: false
+        };
+
+        var $ = function(id){ return document.getElementById(id); };
+        var addrText = $("addrText"), statusText = $("statusText"),
+            countdownText = $("countdownText"), msgList = $("msgList"),
+            emptyState = $("emptyState"), emptyTitle = $("emptyTitle"),
+            emptyText = $("emptyText"), countBadge = $("countBadge"),
+            waitingBar = $("waitingBar"), errorBanner = $("errorBanner"),
+            errorText = $("errorText"), toast = $("toast");
+
+        /* ---------- helpers ---------- */
+        var toastTimer = null;
+        function showToast(msg){
+          toast.textContent = msg;
+          toast.classList.add("show");
+          clearTimeout(toastTimer);
+          toastTimer = setTimeout(function(){ toast.classList.remove("show"); }, 2400);
+        }
+        function randomStr(n){
+          var chars = "abcdefghjkmnpqrstuvwxyz23456789", out = "";
+          var arr = new Uint32Array(n);
+          if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(arr);
+          else for (var i=0;i<n;i++) arr[i] = Math.floor(Math.random()*1e9);
+          for (var j=0;j<n;j++) out += chars[arr[j] % chars.length];
+          return out;
+        }
+        function memberList(data){
+          if (Array.isArray(data)) return data;
+          if (data && Array.isArray(data["hydra:member"])) return data["hydra:member"];
+          return [];
+        }
+        function api(path, opts){
+          opts = opts || {};
+          var headers = { "Accept": "application/json" };
+          if (state.token) headers["Authorization"] = "Bearer " + state.token;
+          if (opts.body) headers["Content-Type"] = "application/json";
+          return fetch(API + path, {
+            method: opts.method || "GET",
+            headers: headers,
+            body: opts.body ? JSON.stringify(opts.body) : undefined
+          }).then(function(res){
+            if (res.status === 204) return null;
+            return res.json().catch(function(){ return null; }).then(function(data){
+              if (!res.ok) { var e = new Error("HTTP " + res.status); e.status = res.status; e.data = data; throw e; }
+              return data;
+            });
+          });
+        }
+        function relTime(iso){
+          var t = new Date(iso).getTime(), diff = Date.now() - t;
+          if (isNaN(t)) return "";
+          var m = Math.floor(diff/60000);
+          if (m < 1) return "មុននេះបន្តិច";
+          if (m < 60) return m + " នាទីមុន";
+          var h = Math.floor(m/60);
+          if (h < 24) return h + " ម៉ោងមុន";
+          return Math.floor(h/24) + " ថ្ងៃមុន";
+        }
+        function fullDate(iso){
+          var d = new Date(iso);
+          if (isNaN(d.getTime())) return iso || "—";
+          try { return d.toLocaleString("km-KH", { dateStyle:"medium", timeStyle:"short" }); }
+          catch(e){ return d.toLocaleString(); }
+        }
+        function copyText(text, okMsg){
+          function done(){ showToast(okMsg); }
+          if (navigator.clipboard && navigator.clipboard.writeText){
+            navigator.clipboard.writeText(text).then(done, function(){ fallback(); });
+          } else fallback();
+          function fallback(){
+            var ta = document.createElement("textarea");
+            ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+            document.body.appendChild(ta); ta.select();
+            try { document.execCommand("copy"); done(); }
+            catch(e){ showToast("សូមចម្លងដោយដៃ៖ " + text); }
+            document.body.removeChild(ta);
+          }
+        }
+        function setBusy(busy){
+          ["copyBtn","qrBtn","refreshBtn","changeBtn","deleteBtn","inboxRefreshBtn"].forEach(function(id){
+            $(id).disabled = busy || !state.token;
+          });
+        }
+        function showError(msg){
+          errorText.textContent = msg;
+          errorBanner.classList.add("show");
+        }
+        function hideError(){ errorBanner.classList.remove("show"); }
+
+        /* ---------- account lifecycle ---------- */
+        function createAccount(){
+          if (state.creating) return;
+          state.creating = true;
+          hideError();
+          stopPolling();
+          state.token = ""; state.messages = [];
+          renderMessages();
+          addrText.textContent = "កំពុងបង្កើតអ៊ីមែល…";
+          addrText.classList.add("loading");
+          statusText.textContent = "កំពុងភ្ជាប់ទៅម៉ាស៊ីនមេ…";
+          countdownText.textContent = "";
+          setBusy(true);
+
+          api("/domains").then(function(data){
+            var domains = memberList(data).filter(function(d){ return d.isActive && !d.isPrivate; });
+            if (!domains.length) throw new Error("no domain");
+            var domain = domains[Math.floor(Math.random()*domains.length)].domain;
+            var address = randomStr(10) + "@" + domain;
+            var password = randomStr(16) + "A1!";
+            return api("/accounts", { method:"POST", body:{ address: address, password: password } })
+              .then(function(acc){
+                return api("/token", { method:"POST", body:{ address: address, password: password } })
+                  .then(function(tok){
+                    state.address = address; state.password = password;
+                    state.token = tok.token; state.accountId = (acc && acc.id) || tok.id || "";
+                  });
+              });
+          }).then(function(){
+            state.creating = false;
+            addrText.textContent = state.address;
+            addrText.classList.remove("loading");
+            statusText.textContent = "កំពុងរង់ចាំអ៊ីមែលថ្មី…";
+            setBusy(false);
+            buildQr();
+            fetchMessages(true);
+            startPolling();
+          }).catch(function(err){
+            state.creating = false;
+            addrText.textContent = "បង្កើតអ៊ីមែលមិនបានសម្រេច";
+            statusText.textContent = "គ្មានការតភ្ជាប់";
+            setBusy(true);
+            $("retryBtn").disabled = false;
+            showError("មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេអ៊ីមែលបានទេ។ សូមពិនិត្យអ៊ីនធឺណិត រួចព្យាយាមម្តងទៀត។");
+          });
+        }
+
+        function deleteAndRecreate(){
+          var oldToken = state.token, oldId = state.accountId;
+          if (oldToken && oldId){
+            var keep = state.token; state.token = oldToken;
+            api("/accounts/" + oldId, { method:"DELETE" }).catch(function(){});
+            state.token = keep;
+          }
+          showToast("បានលុបអ៊ីមែលចាស់ — កំពុងបង្កើតថ្មី…");
+          createAccount();
+        }
+
+        /* ---------- messages ---------- */
+        function fetchMessages(first){
+          if (!state.token || state.checking) return;
+          state.checking = true;
+          api("/messages?page=1").then(function(data){
+            var msgs = memberList(data);
+            var hadNew = msgs.length > state.messages.length;
+            state.messages = msgs;
+            renderMessages();
+            if (!first && hadNew) showToast("មានសារថ្មីចូលមកដល់!");
+          }).catch(function(){
+            /* keep polling quietly */
+          }).then(function(){
+            state.checking = false;
+          });
+        }
+        function renderMessages(){
+          countBadge.textContent = state.messages.length;
+          msgList.innerHTML = "";
+          if (!state.messages.length){
+            emptyState.style.display = "block";
+            emptyTitle.textContent = state.token ? "ប្រអប់សាររបស់អ្នកទទេ" : "កំពុងរៀបចំប្រអប់សារ…";
+            emptyText.textContent = state.token
+              ? "ចម្លងអ៊ីមែលខាងលើទៅប្រើនៅគេហទំព័រដែលអ្នកចង់ចុះឈ្មោះ — សារ និងលេខកូដ OTP នឹងលេចឡើងនៅទីនេះដោយស្វ័យប្រវត្តិ។"
+              : "សូមរង់ចាំបន្តិច…";
+            waitingBar.style.display = state.token ? "block" : "none";
+            return;
+          }
+          emptyState.style.display = "none";
+          waitingBar.style.display = "none";
+          state.messages.forEach(function(m){
+            var li = document.createElement("li");
+            li.className = "msg-item" + (m.seen ? " seen" : "");
+            var btn = document.createElement("button");
+            btn.className = "msg-btn";
+            btn.type = "button";
+
+            var av = document.createElement("span");
+            av.className = "avatar";
+            var fromAddr = (m.from && (m.from.address || "")) || "?";
+            var fromName = (m.from && (m.from.name || "")) || fromAddr;
+            av.textContent = (fromName.trim()[0] || "?");
+
+            var main = document.createElement("span");
+            main.className = "msg-main";
+            var f = document.createElement("span");
+            f.className = "msg-from";
+            if (!m.seen){
+              var dot = document.createElement("span");
+              dot.className = "unread-dot"; f.appendChild(dot);
+            }
+            var fTxt = document.createElement("span");
+            fTxt.textContent = fromName; f.appendChild(fTxt);
+            var s = document.createElement("span");
+            s.className = "msg-subject";
+            s.textContent = m.subject || "(គ្មានចំណងជើង)";
+            var intro = document.createElement("span");
+            intro.className = "msg-intro";
+            intro.textContent = m.intro || "";
+            main.appendChild(f); main.appendChild(s); main.appendChild(intro);
+
+            var time = document.createElement("span");
+            time.className = "msg-time";
+            time.textContent = relTime(m.createdAt);
+            time.title = fullDate(m.createdAt);
+
+            btn.appendChild(av); btn.appendChild(main); btn.appendChild(time);
+            btn.addEventListener("click", function(){ openMessage(m); });
+            li.appendChild(btn);
+            msgList.appendChild(li);
+          });
+        }
+
+        /* ---------- reader ---------- */
+        var overlay = $("readerOverlay"), currentOtp = "";
+        function extractOtp(text){
+          if (!text) return "";
+          var m = text.match(/\b(\d{4,8})\b/g);
+          if (!m) return "";
+          var kw = /(code|otp|verification|verify|pin|កូដ|បញ្ជាក់)/i.test(text);
+          return kw ? m[0] : "";
+        }
+        function openMessage(m){
+          overlay.classList.add("open");
+          document.body.style.overflow = "hidden";
+          $("readerSubject").textContent = m.subject || "(គ្មានចំណងជើង)";
+          $("readerFrom").textContent = (m.from ? ((m.from.name ? m.from.name + " <" : "") + (m.from.address || "") + (m.from.name ? ">" : "")) : "—");
+          $("readerTo").textContent = state.address;
+          $("readerDate").textContent = fullDate(m.createdAt);
+          $("readerBody").innerHTML = '<p style="padding:16px 22px;color:var(--muted)">កំពុងផ្ទុកសារ…</p>';
+          $("otpStrip").classList.remove("show");
+          currentOtp = "";
+
+          api("/messages/" + m.id).then(function(detail){
+            m.seen = true; renderMessages();
+            var body = $("readerBody");
+            body.innerHTML = "";
+            var text = detail.text || "";
+            var htmlArr = detail.html || [];
+            var html = Array.isArray(htmlArr) ? htmlArr.join("\n") : String(htmlArr || "");
+            var otp = extractOtp((m.subject || "") + " " + text);
+            if (otp){
+              currentOtp = otp;
+              $("otpCode").textContent = otp;
+              $("otpStrip").classList.add("show");
+            }
+            if (html){
+              var frame = document.createElement("iframe");
+              frame.setAttribute("sandbox", "");
+              frame.setAttribute("title", "ខ្លឹមសារសារ");
+              frame.srcdoc = html;
+              body.appendChild(frame);
+            } else {
+              var div = document.createElement("div");
+              div.className = "text-body";
+              div.textContent = text || "(សារនេះគ្មានខ្លឹមសារ)";
+              body.appendChild(div);
+            }
+          }).catch(function(){
+            $("readerBody").innerHTML = '<p style="padding:16px 22px;color:var(--red)">ផ្ទុកសារមិនបានសម្រេច។ សូមព្យាយាមម្តងទៀត។</p>';
+          });
+        }
+        function closeMessage(){
+          overlay.classList.remove("open");
+          document.body.style.overflow = "";
+        }
+        $("readerClose").addEventListener("click", closeMessage);
+        overlay.addEventListener("click", function(e){ if (e.target === overlay) closeMessage(); });
+        document.addEventListener("keydown", function(e){ if (e.key === "Escape") closeMessage(); });
+        $("otpCopyBtn").addEventListener("click", function(){
+          if (currentOtp) copyText(currentOtp, "បានចម្លងលេខកូដហើយ");
+        });
+
+        /* ---------- polling ---------- */
+        function startPolling(){
+          stopPolling();
+          state.countdown = POLL_SECONDS;
+          updateCountdown();
+          state.timer = setInterval(function(){
+            state.countdown--;
+            if (state.countdown <= 0){
+              state.countdown = POLL_SECONDS;
+              fetchMessages(false);
+            }
+            updateCountdown();
+          }, 1000);
+        }
+        function stopPolling(){
+          if (state.timer){ clearInterval(state.timer); state.timer = null; }
+        }
+        function updateCountdown(){
+          countdownText.textContent = state.token
+            ? "ធ្វើបច្ចុប្បន្នភាពដោយស្វ័យប្រវត្តិក្នុង " + state.countdown + " វិនាទី"
+            : "";
+        }
+        document.addEventListener("visibilitychange", function(){
+          if (!document.hidden && state.token) fetchMessages(false);
+        });
+
+        /* ---------- QR ---------- */
+        function buildQr(){
+          var holder = $("qrHolder");
+          holder.innerHTML = "";
+          $("qrPanel").classList.remove("open");
+          if (typeof QRCode === "undefined" || !state.address) return;
+          try { new QRCode(holder, { text: state.address, width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M }); }
+          catch(e){ /* QR is optional */ }
+        }
+
+        /* ---------- buttons ---------- */
+        $("copyBtn").addEventListener("click", function(){
+          if (state.address) copyText(state.address, "បានចម្លងអ៊ីមែលហើយ — យកទៅបិទភ្ជាប់បានភ្លាម");
+        });
+        $("qrBtn").addEventListener("click", function(){
+          var p = $("qrPanel");
+          if (typeof QRCode === "undefined"){ showToast("QR មិនអាចប្រើបាននៅពេលនេះ"); return; }
+          p.classList.toggle("open");
+        });
+        function manualRefresh(iconEl){
+          if (!state.token) return;
+          if (iconEl) iconEl.classList.add("spin");
+          state.countdown = POLL_SECONDS; updateCountdown();
+          fetchMessages(false);
+          setTimeout(function(){ if (iconEl) iconEl.classList.remove("spin"); }, 900);
+        }
+        $("refreshBtn").addEventListener("click", function(){ manualRefresh($("refreshIcon")); });
+        $("inboxRefreshBtn").addEventListener("click", function(){ manualRefresh($("inboxRefreshIcon")); });
+        $("changeBtn").addEventListener("click", function(){
+          showToast("កំពុងបង្កើតអ៊ីមែលថ្មី…");
+          createAccount();
+        });
+        $("deleteBtn").addEventListener("click", deleteAndRecreate);
+        $("retryBtn").addEventListener("click", createAccount);
+
+        /* ---------- go ---------- */
+        createAccount();
+      })();
+    </script>
+  </body>
+</html>
