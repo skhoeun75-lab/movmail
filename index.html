@@ -682,6 +682,7 @@
               });
           }).then(function(){
             state.creating = false;
+            state.retryCount = 0;
             addrText.textContent = state.address;
             addrText.classList.remove("loading");
             statusText.textContent = "កំពុងរង់ចាំអ៊ីមែលថ្មី…";
@@ -691,6 +692,14 @@
             startPolling();
           }).catch(function(err){
             state.creating = false;
+            if ((err.status === 429 || err.status === 503) && (state.retryCount || 0) < 3){
+              state.retryCount = (state.retryCount || 0) + 1;
+              addrText.textContent = "កំពុងបង្កើតអ៊ីមែល…";
+              statusText.textContent = "ម៉ាស៊ីនមេរវល់ — កំពុងព្យាយាមម្តងទៀត (លើកទី " + state.retryCount + "/3)…";
+              setTimeout(createAccount, 6000);
+              return;
+            }
+            state.retryCount = 0;
             addrText.textContent = "បង្កើតអ៊ីមែលមិនបានសម្រេច";
             statusText.textContent = "គ្មានការតភ្ជាប់";
             setBusy(true);
