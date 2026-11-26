@@ -1197,7 +1197,24 @@ async function handleAdminNotify(req, res) {
     sendJson(res, 400, { error: "code not found" });
     return;
   }
-  const gmail = gmailRaw === "ALL" ? "ALL" : gmailRaw.toLowerCase();
+  if (gmailRaw === "ALL") {
+    // Per-user codes: redeem codes are single-use, so a shared 'ALL'
+    // code would be consumed by the first redeemer. Mint a fresh code
+    // per user (same amount + expiry as the source) and notify each
+    // user individually. The source code itself stays active and is
+    // NOT marked used.
+    const users = await listUsersWithRisk();
+    const expiresAt = toIso(crow.expires_at);
+    let notified = 0;
+    for (const user of users) {
+      const fresh = await createCode(crow.amount_per_day, expiresAt);
+      await createNotification(user.gmail, fresh.code, crow.amount_per_day);
+      notified++;
+    }
+    sendJson(res, 200, { ok: true, notified, perUser: true });
+    return;
+  }
+  const gmail = gmailRaw.toLowerCase();
   await createNotification(gmail, crow.code, crow.amount_per_day);
   sendJson(res, 200, { ok: true, notified: 1 });
 }

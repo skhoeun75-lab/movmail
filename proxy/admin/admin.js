@@ -97,6 +97,8 @@ const I18N = {
     expiryDays: 'ផុតកំណត់ (ថ្ងៃ)', day: 'ថ្ងៃ', days: 'ថ្ងៃ',
     sendCode: 'ផ្ញើកូដ', allUsers: 'អ្នកប្រើទាំងអស់', selectRecipient: 'ជ្រើសរើសអ្នកទទួល',
     sentToUser: 'បានផ្ញើកូដទៅ {name} រួចហើយ', sentToAll: 'បានផ្ញើកូដទៅអ្នកប្រើទាំងអស់រួចហើយ',
+    perUserNote: 'កូដខុសគ្នាសម្រាប់អ្នកប្រើម្នាក់ៗ',
+    sentToAllCount: 'បានផ្ញើកូដខុសគ្នា {n} កូដទៅអ្នកប្រើ {n} នាក់រួចហើយ',
     errSendCode: 'បរាជ័យក្នុងការផ្ញើកូដ។ សូមព្យាយាមម្តងទៀត។', generating: 'កំពុងបង្កើត…',
     generate: 'បង្កើត', yourCode: 'កូដរបស់អ្នក៖', copy: 'ចម្លង', copied: 'បានចម្លង',
     codesList: 'បញ្ជីកូដ', noCodes: 'មិនមានកូដទេ',
@@ -141,6 +143,8 @@ const I18N = {
     expiryDays: 'Expires in (days)', day: 'day', days: 'days',
     sendCode: 'Send code', allUsers: 'All users', selectRecipient: 'Choose recipient',
     sentToUser: 'Code sent to {name}', sentToAll: 'Code sent to all users',
+    perUserNote: 'A different code for each user',
+    sentToAllCount: 'Sent {n} different codes to {n} users',
     errSendCode: 'Failed to send the code. Please try again.', generating: 'Generating…',
     generate: 'Generate', yourCode: 'Your code:', copy: 'Copy', copied: 'Copied',
     codesList: 'Code list', noCodes: 'No codes yet',
@@ -502,6 +506,7 @@ function renderCodes() {
     /* Active codes can be sent straight to a user (or to all users). */
     var sendRow = st === 'active'
       ? '<div class="send-row"><select class="send-recipient" data-code="' + esc(code) + '" aria-label="' + esc(t('selectRecipient')) + '"></select>'
+        + '<span class="per-user-note" data-per-user-note hidden>' + esc(t('perUserNote')) + '</span>'
         + '<button class="btn btn-primary" type="button" data-send-code="' + esc(code) + '">' + esc(t('sendCode')) + '</button>'
         + '<span class="send-status" data-send-status="' + esc(code) + '" role="status" hidden></span></div>'
       : '';
@@ -534,6 +539,13 @@ function recipientOptionsHTML(selected) {
   });
   return opts;
 }
+/* Show the "different code per user" note only when the recipient is ALL. */
+function updatePerUserNote(sel) {
+  if (!sel) return;
+  var row = sel.closest ? sel.closest('.send-row') : null;
+  var note = row ? row.querySelector('.per-user-note') : null;
+  if (note) note.hidden = sel.value !== 'ALL';
+}
 /* (Re)build every recipient dropdown from the loaded users list. */
 function refreshSendRecipients() {
   var selects = [];
@@ -543,15 +555,35 @@ function refreshSendRecipients() {
     var prev = sel.value || 'ALL';
     sel.innerHTML = recipientOptionsHTML(prev);
     if (!sel.value) sel.value = 'ALL';
+    updatePerUserNote(sel);
   });
 }
 async function sendCodeTo(code, gmail, statusEl) {
   if (!getToken()) { showSendStatus(statusEl, t('errNoToken'), true); return false; }
   try {
-    await api('/api/admin/notify', { method: 'POST', body: { code: code, gmail: gmail } });
-    var msg = gmail === 'ALL' ? t('sentToAll') : t('sentToUser').replace('{name}', displayNameForGmail(gmail));
+    var data = await api('/api/admin/notify', { method: 'POST', body: { code: code, gmail: gmail } });
+    var msg;
+    if (gmail === 'ALL' && data && data.perUser && typeof data.notified === 'number') {
+      /* Per-user codes: the server minted one different code per user. */
+      msg = t('sentToAllCount').replace(/\{n\}/g, String(data.notified));
+    } else if (gmail === 'ALL') {
+      msg = t('sentToAll');
+    } else {
+      msg = t('sentToUser').replace('{name}', displayNameForGmail(gmail));
+    }
     showSendStatus(statusEl, msg, false);
     toast(msg);
+    if (gmail === 'ALL') {
+      /* The server created fresh per-user codes — refresh the list so they
+         appear as normal active codes. This re-renders per-code rows, so if
+         the status span we just wrote into was rebuilt, re-apply the
+         message to the fresh row. */
+      await loadCodes();
+      if (statusEl && !statusEl.isConnected) {
+        var fresh = document.querySelector('[data-send-status="' + code + '"]');
+        if (fresh) showSendStatus(fresh, msg, false);
+      }
+    }
     return true;
   } catch (err) { showSendStatus(statusEl, t('errSendCode'), true); return false; }
 }
@@ -715,6 +747,10 @@ function init() {
     finally { btn.disabled = false; }
   });
   $('codesList').addEventListener('click', onCodeActionClick);
+  $('codesList').addEventListener('change', function (e) {
+    if (e.target && e.target.matches && e.target.matches('select.send-recipient')) updatePerUserNote(e.target);
+  });
+  $('newCodeRecipient').addEventListener('change', function () { updatePerUserNote($('newCodeRecipient')); });
   $('copyCodeBtn').addEventListener('click', function () {
     var code = $('newCodeValue').textContent;
     var done = function () { $('copyCodeBtn').textContent = t('copied'); };

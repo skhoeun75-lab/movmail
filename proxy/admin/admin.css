@@ -197,6 +197,10 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
 .send-row select.send-recipient { flex: 1 1 200px; width: auto; }
 .send-status { font-size: 13px; color: var(--green); font-weight: 600; }
 .send-status.send-error { color: var(--red); }
+/* "Different code per user" note — shown only when the recipient is ALL. */
+.per-user-note {
+  flex-basis: 100%; font-size: 13px; font-weight: 600; color: var(--amber);
+}
 
 /* ---------- Receipts ---------- */
 .receipts-list { display: grid; gap: 12px; }
