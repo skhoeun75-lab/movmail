@@ -449,6 +449,11 @@
         max-height:82vh;
       }
       .float-panel.open{display:flex}
+      /* Compact window on phones: never taller than 62% of the screen,
+         body scrolls inside it (float-body already overflow:auto). */
+      @media (max-width:600px){
+        .float-panel{max-height:62vh}
+      }
       .float-head{
         display:flex;align-items:center;gap:10px;padding:11px 12px 11px 16px;
         background:linear-gradient(135deg,#0a2e22,#087f5b);color:#fff;cursor:grab;
@@ -462,6 +467,25 @@
         background:rgba(255,255,255,.14);color:#fff;font-size:15px;line-height:1;flex:none;cursor:pointer;
       }
       .float-close:hover{background:rgba(255,255,255,.28)}
+      .float-min{
+        width:34px;height:34px;min-height:34px;border-radius:50%;border:1px solid rgba(255,255,255,.4);
+        background:rgba(255,255,255,.14);color:#fff;font-size:16px;line-height:1;flex:none;cursor:pointer;
+      }
+      .float-min:hover{background:rgba(255,255,255,.28)}
+      /* Minimized pill: obvious green dock at bottom-center, never a
+         bare dark strip. Logo + "Mailbox" + mailbox name + expand chevron. */
+      .float-pill{
+        position:fixed;z-index:71;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));
+        transform:translateX(-50%);
+        display:none;align-items:center;gap:8px;max-width:92vw;
+        padding:8px 14px 8px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.35);
+        background:linear-gradient(135deg,#0a2e22,#087f5b);color:#fff;
+        box-shadow:var(--shadow-lg);cursor:pointer;font-size:14px;font-weight:800;
+      }
+      .float-pill.open{display:flex}
+      .float-pill img{width:26px;height:26px;border-radius:8px;flex:none}
+      .float-pill .float-pill-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700;opacity:.92}
+      .float-pill .float-pill-chev{flex:none;font-size:13px}
       .float-body{overflow:auto;padding:16px;min-height:0}
       .float-profile{display:flex;gap:12px;align-items:center;margin-bottom:12px}
       .float-profile .avatar{width:54px;height:54px;font-size:22px}
@@ -537,20 +561,23 @@
       .overlay.open .reader{animation:blurIn .3s ease}
       .mini-overlay.open .mini-modal{animation:blurIn .3s ease}
       .float-panel.open{animation:blurIn .3s ease}
+      .float-pill.open{animation:blurIn .3s ease}
       .country-dropdown.open{animation:blurIn .25s ease}
       .profile-panel.open{animation:blurIn .3s ease}
       .bell-panel.open{animation:blurIn .3s ease}
       .overlay.open .reader.blur-out,
       .mini-overlay.open .mini-modal.blur-out,
       .float-panel.open.blur-out,
+      .float-pill.open.blur-out,
       .country-dropdown.open.blur-out,
       .profile-panel.open.blur-out,
       .bell-panel.open.blur-out{animation:blurOut .28s ease forwards}
       @media (prefers-reduced-motion: reduce){
         .overlay.open .reader,.mini-overlay.open .mini-modal,.float-panel.open,
+        .float-pill.open,
         .country-dropdown.open,.profile-panel.open,.bell-panel.open,
         .overlay.open .reader.blur-out,.mini-overlay.open .mini-modal.blur-out,
-        .float-panel.open.blur-out,.country-dropdown.open.blur-out,
+        .float-panel.open.blur-out,.float-pill.open.blur-out,.country-dropdown.open.blur-out,
         .profile-panel.open.blur-out,.bell-panel.open.blur-out{animation:none}
       }
 
@@ -977,11 +1004,21 @@
       <div class="float-head" id="floatHead">
         <span class="float-title" id="floatTitle">Mailbox</span>
         <span class="float-drag-hint" data-i18n="floatDragHint">អូសដើម្បីផ្លាស់ទី</span>
+        <button class="float-min" id="floatMinBtn" aria-label="បង្រួម" data-i18n-aria="floatMinimize">—</button>
         <button class="float-close" id="floatClose" aria-label="Close">✕</button>
       </div>
       <div class="float-body" id="floatBody"></div>
       <div class="float-resize" id="floatResize" aria-hidden="true"></div>
     </div>
+
+    <!-- Minimized floating panel: green pill docked at bottom-center.
+         Tapping it expands the panel back into a compact window. -->
+    <button class="float-pill" id="floatPill" aria-label="ពង្រីក" data-i18n-aria="floatExpand">
+      <img src="logo.png" alt="" />
+      <span data-i18n="floatPillMailbox">ប្រអប់សារ</span>
+      <span class="float-pill-name" id="floatPillName"></span>
+      <span class="float-pill-chev" aria-hidden="true">▲</span>
+    </button>
 
     <!-- ===== Save prompt modal ===== -->
     <div class="mini-overlay" id="savePromptOverlay" role="dialog" aria-modal="true">
@@ -1332,6 +1369,9 @@ var I18N = {
     "copiedCheck": "✓ បានចម្លង",
     "confirmDone": "✓",
     "floatDragHint": "អូសដើម្បីផ្លាស់ទី",
+    "floatMinimize": "បង្រួម",
+    "floatExpand": "ពង្រីក",
+    "floatPillMailbox": "ប្រអប់សារ",
     "floatMessagesTitle": "សាររបស់អ៊ីមែលនេះ",
     "floatNoMessages": "មិនទាន់មានសារ",
     "floatProxyLabel": "Proxy",
@@ -1571,6 +1611,9 @@ var I18N = {
     "copiedCheck": "✓ Copied",
     "confirmDone": "✓",
     "floatDragHint": "Drag to move",
+    "floatMinimize": "Minimize",
+    "floatExpand": "Expand",
+    "floatPillMailbox": "Mailbox",
     "floatMessagesTitle": "Messages for this email",
     "floatNoMessages": "No messages yet",
     "floatProxyLabel": "Proxy",
@@ -3157,7 +3200,43 @@ var I18N = {
         /* ---------- floating mailbox panel ---------- */
         var floatPanel = $("floatPanel"), floatHead = $("floatHead"),
             floatBody = $("floatBody"), floatTitle = $("floatTitle");
+        var floatPill = $("floatPill"), floatPillName = $("floatPillName");
         var floatMailbox = null;
+        /* The panel must never be draggable mostly off-screen: at least
+           160px of it always stays visible (this is what left only a
+           60px dark strip peeking from the bottom on Mov's phone). */
+        var FLOAT_MIN_VISIBLE = 160;
+        function clampFloatPos(){
+          if (!floatPanel.classList.contains("open")) return;
+          var w = floatPanel.offsetWidth || 360;
+          var left = parseFloat(floatPanel.style.left);
+          var top = parseFloat(floatPanel.style.top);
+          if (isNaN(left) || isNaN(top)) return;
+          var nx = Math.max(-(w - FLOAT_MIN_VISIBLE), Math.min(left, window.innerWidth - FLOAT_MIN_VISIBLE));
+          var ny = Math.max(0, Math.min(top, window.innerHeight - FLOAT_MIN_VISIBLE));
+          floatPanel.style.left = nx + "px";
+          floatPanel.style.top = ny + "px";
+        }
+        /* A stale inline position (e.g. dragged down before the tighter
+           clamps) must not reopen the panel off-screen: reset it to the
+           default visible spot instead. */
+        function resetFloatPosIfOffscreen(){
+          var w = floatPanel.offsetWidth || 360;
+          var left = parseFloat(floatPanel.style.left);
+          var top = parseFloat(floatPanel.style.top);
+          var off = isNaN(left) || isNaN(top) ||
+            top > window.innerHeight - FLOAT_MIN_VISIBLE ||
+            left < -(w - FLOAT_MIN_VISIBLE) ||
+            left > window.innerWidth - FLOAT_MIN_VISIBLE;
+          if (off){
+            floatPanel.style.left = "";
+            floatPanel.style.top = "";
+            floatPanel.style.right = "";
+            floatPanel.style.width = "";
+            floatPanel.style.height = "";
+            floatPanel.style.maxHeight = "";
+          }
+        }
         function currentMailboxObject(){
           var saved = state.address ? findMailbox(state.address) : null;
           if (saved) return saved;
@@ -3253,17 +3332,55 @@ var I18N = {
             msgsWrap.appendChild(ul);
           }
           floatBody.appendChild(msgsWrap);
+          /* If the pill is showing, hide it — the full panel is opening. */
+          if (floatPill.classList.contains("open")) closeAnimated(floatPill, null);
+          resetFloatPosIfOffscreen();
           openAnimated(floatPanel);
         }
         function closeFloatPanel(){
           closeAnimated(floatPanel, null, function(){ floatMailbox = null; });
+          /* ✕ closes everything: the pill goes away too. */
+          if (floatPill.classList.contains("open")) closeAnimated(floatPill, null);
+        }
+        /* Minimize: collapse to the obvious green pill at bottom-center.
+           Tapping the pill expands back into a compact, on-screen window. */
+        function minimizeFloatPanel(){
+          if (!floatPanel.classList.contains("open") || !floatMailbox) return;
+          var mb = floatMailbox;
+          closeAnimated(floatPanel, null, function(){
+            floatPillName.textContent = mb.name || mb.address || "";
+            openAnimated(floatPill);
+          });
+        }
+        function expandFloatPanel(){
+          if (!floatMailbox) return;
+          var mb = floatMailbox;
+          closeAnimated(floatPill, null);
+          /* Always re-open as a compact window at a visible spot. */
+          floatPanel.style.left = "";
+          floatPanel.style.top = "";
+          floatPanel.style.right = "";
+          floatPanel.style.width = "";
+          floatPanel.style.height = "";
+          floatPanel.style.maxHeight = "";
+          openFloatPanel(mb);
+          if (window.innerWidth < 600){
+            var w = Math.min(360, window.innerWidth * 0.92);
+            floatPanel.style.left = Math.max(8, Math.round((window.innerWidth - w) / 2)) + "px";
+            floatPanel.style.top = Math.round(window.innerHeight * 0.18) + "px";
+            floatPanel.style.right = "auto";
+          }
         }
         $("floatClose").addEventListener("click", closeFloatPanel);
+        $("floatMinBtn").addEventListener("click", minimizeFloatPanel);
+        floatPill.addEventListener("click", expandFloatPanel);
+        /* A window resize must never leave the panel stranded off-screen. */
+        window.addEventListener("resize", clampFloatPos);
         /* Drag by the header (mouse + touch via pointer events). */
         (function(){
           var dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
           floatHead.addEventListener("pointerdown", function(e){
-            if (e.target.closest(".float-close")) return;
+            if (e.target.closest("button")) return;
             dragging = true;
             var rect = floatPanel.getBoundingClientRect();
             floatPanel.style.left = rect.left + "px";
@@ -3278,8 +3395,9 @@ var I18N = {
             if (!dragging) return;
             var nx = startLeft + (e.clientX - startX);
             var ny = startTop + (e.clientY - startY);
-            nx = Math.max(-floatPanel.offsetWidth + 80, Math.min(nx, window.innerWidth - 80));
-            ny = Math.max(0, Math.min(ny, window.innerHeight - 60));
+            /* Keep at least 160px of the panel visible on every side. */
+            nx = Math.max(-(floatPanel.offsetWidth - FLOAT_MIN_VISIBLE), Math.min(nx, window.innerWidth - FLOAT_MIN_VISIBLE));
+            ny = Math.max(0, Math.min(ny, window.innerHeight - FLOAT_MIN_VISIBLE));
             floatPanel.style.left = nx + "px";
             floatPanel.style.top = ny + "px";
           });
