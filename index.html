@@ -535,17 +535,19 @@
       .float-panel.open{animation:blurIn .3s ease}
       .country-dropdown.open{animation:blurIn .25s ease}
       .profile-panel.open{animation:blurIn .3s ease}
+      .bell-panel.open{animation:blurIn .3s ease}
       .overlay.open .reader.blur-out,
       .mini-overlay.open .mini-modal.blur-out,
       .float-panel.open.blur-out,
       .country-dropdown.open.blur-out,
-      .profile-panel.open.blur-out{animation:blurOut .28s ease forwards}
+      .profile-panel.open.blur-out,
+      .bell-panel.open.blur-out{animation:blurOut .28s ease forwards}
       @media (prefers-reduced-motion: reduce){
         .overlay.open .reader,.mini-overlay.open .mini-modal,.float-panel.open,
-        .country-dropdown.open,.profile-panel.open,
+        .country-dropdown.open,.profile-panel.open,.bell-panel.open,
         .overlay.open .reader.blur-out,.mini-overlay.open .mini-modal.blur-out,
         .float-panel.open.blur-out,.country-dropdown.open.blur-out,
-        .profile-panel.open.blur-out{animation:none}
+        .profile-panel.open.blur-out,.bell-panel.open.blur-out{animation:none}
       }
 
       /* ---------- Header profile avatar ---------- */
@@ -553,6 +555,12 @@
       .avatar-btn{width:38px;height:38px;min-height:38px;border-radius:50%;border:2px solid rgba(255,255,255,.55);background:var(--accent);color:#fff;font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex:none}
       .profile-signup-btn{background:#fff;border-color:#fff;color:#065f46}
       @media (max-width:560px){ .profile-slot{margin-left:4px} }
+
+      /* ---------- Notification bell (next to the avatar) ---------- */
+      .bell-btn{position:relative;width:38px;height:38px;min-height:38px;border-radius:50%;border:2px solid rgba(255,255,255,.55);background:rgba(255,255,255,.12);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex:none;margin-right:8px}
+      .bell-btn svg{display:block}
+      .bell-badge{position:absolute;top:-5px;right:-5px;min-width:19px;height:19px;border-radius:999px;background:#2563eb;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid #0a9d6e}
+      .bell-badge.zero{background:#dc2626}
 
       /* ---------- Profile panel (small, top-right) ---------- */
       .profile-panel{
@@ -572,13 +580,54 @@
       .profile-row>span:first-child{color:var(--muted);flex:none}
       .profile-row b{overflow-wrap:anywhere;text-align:right;font-weight:700}
       .profile-pricing h4{margin:0 0 8px;font-size:14.5px}
-      .plan-option{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;font-size:14.5px;font-weight:700;color:var(--ink);cursor:pointer;margin-bottom:8px;min-height:44px;text-align:left}
+      .plan-option{display:block;width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;font-size:14.5px;font-weight:700;color:var(--ink);cursor:pointer;margin-bottom:8px;min-height:44px;text-align:left}
+      .plan-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+      .plan-feats{display:grid;gap:5px;margin-top:10px;font-size:13.5px;font-weight:400;line-height:1.5;text-align:left}
+      .plan-feat::before{content:"✓ ";color:var(--accent);font-weight:800}
+      .old-price{text-decoration:line-through;color:var(--muted);font-weight:400;margin-right:6px}
+      .off-badge{display:inline-block;background:var(--accent-soft);color:var(--accent-ink);border:1px solid var(--accent);border-radius:999px;padding:1px 8px;font-size:12px;font-weight:800;margin-left:6px;white-space:nowrap}
       .plan-option:last-child{margin-bottom:0}
       .plan-option.selected{border-color:var(--accent);background:var(--accent-soft)}
       .plan-option .plan-price{color:var(--accent-ink);white-space:nowrap}
       .seg{display:inline-flex;border:1px solid var(--border);border-radius:999px;overflow:hidden;flex:none}
       .seg button{border:none;background:var(--surface);color:var(--ink);padding:6px 12px;font-weight:700;font-size:13.5px;min-height:34px;cursor:pointer}
       .seg button.active{background:var(--accent);color:#fff}
+
+      /* ---------- Notification bell panel (small, top-right) ---------- */
+      .bell-panel{
+        position:fixed;z-index:70;top:64px;right:14px;width:320px;max-width:92vw;max-height:82vh;
+        background:var(--surface);color:var(--ink);border:1px solid var(--border);
+        border-radius:16px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;overflow:hidden;
+      }
+      .bell-panel.open{display:flex}
+      .bell-section{margin-bottom:4px}
+      .bell-section h4{margin:0 0 8px;font-size:14.5px}
+      .quota-bar{height:8px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);overflow:hidden;margin-top:8px}
+      .quota-fill{height:100%;background:var(--accent);border-radius:999px;transition:width .3s ease}
+      .quota-fill.zero{background:#dc2626}
+      .notif-item{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:14px}
+      .notif-item:last-child{border-bottom:none}
+      .notif-item .notif-time{color:var(--muted);font-size:12.5px;white-space:nowrap;flex:none}
+      .notif-empty{color:var(--muted);font-size:14px;padding:6px 0}
+      .good-box{border:1px solid var(--accent);background:var(--accent-soft);border-radius:12px;padding:12px}
+      .good-box .bell-section-title{color:var(--accent-ink);font-weight:800}
+      .prob-box{border:1px solid var(--border);border-radius:12px;padding:12px}
+      .bell-section-title{font-weight:800;font-size:14.5px;margin-bottom:6px}
+      .prob-row{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding:4px 0}
+      .prob-row .prob-count{font-weight:800;white-space:nowrap}
+      .no-problems{color:var(--accent-ink);font-weight:700;font-size:14px}
+
+      /* ---------- Saved mailbox tabs + tier badges ---------- */
+      .mailbox-tabs{display:flex;gap:8px;margin-bottom:14px}
+      .mailbox-tab{flex:1;border:1px solid var(--border);background:var(--surface-2);color:var(--ink);border-radius:10px;padding:9px 10px;font-weight:800;font-size:14px;min-height:40px;cursor:pointer}
+      .mailbox-tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+      .mailbox-tab .tab-count{background:rgba(0,0,0,.12);border-radius:999px;padding:1px 8px;font-size:12.5px;margin-left:4px}
+      .mailbox-tab.active .tab-count{background:rgba(255,255,255,.25)}
+      .tier-badge{display:inline-block;font-size:11.5px;font-weight:800;border-radius:999px;padding:1px 8px;margin-left:6px;vertical-align:middle}
+      .tier-badge.free{background:var(--surface-2);color:var(--muted);border:1px solid var(--border)}
+      .tier-badge.pro{background:var(--accent);color:#fff}
+      .country-option.locked{opacity:.65}
+      .country-option .c-lock{font-size:15px;flex:none;margin-left:auto}
 
       /* ---------- Auth modal ---------- */
       .auth-error{background:var(--red-bg);color:var(--red);border:1px solid var(--red);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:12px}
@@ -664,6 +713,7 @@
           <button type="button" class="lang-btn" id="langEn" aria-pressed="false">EN</button>
         </div>
         <div class="profile-slot" id="profileSlot">
+          <button type="button" class="bell-btn" id="bellBtn" data-i18n-aria="bellTitle" aria-label="Notifications"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="bell-badge" id="bellBadge">10</span></button>
           <button type="button" class="avatar-btn" id="avatarBtn" hidden aria-label="Profile"><span id="avatarInitials">?</span></button>
           <button type="button" class="btn pill profile-signup-btn" id="headerSignupBtn"><span data-i18n="signUpBtn">ចុះឈ្មោះ</span></button>
         </div>
@@ -776,6 +826,10 @@
             <span class="count-badge" id="mailboxCountBadge">0</span>
           </div>
           <div style="padding:16px 18px 18px">
+            <div class="mailbox-tabs" role="tablist">
+              <button type="button" class="mailbox-tab active" data-mbtab="free"><span data-i18n="tabFreeEmail">Free Email</span> <span class="tab-count" id="tabFreeCount">0</span></button>
+              <button type="button" class="mailbox-tab" data-mbtab="pro"><span data-i18n="tabProEmail">Pro Email</span> <span class="tab-count" id="tabProCount">0</span></button>
+            </div>
             <div id="mailboxList"></div>
             <div class="empty-state" id="mailboxEmptyState" style="padding:28px 16px 30px">
               <h3 id="mailboxEmptyTitle">មិនទាន់មានអ៊ីមែលដែលបានរក្សាទុក</h3>
@@ -1024,13 +1078,71 @@
         <div class="profile-row"><span data-i18n="planLabel">គម្រោង</span><b id="profilePlan">Free</b></div>
         <div class="profile-pricing">
           <h4 data-i18n="pricingTitle">តម្លៃ</h4>
-          <button type="button" class="plan-option selected" data-plan="free"><span data-i18n="planFree">Free</span><span class="plan-price">$0</span></button>
-          <button type="button" class="plan-option" data-plan="pro-monthly"><span data-i18n="planProMonthly">Pro — ប្រចាំខែ</span><span class="plan-price">$3 / <span data-i18n="perMonth">ខែ</span></span></button>
-          <button type="button" class="plan-option" data-plan="pro-yearly"><span data-i18n="planProYearly">Pro — ប្រចាំឆ្នាំ</span><span class="plan-price">$30 / <span data-i18n="perYear">ឆ្នាំ</span></span></button>
+          <button type="button" class="plan-option selected" data-plan="free">
+            <span class="plan-head"><span data-i18n="planFree">Free</span><span class="plan-price">$0</span></span>
+            <span class="plan-feats">
+              <span class="plan-feat" data-i18n="feat10Day">10 អ៊ីមែលក្នុងមួយថ្ងៃ</span>
+              <span class="plan-feat" data-i18n="feat5Countries">ប្រទេស 5៖ កម្ពុជា, សិង្ហបុរី, ថៃ, វៀតណាម, អាមេរិក</span>
+              <span class="plan-feat" data-i18n="featProtectBasic">ការពារមូលដ្ឋាន៖ IP + ប្រទេស</span>
+              <span class="plan-feat" data-i18n="featOneMailbox">អ៊ីមែលសកម្ម 1</span>
+              <span class="plan-feat" data-i18n="featStdDomains">Domain ធម្មតា</span>
+            </span>
+          </button>
+          <button type="button" class="plan-option" data-plan="pro-monthly">
+            <span class="plan-head"><span data-i18n="planProMonthly">Pro — ប្រចាំខែ</span><span class="plan-price">$2.99 / <span data-i18n="perMonth">ខែ</span></span></span>
+            <span class="plan-feats">
+              <span class="plan-feat" data-i18n="feat100Day">100 អ៊ីមែលក្នុងមួយថ្ងៃ</span>
+              <span class="plan-feat" data-i18n="featAll48">ប្រទេសទាំង 48</span>
+              <span class="plan-feat" data-i18n="featProtectFull">ការពារពេញលេញ៖ IP + ប្រទេស + ជ្រើស Proxy</span>
+              <span class="plan-feat" data-i18n="featCustomNames">ដាក់ឈ្មោះផ្ទាល់ខ្លួន</span>
+              <span class="plan-feat" data-i18n="featSavedMailboxes">រក្សាទុកអ៊ីមែល</span>
+              <span class="plan-feat" data-i18n="featRestore">ស្តារអ៊ីមែលឡើងវិញ</span>
+            </span>
+          </button>
+          <button type="button" class="plan-option" data-plan="pro-yearly">
+            <span class="plan-head"><span data-i18n="planProYearly">Pro — ប្រចាំឆ្នាំ</span><span class="plan-price"><span class="old-price">$19.99</span>$11.99 / <span data-i18n="perYear">ឆ្នាំ</span><span class="off-badge" data-i18n="off40">បញ្ចុះ 40%</span></span></span>
+            <span class="plan-feats">
+              <span class="plan-feat" data-i18n="featUnlimitedEmails">អ៊ីមែលគ្មានកំណត់</span>
+              <span class="plan-feat" data-i18n="featAll48">ប្រទេសទាំង 48</span>
+              <span class="plan-feat" data-i18n="featProtectStrongest">ការពារខ្លាំងបំផុត</span>
+              <span class="plan-feat" data-i18n="featAdminSupport">ជំនួយពី Admin</span>
+              <span class="plan-feat" data-i18n="featPriority">អាទិភាព</span>
+              <span class="plan-feat" data-i18n="featAllMonthly">គ្រប់យ៉ាងនៅក្នុង Pro ប្រចាំខែ</span>
+            </span>
+          </button>
         </div>
         <div class="profile-row"><span data-i18n="languageRow">ភាសា</span><span class="seg" id="profileLangSeg"><button type="button" data-lang="km">ខ្មែរ</button><button type="button" data-lang="en">EN</button></span></div>
         <div class="profile-row"><span data-i18n="themeRow">រចនាប័ទ្ម</span><span class="seg" id="profileThemeSeg"><button type="button" data-theme="light" data-i18n="themeDay">ថ្ងៃ</button><button type="button" data-theme="dark" data-i18n="themeNight">យប់</button><button type="button" data-theme="auto" data-i18n="themeAuto">ស្វ័យប្រវត្តិ</button></span></div>
         <button type="button" class="btn danger" id="signOutBtn" data-i18n="signOut">ចាកចេញ</button>
+      </div>
+    </div>
+
+    <!-- ===== Notification bell panel (small, top-right) ===== -->
+    <div class="bell-panel" id="bellPanel" role="dialog" aria-modal="false" aria-label="Notifications">
+      <div class="profile-head">
+        <div style="min-width:0">
+          <div class="profile-name" data-i18n="bellTitle">ការជូនដំណឹង</div>
+        </div>
+        <span class="spacer"></span>
+        <button class="panel-close" id="bellClose" aria-label="Close">✕</button>
+      </div>
+      <div class="profile-body">
+        <div class="bell-section">
+          <div class="profile-row"><span data-i18n="quotaToday">កូតាថ្ងៃនេះ</span><b id="bellQuotaText">—</b></div>
+          <div class="quota-bar"><div class="quota-fill" id="bellQuotaFill" style="width:0%"></div></div>
+        </div>
+        <div class="bell-section">
+          <h4 data-i18n="notifSectionTitle">ការជូនដំណឹងថ្មីៗ</h4>
+          <div id="bellNotifList"></div>
+        </div>
+        <div class="bell-section good-box">
+          <div class="bell-section-title">✓ <span data-i18n="goodTitle">ល្អ</span></div>
+          <div id="bellGoodText">—</div>
+        </div>
+        <div class="bell-section prob-box">
+          <div class="bell-section-title">⚠ <span data-i18n="problemsTitle">បញ្ហា</span></div>
+          <div id="bellProblemsList"></div>
+        </div>
       </div>
     </div>
 
@@ -1058,6 +1170,16 @@
            loads. */
         var FALLBACK_DOMAINS = [{ "domain": "euploading.com", "isActive": true }];
         var POLL_SECONDS = 20;
+        /* Plan daily limits: Free 10/day, Pro Monthly 100/day,
+           Pro Yearly unlimited. Everyone is Free for now; the plan
+           comes from the profile when paid plans exist. */
+        var DAILY_LIMITS = { "free": 10, "pro-monthly": 100, "pro-yearly": Infinity };
+        var DAILY_USE_KEY = "movmail-daily-use";
+        var NOTIF_KEY = "movmail-notifications";
+        var PROBLEMS_KEY = "movmail-problems";
+        /* Free countries in the country picker: only these 5 are
+           selectable on the Free plan. The other 43 are locked. */
+        var FREE_COUNTRIES = ["Cambodia", "Singapore", "Thailand", "Vietnam", "United States"];
 
         /* ---------- Language (EN / ខ្មែរ, one language at a time) ---------- */
 var I18N = {
@@ -1253,7 +1375,51 @@ var I18N = {
     "themeDay": "ថ្ងៃ",
     "themeNight": "យប់",
     "themeAuto": "ស្វ័យប្រវត្តិ",
-    "signOut": "ចាកចេញ"
+    "signOut": "ចាកចេញ",
+    "bellTitle": "ការជូនដំណឹង",
+    "quotaToday": "កូតាថ្ងៃនេះ",
+    "quotaUsed": "បានប្រើ {used} / {limit}",
+    "quotaRemaining": "នៅសល់ {n}",
+    "quotaUnlimited": "គ្មានកំណត់",
+    "notifSectionTitle": "ការជូនដំណឹងថ្មីៗ",
+    "notifEmpty": "មិនទាន់មានការជូនដំណឹងទេ",
+    "goodTitle": "ល្អ",
+    "goodText": "{n} អ៊ីមែលត្រូវបានបង្កើត ហើយដំណើរការល្អទាំងអស់",
+    "problemsTitle": "បញ្ហា",
+    "noProblems": "គ្មានបញ្ហាទេ",
+    "timesCount": "{n} ដង",
+    "probRateLimit": "Mail.tm កំណត់ (429)",
+    "probConnection": "ការតភ្ជាប់បរាជ័យ",
+    "probGenFailed": "បង្កើតអ៊ីមែលបរាជ័យ",
+    "notifAccountCreated": "បានបង្កើតគណនី",
+    "notifEmailGenerated": "បានបង្កើតអ៊ីមែល {addr}",
+    "notifEmailSaved": "បានរក្សាអ៊ីមែល {name} ទុក",
+    "notifRestored": "បានស្តារអ៊ីមែល {addr} ឡើងវិញ",
+    "notifIpGenerated": "បានបង្កើត IP ថ្មី {ip}",
+    "limitReachedFree": "ដល់កំណត់ Free ហើយ៖ 10 អ៊ីមែលក្នុងមួយថ្ងៃ — ទិញ Pro ដើម្បីបានគ្មានកំណត់",
+    "limitReachedPro": "ដល់កំណត់ Pro ហើយ៖ 100 អ៊ីមែលក្នុងមួយថ្ងៃ — ទិញ Yearly ដើម្បីបានគ្មានកំណត់",
+    "countryLocked": "ជាប់សោ — ទិញ Pro ដើម្បីដោះសោប្រទេសទាំងអស់",
+    "tabFreeEmail": "Free Email",
+    "tabProEmail": "Pro Email",
+    "noProEmails": "មិនទាន់មានអ៊ីមែល Pro ទេ",
+    "noProEmailsText": "អ៊ីមែល Pro នឹងបង្ហាញនៅទីនេះ — ទិញ Pro ដើម្បីរក្សាទុកអ៊ីមែល Pro",
+    "off40": "បញ្ចុះ 40%",
+    "feat10Day": "10 អ៊ីមែលក្នុងមួយថ្ងៃ",
+    "feat100Day": "100 អ៊ីមែលក្នុងមួយថ្ងៃ",
+    "featUnlimitedEmails": "អ៊ីមែលគ្មានកំណត់",
+    "feat5Countries": "ប្រទេស 5៖ កម្ពុជា, សិង្ហបុរី, ថៃ, វៀតណាម, អាមេរិក",
+    "featAll48": "ប្រទេសទាំង 48",
+    "featProtectBasic": "ការពារមូលដ្ឋាន៖ IP + ប្រទេស",
+    "featProtectFull": "ការពារពេញលេញ៖ IP + ប្រទេស + ជ្រើស Proxy",
+    "featProtectStrongest": "ការពារខ្លាំងបំផុត",
+    "featOneMailbox": "អ៊ីមែលសកម្ម 1",
+    "featStdDomains": "Domain ធម្មតា",
+    "featCustomNames": "ដាក់ឈ្មោះផ្ទាល់ខ្លួន",
+    "featSavedMailboxes": "រក្សាទុកអ៊ីមែល",
+    "featRestore": "ស្តារអ៊ីមែលឡើងវិញ",
+    "featAdminSupport": "ជំនួយពី Admin",
+    "featPriority": "អាទិភាព",
+    "featAllMonthly": "គ្រប់យ៉ាងនៅក្នុង Pro ប្រចាំខែ"
   },
   "en": {
     "docTitle": "MovMail.com — Temporary Email",
@@ -1447,7 +1613,51 @@ var I18N = {
     "themeDay": "Day",
     "themeNight": "Night",
     "themeAuto": "Auto",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "bellTitle": "Notifications",
+    "quotaToday": "Today's quota",
+    "quotaUsed": "Used {used} / {limit}",
+    "quotaRemaining": "Remaining {n}",
+    "quotaUnlimited": "Unlimited",
+    "notifSectionTitle": "Recent notifications",
+    "notifEmpty": "No notifications yet",
+    "goodTitle": "Good",
+    "goodText": "{n} emails created, all working",
+    "problemsTitle": "Problems",
+    "noProblems": "No problems",
+    "timesCount": "{n} times",
+    "probRateLimit": "Mail.tm rate limit (429)",
+    "probConnection": "Connection failed",
+    "probGenFailed": "Email generation failed",
+    "notifAccountCreated": "Account created",
+    "notifEmailGenerated": "Email created: {addr}",
+    "notifEmailSaved": "Email saved: {name}",
+    "notifRestored": "Mailbox restored: {addr}",
+    "notifIpGenerated": "New IP generated: {ip}",
+    "limitReachedFree": "Free limit reached: 10 emails per day — upgrade to Pro for unlimited",
+    "limitReachedPro": "Pro limit reached: 100 emails per day — upgrade to Yearly for unlimited",
+    "countryLocked": "Locked — upgrade to Pro to unlock all countries",
+    "tabFreeEmail": "Free Email",
+    "tabProEmail": "Pro Email",
+    "noProEmails": "No Pro emails yet",
+    "noProEmailsText": "Pro emails will appear here — upgrade to Pro to save Pro emails",
+    "off40": "40% off",
+    "feat10Day": "10 emails per day",
+    "feat100Day": "100 emails per day",
+    "featUnlimitedEmails": "Unlimited emails",
+    "feat5Countries": "5 countries: Cambodia, Singapore, Thailand, Vietnam, USA",
+    "featAll48": "All 48 countries",
+    "featProtectBasic": "Basic protection: IP + country display",
+    "featProtectFull": "Full protection: IP + country + proxy choice",
+    "featProtectStrongest": "Strongest protection",
+    "featOneMailbox": "1 active mailbox",
+    "featStdDomains": "Standard domains",
+    "featCustomNames": "Custom names",
+    "featSavedMailboxes": "Saved mailboxes",
+    "featRestore": "Restore mailboxes",
+    "featAdminSupport": "Admin support",
+    "featPriority": "Priority",
+    "featAllMonthly": "Everything in Pro Monthly"
   }
 };
         var lang = "km";
@@ -1506,6 +1716,8 @@ var I18N = {
           renderMessages();
           renderSavedMessages();
           renderMailboxes();
+          updateBellBadge();
+          if ($("bellPanel") && $("bellPanel").classList.contains("open")) renderBellPanel();
           updateIpLine();
           syncLangSeg();
           syncThemeSeg();
@@ -1650,12 +1862,14 @@ var I18N = {
         function setBusy(busy){
           // Only copy/QR/refresh/delete need a live mailbox. Generate,
           // Change and Try again must stay clickable at all times so
-          // the user can always retry after a failure.
+          // the user can always retry after a failure — except when
+          // the plan's daily quota is used up, when Generate and
+          // Change are disabled (restoring a saved mailbox still
+          // works, and the quota resets at local midnight).
           ["copyBtn","qrBtn","refreshBtn","deleteBtn","inboxRefreshBtn","saveBtn","openFloatBtn"].forEach(function(id){
             $(id).disabled = busy || !state.token;
           });
-          $("generateBtn").disabled = false;
-          $("changeBtn").disabled = false;
+          updateGenerateState();
           $("retryBtn").disabled = false;
         }
         function showError(msg){
@@ -1699,6 +1913,19 @@ var I18N = {
         /* ---------- account lifecycle ---------- */
         function createAccount(){
           if (state.creating) return;
+          /* Plan daily limit: block a new address once the day's
+             quota is used up. Restores do not call createAccount,
+             so they are never counted or blocked. */
+          if (dailyLimitReached()){
+            state.creating = false;
+            state.failed = true;
+            state.lastErrorCode = "limit";
+            addrText.textContent = t("addrFailed");
+            statusText.textContent = t(limitReachedKey());
+            setBusy(false);
+            showToast(t(limitReachedKey()));
+            return;
+          }
           if (state.createTimer){ clearTimeout(state.createTimer); state.createTimer = null; }
           state.creating = true;
           state.failed = false;
@@ -1754,6 +1981,10 @@ var I18N = {
             startPolling();
             rememberAddress();
             fetchSavedMessages();
+            /* A new address was created: count it against the daily
+               quota and log it in the bell. */
+            recordEmailCreated();
+            addNotification("notifEmailGenerated", {addr: state.address});
           }).catch(function(err){
             state.creating = false;
             /* Auto-reconnect forever: the user must never have to click
@@ -1765,6 +1996,15 @@ var I18N = {
                and the manual Retry button kept as a backup. */
             var retryable = !err || !err.status || err.status === 429 || err.status === 503;
             state.retryCount = (state.retryCount || 0) + 1;
+            /* Log the failure once per creation attempt (first
+               retry) so the bell's Problems section shows real
+               causes without flooding on the forever-retry loop. */
+            if (state.retryCount === 1){
+              var cause = (!err || !err.status) ? "probConnection"
+                : (err.status === 429 ? "probRateLimit"
+                : (err.status >= 500 ? "probConnection" : "probGenFailed"));
+              recordProblem(cause);
+            }
             state.retrying = true;
             var delay = state.retryCount === 1 ? 5000 : state.retryCount === 2 ? 10000 : 20000;
             addrText.textContent = t("addrGenerating");
@@ -2132,6 +2372,7 @@ var I18N = {
           for (var i = 0; i < list.length; i++){
             if (list[i].address === state.address){
               list[i].name = name;
+              if (!list[i].tier) list[i].tier = "free";
               if (currentIp) list[i].ip = currentIp.ip, list[i].country = currentIp.country, list[i].city = currentIp.city, list[i].flag = currentIp.flag;
               saveMailboxes(list);
               renderMailboxes();
@@ -2141,6 +2382,7 @@ var I18N = {
           var mb = {
             id: "mb-" + Date.now().toString(36) + randomStr(6),
             name: name,
+            tier: getCurrentPlan() === "free" ? "free" : "pro",
             address: state.address,
             password: state.password,
             token: state.token,
@@ -2156,6 +2398,11 @@ var I18N = {
           renderMailboxes();
           return mb;
         }
+        /* Saved mailboxes are split into Free / Pro tabs. A mailbox
+           keeps the tier it was saved with ("free" or "pro");
+           mailboxes saved before tiers existed count as Free. */
+        var mailboxTab = "free";
+        function mailboxTier(mb){ return mb && mb.tier === "pro" ? "pro" : "free"; }
         function renderMailboxes(){
           var listEl = $("mailboxList"), empty = $("mailboxEmptyState");
           if (!listEl || !empty) return;
@@ -2171,15 +2418,26 @@ var I18N = {
             }
           });
           if (mbChanged) saveMailboxes(list);
+          var freeCount = 0, proCount = 0;
+          list.forEach(function(mb){ if (mailboxTier(mb) === "pro") proCount++; else freeCount++; });
+          var tf = $("tabFreeCount"), tp = $("tabProCount");
+          if (tf) tf.textContent = freeCount;
+          if (tp) tp.textContent = proCount;
           $("mailboxCountBadge").textContent = list.length;
+          var shown = list.filter(function(mb){ return mailboxTier(mb) === mailboxTab; });
           listEl.innerHTML = "";
-          empty.style.display = list.length ? "none" : "block";
-          if (!list.length){
-            $("mailboxEmptyTitle").textContent = t("mailboxEmptyTitle");
-            $("mailboxEmptyText").textContent = t("mailboxEmptyText");
+          empty.style.display = shown.length ? "none" : "block";
+          if (!shown.length){
+            if (mailboxTab === "pro"){
+              $("mailboxEmptyTitle").textContent = t("noProEmails");
+              $("mailboxEmptyText").textContent = t("noProEmailsText");
+            } else {
+              $("mailboxEmptyTitle").textContent = t("mailboxEmptyTitle");
+              $("mailboxEmptyText").textContent = t("mailboxEmptyText");
+            }
             return;
           }
-          list.forEach(function(mb){
+          shown.forEach(function(mb){
             var row = document.createElement("div");
             row.className = "mailbox-row";
             row.appendChild(avatarForMailboxName(mb.name));
@@ -2188,6 +2446,10 @@ var I18N = {
             var nm = document.createElement("div");
             nm.className = "mailbox-name";
             nm.textContent = mb.name;
+            var tb = document.createElement("span");
+            tb.className = "tier-badge " + mailboxTier(mb);
+            tb.textContent = mailboxTier(mb) === "pro" ? "Pro" : "Free";
+            nm.appendChild(tb);
             var ad = document.createElement("div");
             ad.className = "mailbox-addr mono";
             ad.textContent = mb.address;
@@ -2246,6 +2508,14 @@ var I18N = {
             listEl.appendChild(row);
           });
         }
+        /* Free / Pro mailbox tabs. */
+        Array.prototype.forEach.call(document.querySelectorAll(".mailbox-tab"), function(btn){
+          btn.addEventListener("click", function(){
+            mailboxTab = btn.getAttribute("data-mbtab");
+            Array.prototype.forEach.call(document.querySelectorAll(".mailbox-tab"), function(b){ b.classList.toggle("active", b === btn); });
+            renderMailboxes();
+          });
+        });
         function showDeleteConfirm(row, mb){
           if (row._delConfirm) row._delConfirm.classList.add("show");
         }
@@ -2288,7 +2558,10 @@ var I18N = {
             statusText.textContent = t("statusWaiting");
             if (mb.ip) currentIp = { ip: mb.ip, country: mb.country, city: mb.city, flag: mb.flag };
             state.createdAt = mb.createdAt || new Date().toISOString();
-            if (mb.country){ selectedCountry = mb.country; updateCountryBtn(); }
+            /* Free users may only pick the 5 free countries, so do
+               not switch the picker to a locked country on restore —
+               the mailbox keeps its own stored profile. */
+            if (mb.country && (getCurrentPlan() !== "free" || FREE_COUNTRIES.indexOf(mb.country) !== -1)){ selectedCountry = mb.country; updateCountryBtn(); }
             updateIpLine();
             applyProxyPref(mb.proxy || "auto");
             setBusy(false);
@@ -2300,6 +2573,7 @@ var I18N = {
             fetchSavedMessages();
             renderMailboxes();
             showToast(t("toastRestored"));
+            addNotification("notifRestored", {addr: mb.address});
           }
           function fail(){
             state.address = old.address; state.password = old.password;
@@ -2371,6 +2645,7 @@ var I18N = {
           var name = $("saveNameInput").value.trim();
           if (!name){ showToast(t("toastNameNeeded")); $("saveNameInput").focus(); return; }
           saveCurrentMailbox(name);
+          addNotification("notifEmailSaved", {name: name});
           showToast(t("toastSaved"));
           var after = savePromptAfter;
           closeSavePrompt();
@@ -2865,7 +3140,7 @@ var I18N = {
         }
         $("readerClose").addEventListener("click", closeMessage);
         overlay.addEventListener("click", function(e){ if (e.target === overlay) closeMessage(); });
-        document.addEventListener("keydown", function(e){ if (e.key === "Escape"){ closeMessage(); closeFloatPanel(); closeProfilePanel(); } });
+        document.addEventListener("keydown", function(e){ if (e.key === "Escape"){ closeMessage(); closeFloatPanel(); closeProfilePanel(); closeBellPanel(); } });
         $("otpCopyBtn").addEventListener("click", function(){
           if (currentOtp){ flashCheck($("otpCopyBtn"), t("copiedCheck")); copyText(currentOtp, t("toastCopiedCode")); }
         });
@@ -3121,6 +3396,180 @@ var I18N = {
           });
         }
 
+        /* ---------- plans, daily quota, notifications, problems ----------
+           Daily use is keyed by the local date and resets at local
+           midnight. `total` is a lifetime count (used by the bell's
+           Good section). Restores never count — only new addresses
+           created by createAccount() do. */
+        function getCurrentPlan(){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (p && (p.plan === "pro-monthly" || p.plan === "pro-yearly")) return p.plan;
+          return "free";
+        }
+        function localDateKey(d){
+          d = d || new Date();
+          function p(n){ return (n < 10 ? "0" : "") + n; }
+          return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+        }
+        function loadDailyUse(){
+          var today = localDateKey();
+          var def = { date: today, count: 0, total: 0 };
+          try {
+            var raw = localStorage.getItem(DAILY_USE_KEY);
+            if (!raw) return def;
+            var o = JSON.parse(raw);
+            if (!o || typeof o !== "object") return def;
+            if (o.date !== today) return { date: today, count: 0, total: (o.total || 0) };
+            return { date: today, count: (o.count || 0), total: (o.total || 0) };
+          } catch(e){ return def; }
+        }
+        function saveDailyUse(o){ try { localStorage.setItem(DAILY_USE_KEY, JSON.stringify(o)); } catch(e) {} }
+        function dailyLimitFor(plan){
+          var l = DAILY_LIMITS[plan || getCurrentPlan()];
+          return (typeof l === "number") ? l : 10;
+        }
+        function dailyRemaining(){
+          if (getCurrentPlan() === "pro-yearly") return Infinity;
+          var u = loadDailyUse();
+          return Math.max(0, dailyLimitFor() - u.count);
+        }
+        function dailyLimitReached(){ return dailyRemaining() <= 0; }
+        function limitReachedKey(){
+          return getCurrentPlan() === "pro-monthly" ? "limitReachedPro" : "limitReachedFree";
+        }
+        function recordEmailCreated(){
+          var u = loadDailyUse();
+          u.count++; u.total++;
+          saveDailyUse(u);
+          updateBellBadge();
+          updateGenerateState();
+          /* The moment the quota runs out, say so clearly — the
+             Generate button is disabled from here, so this toast is
+             the user's explanation of why. */
+          if (getCurrentPlan() !== "pro-yearly" && u.count >= dailyLimitFor()) showToast(t(limitReachedKey()));
+        }
+        /* Generate / Change are disabled once the day's quota is
+           used up. Called from setBusy and after every count. */
+        function updateGenerateState(){
+          var limited = dailyLimitReached();
+          $("generateBtn").disabled = limited;
+          $("changeBtn").disabled = limited;
+        }
+        function guardDailyLimit(){
+          if (dailyLimitReached()){ showToast(t(limitReachedKey())); return false; }
+          return true;
+        }
+        /* Notifications: newest first, capped at 30. Stored as i18n
+           keys + vars so the list re-renders in the active language. */
+        function loadNotifications(){
+          try {
+            var raw = localStorage.getItem(NOTIF_KEY);
+            var l = raw ? JSON.parse(raw) : [];
+            return Array.isArray(l) ? l : [];
+          } catch(e){ return []; }
+        }
+        function addNotification(key, vars){
+          var list = loadNotifications();
+          list.unshift({ t: new Date().toISOString(), key: key, vars: vars || {} });
+          if (list.length > 30) list.length = 30;
+          try { localStorage.setItem(NOTIF_KEY, JSON.stringify(list)); } catch(e) {}
+        }
+        /* Problems: capped at 20, throttled to one entry per cause
+           per 60 seconds so the forever-retry loop cannot flood it. */
+        function loadProblems(){
+          try {
+            var raw = localStorage.getItem(PROBLEMS_KEY);
+            var l = raw ? JSON.parse(raw) : [];
+            return Array.isArray(l) ? l : [];
+          } catch(e){ return []; }
+        }
+        function recordProblem(causeKey){
+          var list = loadProblems();
+          var now = Date.now();
+          for (var i = 0; i < list.length; i++){
+            if (list[i].cause === causeKey && (now - new Date(list[i].t).getTime()) < 60000) return;
+          }
+          list.unshift({ t: new Date().toISOString(), cause: causeKey });
+          if (list.length > 20) list.length = 20;
+          try { localStorage.setItem(PROBLEMS_KEY, JSON.stringify(list)); } catch(e) {}
+        }
+        /* Bell badge: remaining emails today (blue), red at 0,
+           "∞" for the unlimited Yearly plan. */
+        function updateBellBadge(){
+          var b = $("bellBadge");
+          if (!b) return;
+          if (getCurrentPlan() === "pro-yearly"){ b.textContent = "∞"; b.classList.remove("zero"); return; }
+          var rem = dailyRemaining();
+          b.textContent = String(rem);
+          b.classList.toggle("zero", rem <= 0);
+        }
+        function renderBellPanel(){
+          var plan = getCurrentPlan();
+          var limit = dailyLimitFor(plan);
+          var u = loadDailyUse();
+          var used = (plan === "pro-yearly") ? u.count : Math.min(u.count, limit);
+          var limitTxt = (plan === "pro-yearly") ? "∞" : String(limit);
+          $("bellQuotaText").textContent = t("quotaUsed", {used: used, limit: limitTxt}) + " · " +
+            (plan === "pro-yearly" ? t("quotaUnlimited") : t("quotaRemaining", {n: dailyRemaining()}));
+          var fill = $("bellQuotaFill");
+          if (fill){
+            var pct = (plan === "pro-yearly") ? 100 : (limit > 0 ? Math.min(100, Math.round(u.count / limit * 100)) : 100);
+            fill.style.width = pct + "%";
+            fill.classList.toggle("zero", plan !== "pro-yearly" && dailyRemaining() <= 0);
+          }
+          var nl = $("bellNotifList");
+          nl.innerHTML = "";
+          var notifs = loadNotifications();
+          if (!notifs.length){
+            var em = document.createElement("div");
+            em.className = "notif-empty";
+            em.textContent = t("notifEmpty");
+            nl.appendChild(em);
+          } else {
+            notifs.forEach(function(n){
+              var row = document.createElement("div");
+              row.className = "notif-item";
+              var tx = document.createElement("span");
+              tx.textContent = t(n.key, n.vars || {});
+              var tm = document.createElement("span");
+              tm.className = "notif-time";
+              tm.textContent = relTime(n.t);
+              row.appendChild(tx); row.appendChild(tm);
+              nl.appendChild(row);
+            });
+          }
+          $("bellGoodText").textContent = t("goodText", {n: u.total});
+          var pl = $("bellProblemsList");
+          pl.innerHTML = "";
+          var probs = loadProblems();
+          if (!probs.length){
+            var ok = document.createElement("div");
+            ok.className = "no-problems";
+            ok.textContent = "✓ " + t("noProblems");
+            pl.appendChild(ok);
+          } else {
+            var counts = {}, order = [];
+            probs.forEach(function(p){
+              if (!counts[p.cause]){ counts[p.cause] = 0; order.push(p.cause); }
+              counts[p.cause]++;
+            });
+            order.forEach(function(c){
+              var row = document.createElement("div");
+              row.className = "prob-row";
+              var nm = document.createElement("span");
+              nm.textContent = t(c);
+              var ct = document.createElement("span");
+              ct.className = "prob-count";
+              ct.textContent = t("timesCount", {n: counts[c]});
+              row.appendChild(nm); row.appendChild(ct);
+              pl.appendChild(row);
+            });
+          }
+        }
+        function openBellPanel(){ closeProfilePanel(); renderBellPanel(); openAnimated($("bellPanel")); }
+        function closeBellPanel(){ closeAnimated($("bellPanel"), null); }
+
         /* ---------- sign-up gate / sign-in ---------- */
         var authMode = "signup";
         function showAuthError(msg){
@@ -3197,6 +3646,7 @@ var I18N = {
               };
               saveProfile(profile);
               saveAccount(profile);
+              addNotification("notifAccountCreated", {});
               setAuthBusy(false);
               closeAuthModal();
               $("authSuccessText").textContent = t("authSuccessText", {name: first});
@@ -3247,6 +3697,7 @@ var I18N = {
         }
         function closeProfilePanel(){ closeAnimated($("profilePanel"), null); }
         $("avatarBtn").addEventListener("click", function(){
+          closeBellPanel();
           var panel = $("profilePanel");
           if (panel.classList.contains("open")) closeProfilePanel();
           else openProfilePanel();
@@ -3276,6 +3727,19 @@ var I18N = {
         });
         Array.prototype.forEach.call(document.querySelectorAll("#profileThemeSeg button"), function(btn){
           btn.addEventListener("click", function(){ applyTheme(btn.getAttribute("data-theme")); });
+        });
+
+        /* ---------- notification bell ---------- */
+        $("bellBtn").addEventListener("click", function(e){
+          e.stopPropagation();
+          var panel = $("bellPanel");
+          if (panel.classList.contains("open")) closeBellPanel();
+          else openBellPanel();
+        });
+        $("bellClose").addEventListener("click", closeBellPanel);
+        document.addEventListener("click", function(e){
+          var panel = $("bellPanel");
+          if (panel && panel.classList.contains("open") && !e.target.closest("#bellPanel") && !e.target.closest("#bellBtn")) closeBellPanel();
         });
 
         /* ---------- polling ---------- */
@@ -3316,6 +3780,7 @@ var I18N = {
 
         /* ---------- buttons ---------- */
         $("generateBtn").addEventListener("click", function(){
+          if (!guardDailyLimit()) return;
           maybeSaveBeforeGenerate(function(){
             showToast(t("toastCreatingNew"));
             createAccount();
@@ -3334,6 +3799,7 @@ var I18N = {
              saved mailbox's stored profile in sync. */
           currentIp = generateIpProfile();
           updateIpLine();
+          if (currentIp) addNotification("notifIpGenerated", {ip: currentIp.ip});
           if (state.address){
             var list = loadMailboxes(), changed = false;
             list.forEach(function(m){
@@ -3349,6 +3815,7 @@ var I18N = {
           var dd = $("countryDropdown");
           if (!dd) return;
           dd.innerHTML = "";
+          var pro = getCurrentPlan() !== "free";
           countryList().forEach(function(c){
             var b = document.createElement("button");
             b.type = "button";
@@ -3366,7 +3833,17 @@ var I18N = {
               chk.className = "c-check"; chk.textContent = "✓";
               b.appendChild(chk);
             }
+            /* Free plan: only the 5 free countries are selectable.
+               The other 43 show a lock and cannot be picked. */
+            var locked = !pro && FREE_COUNTRIES.indexOf(c.country) === -1;
+            if (locked){
+              var lk = document.createElement("span");
+              lk.className = "c-lock"; lk.textContent = "🔒";
+              b.appendChild(lk);
+              b.classList.add("locked");
+            }
             b.addEventListener("click", function(){
+              if (locked){ showToast(t("countryLocked")); return; }
               selectedCountry = c.country;
               updateCountryBtn();
               closeCountryDropdown();
@@ -3433,6 +3910,7 @@ var I18N = {
         $("refreshBtn").addEventListener("click", function(){ manualRefresh($("refreshIcon")); });
         $("inboxRefreshBtn").addEventListener("click", function(){ savedState.lastFetch = 0; manualRefresh($("inboxRefreshIcon")); });
         $("changeBtn").addEventListener("click", function(){
+          if (!guardDailyLimit()) return;
           maybeSaveBeforeGenerate(function(){
             showToast(t("toastCreatingNew"));
             createAccount();
@@ -3451,6 +3929,7 @@ var I18N = {
         updateIpLine();
         updateCountryBtn();
         updateAvatarUI();
+        updateBellBadge();
         applyTheme(currentTheme());
         createAccount();
         /* Sign-up gate: if no profile exists yet, show it on top of
