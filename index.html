@@ -204,7 +204,7 @@
         border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;
       }
       .inbox-head{
-        display:flex;align-items:center;gap:12px;padding:15px 20px;
+        display:flex;align-items:center;gap:12px;padding:15px 20px;flex-wrap:wrap;
         border-bottom:1px solid var(--border);background:var(--surface-2);
       }
       .inbox-head h2{margin:0;font-size:17px;font-weight:800;display:flex;align-items:center;gap:9px}
@@ -266,6 +266,43 @@
       .waiting-bar i{display:block;height:100%;width:40%;background:var(--accent);animation:slide 1.6s ease-in-out infinite}
       @keyframes slide{0%{transform:translateX(-110%)}100%{transform:translateX(280%)}}
       @media (prefers-reduced-motion: reduce){ .waiting-bar i{animation:none;width:100%} }
+
+      /* ---------- OTP hero card (TempMail Pro style) ---------- */
+      .refresh-indicator{
+        display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;
+        color:var(--muted);background:var(--surface);border:1px solid var(--border);
+        border-radius:999px;padding:5px 11px;white-space:nowrap;
+      }
+      .refresh-indicator .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:heroPulse 1.6s ease-in-out infinite}
+      @keyframes heroPulse{0%,100%{opacity:1}50%{opacity:.3}}
+      .otp-hero{
+        display:none;margin:14px 20px 0;padding:16px 18px 14px;border-radius:16px;
+        background:linear-gradient(135deg,var(--accent-soft),var(--surface));
+        border:1.5px solid var(--accent);box-shadow:var(--shadow);
+      }
+      .otp-hero.show{display:block;animation:msgIn .5s ease-out}
+      .otp-hero-top{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;letter-spacing:.4px;color:var(--accent-ink)}
+      .otp-hero-top .otp-hero-from{font-weight:700}
+      .otp-hero-top .spacer{flex:1}
+      .otp-hero-dismiss{background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:2px 7px;line-height:1;border-radius:8px}
+      .otp-hero-dismiss:hover{background:var(--surface-2);color:var(--ink)}
+      .otp-hero-row{display:flex;align-items:center;gap:16px;margin:12px 0 9px;flex-wrap:wrap}
+      .otp-hero-code{
+        font-family:inherit;background:none;border:none;cursor:pointer;padding:0;
+        font-size:42px;font-weight:800;letter-spacing:5px;color:var(--accent-ink);line-height:1.1;
+      }
+      .otp-hero-copy{
+        background:var(--accent);color:#fff;border:none;border-radius:10px;
+        padding:12px 22px;font-weight:800;font-size:15px;min-height:48px;cursor:pointer;
+      }
+      .otp-hero-copy:hover{background:var(--accent-strong)}
+      .otp-hero-copy.done{background:#1e9e6a}
+      .otp-hero-confirm{padding:13px 24px;font-size:16px;min-height:50px;border-radius:10px}
+      .otp-hero-subject{font-size:14px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      @media (max-width:560px){
+        .otp-hero{margin:12px 14px 0;padding:14px 15px 12px}
+        .otp-hero-code{font-size:34px;letter-spacing:4px}
+      }
 
       /* ---------- Sections ---------- */
       section.block{margin-top:44px}
@@ -508,6 +545,45 @@
         border-bottom-right-radius:16px;opacity:.85;
       }
 
+      /* ---------- Waiting-for-code/confirm chip (live ticking timer) ---------- */
+      .wait-chip{
+        display:inline-flex;align-items:center;gap:6px;
+        background:var(--surface-2);border:1px solid var(--border);border-radius:999px;
+        padding:6px 12px;font-size:13.5px;font-weight:700;color:var(--muted);white-space:nowrap;
+      }
+      .wait-done{font-size:12.5px;font-weight:800;color:var(--accent-ink);white-space:nowrap}
+      .reader-wait{flex:1 1 100%;display:none;justify-content:center;margin:14px 0 4px}
+      .reader-wait.show{display:inline-flex}
+
+      /* ---------- Upgrade FAB (bottom-right) + plans popup (small) ---------- */
+      .upgrade-fab{
+        position:fixed;z-index:69;right:14px;bottom:calc(16px + env(safe-area-inset-bottom,0px));
+        display:inline-flex;align-items:center;gap:6px;
+        padding:9px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.35);
+        background:linear-gradient(135deg,#0a2e22,#087f5b);color:#fff;
+        box-shadow:var(--shadow-lg);cursor:pointer;font-size:14px;font-weight:800;
+      }
+      /* When the minimized mailbox pill is showing at bottom-center,
+         lift the Upgrade button above it so the two never overlap,
+         even on a 360px screen. */
+      body.pill-open .upgrade-fab{bottom:calc(78px + env(safe-area-inset-bottom,0px))}
+      .upgrade-overlay{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.35);display:none}
+      .upgrade-overlay.open{display:block}
+      .upgrade-popup{
+        position:fixed;z-index:81;right:14px;bottom:calc(16px + env(safe-area-inset-bottom,0px));
+        width:min(360px,92vw);max-height:70vh;
+        background:var(--surface);color:var(--ink);border:1px solid var(--border);
+        border-radius:16px;box-shadow:var(--shadow-lg);
+        display:none;flex-direction:column;overflow:hidden;
+      }
+      .upgrade-overlay.open .upgrade-popup{display:flex}
+      .upgrade-head{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+      .upgrade-title{font-weight:800;font-size:16.5px}
+      .upgrade-head .spacer{flex:1}
+      .upgrade-body{overflow:auto;padding:16px;display:grid;gap:8px;min-height:0}
+      .plan-option.best{border:2px solid var(--accent);background:var(--accent-soft)}
+      .best-badge{display:inline-block;background:var(--accent);color:#fff;border-radius:999px;padding:1px 8px;font-size:11.5px;font-weight:800;white-space:nowrap}
+
       /* ---------- Reader: code + confirm in one compact row ---------- */
       .reader-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch;margin:0 22px}
       .reader-actions .otp-strip{flex:1 1 200px;margin:14px 0 4px}
@@ -565,20 +641,24 @@
       .country-dropdown.open{animation:blurIn .25s ease}
       .profile-panel.open{animation:blurIn .3s ease}
       .bell-panel.open{animation:blurIn .3s ease}
+      .upgrade-overlay.open .upgrade-popup{animation:blurIn .3s ease}
       .overlay.open .reader.blur-out,
       .mini-overlay.open .mini-modal.blur-out,
       .float-panel.open.blur-out,
       .float-pill.open.blur-out,
       .country-dropdown.open.blur-out,
       .profile-panel.open.blur-out,
-      .bell-panel.open.blur-out{animation:blurOut .28s ease forwards}
+      .bell-panel.open.blur-out,
+      .upgrade-overlay.open .upgrade-popup.blur-out{animation:blurOut .28s ease forwards}
       @media (prefers-reduced-motion: reduce){
         .overlay.open .reader,.mini-overlay.open .mini-modal,.float-panel.open,
         .float-pill.open,
         .country-dropdown.open,.profile-panel.open,.bell-panel.open,
+        .upgrade-overlay.open .upgrade-popup,
         .overlay.open .reader.blur-out,.mini-overlay.open .mini-modal.blur-out,
         .float-panel.open.blur-out,.float-pill.open.blur-out,.country-dropdown.open.blur-out,
-        .profile-panel.open.blur-out,.bell-panel.open.blur-out{animation:none}
+        .profile-panel.open.blur-out,.bell-panel.open.blur-out,
+        .upgrade-overlay.open .upgrade-popup.blur-out{animation:none}
       }
 
       /* ---------- Header profile avatar ---------- */
@@ -610,7 +690,6 @@
       .profile-row{display:flex;justify-content:space-between;gap:12px;font-size:14.5px;align-items:center}
       .profile-row>span:first-child{color:var(--muted);flex:none}
       .profile-row b{overflow-wrap:anywhere;text-align:right;font-weight:700}
-      .profile-pricing h4{margin:0 0 8px;font-size:14.5px}
       .plan-option{display:block;width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;font-size:14.5px;font-weight:700;color:var(--ink);cursor:pointer;margin-bottom:8px;min-height:44px;text-align:left}
       .plan-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
       .plan-feats{display:grid;gap:5px;margin-top:10px;font-size:13.5px;font-weight:400;line-height:1.5;text-align:left}
@@ -831,12 +910,14 @@
             <span data-i18n="inboxTitle">ប្រអប់សារ</span> <span style="color:var(--faint);font-weight:600;font-size:13px;letter-spacing:1px">INBOX</span>
           </h2>
           <span class="count-badge" id="countBadge">0</span>
+          <span class="refresh-indicator" id="refreshIndicator"><i class="dot" aria-hidden="true"></i><span id="refreshIndicatorText"></span></span>
           <span class="spacer"></span>
           <button class="icon-btn" id="inboxRefreshBtn" aria-label="ធ្វើឱ្យប្រអប់សារស្រស់" data-i18n-aria="inboxRefreshLabel" disabled>
             <svg viewBox="0 0 24 24" fill="currentColor" id="inboxRefreshIcon"><path d="M17.65 6.35A8 8 0 1 0 19.73 14h-2.08a6 6 0 1 1-1.41-6.65L13 11h7V4l-2.35 2.35z"/></svg>
           </button>
         </div>
         <div class="waiting-bar" id="waitingBar"><i></i></div>
+        <div class="otp-hero" id="otpHero" aria-live="polite"></div>
         <div class="col-head" aria-hidden="true"><span data-i18n="colFrom">អ្នកផ្ញើ / ចំណងជើង</span><span data-i18n="colTime">ពេលវេលា</span></div>
         <ul class="msg-list" id="msgList"></ul>
         <div class="empty-state" id="emptyState">
@@ -888,7 +969,7 @@
           <div class="step">
             <div class="step-num">3</div>
             <h3 data-i18n="step3Title">រង់ចាំសារចូល</h3>
-            <p data-i18n-html="step3Text">ទុកទំព័រនេះចំហរ។ ប្រអប់សារធ្វើបច្ចុប្បន្នភាពរៀងរាល់ ២០ វិនាទី — សារថ្មីនឹងលេចឡើងដោយខ្លួនឯង។</p>
+            <p data-i18n-html="step3Text">ទុកទំព័រនេះចំហរ។ ប្រអប់សារធ្វើបច្ចុប្បន្នភាពរៀងរាល់ ៥ វិនាទី — សារថ្មីនឹងលេចឡើងដោយខ្លួនឯង។</p>
           </div>
           <div class="step">
             <div class="step-num">4</div>
@@ -991,6 +1072,7 @@
             <div class="confirm-strip" id="confirmStrip">
               <a class="confirm-btn" id="readerConfirmBtn" href="#" target="_blank" rel="noopener" data-i18n="confirmEmail">បញ្ជាក់អ៊ីមែល</a>
             </div>
+            <div class="wait-chip reader-wait" id="readerWaitChip"></div>
           </div>
           <div class="reader-body" id="readerBody">
             <p style="padding:16px 22px;color:var(--muted)">កំពុងផ្ទុកសារ…</p>
@@ -1019,6 +1101,54 @@
       <span class="float-pill-name" id="floatPillName"></span>
       <span class="float-pill-chev" aria-hidden="true">▲</span>
     </button>
+
+    <!-- ===== Upgrade FAB (bottom-right) + small plans popup ===== -->
+    <button class="upgrade-fab" id="upgradeFab" aria-label="Upgrade" data-i18n-aria="upgradeBtn">
+      <span aria-hidden="true">★</span> <span data-i18n="upgradeBtn">Upgrade</span>
+    </button>
+    <div class="upgrade-overlay" id="upgradeOverlay" role="dialog" aria-modal="true" aria-label="Upgrade">
+      <div class="upgrade-popup">
+        <div class="upgrade-head">
+          <div class="upgrade-title" data-i18n="upgradeTitle">កញ្ចប់</div>
+          <span class="spacer"></span>
+          <button class="panel-close" id="upgradeClose" aria-label="Close">✕</button>
+        </div>
+        <div class="upgrade-body">
+          <button type="button" class="plan-option selected" data-plan="free">
+            <span class="plan-head"><span data-i18n="planFree">Free</span><span class="plan-price">$0</span></span>
+            <span class="plan-feats">
+              <span class="plan-feat" data-i18n="feat10Day">10 អ៊ីមែលក្នុងមួយថ្ងៃ</span>
+              <span class="plan-feat" data-i18n="feat5Countries">ប្រទេស 5៖ កម្ពុជា, សិង្ហបុរី, ថៃ, វៀតណាម, អាមេរិក</span>
+              <span class="plan-feat" data-i18n="featProtectBasic">ការពារមូលដ្ឋាន៖ IP + ប្រទេស</span>
+              <span class="plan-feat" data-i18n="featOneMailbox">អ៊ីមែលសកម្ម 1</span>
+              <span class="plan-feat" data-i18n="featStdDomains">Domain ធម្មតា</span>
+            </span>
+          </button>
+          <button type="button" class="plan-option" data-plan="pro-monthly">
+            <span class="plan-head"><span data-i18n="planProMonthly">Pro — ប្រចាំខែ</span><span class="plan-price">$2.99 / <span data-i18n="perMonth">ខែ</span></span></span>
+            <span class="plan-feats">
+              <span class="plan-feat" data-i18n="feat100Day">100 អ៊ីមែលក្នុងមួយថ្ងៃ</span>
+              <span class="plan-feat" data-i18n="featAll48">ប្រទេសទាំង 48</span>
+              <span class="plan-feat" data-i18n="featProtectFull">ការពារពេញលេញ៖ IP + ប្រទេស + ជ្រើស Proxy</span>
+              <span class="plan-feat" data-i18n="featCustomNames">ដាក់ឈ្មោះផ្ទាល់ខ្លួន</span>
+              <span class="plan-feat" data-i18n="featSavedMailboxes">រក្សាទុកអ៊ីមែល</span>
+              <span class="plan-feat" data-i18n="featRestore">ស្តារអ៊ីមែលឡើងវិញ</span>
+            </span>
+          </button>
+          <button type="button" class="plan-option best" data-plan="pro-yearly">
+            <span class="plan-head"><span data-i18n="planProYearly">Pro — ប្រចាំឆ្នាំ</span><span class="best-badge" data-i18n="bestValue">ល្អបំផុត</span><span class="plan-price"><span class="old-price">$19.99</span>$11.99 / <span data-i18n="perYear">ឆ្នាំ</span><span class="off-badge" data-i18n="off40">បញ្ចុះ 40%</span></span></span>
+            <span class="plan-feats">
+              <span class="plan-feat" data-i18n="featUnlimitedEmails">អ៊ីមែលគ្មានកំណត់</span>
+              <span class="plan-feat" data-i18n="featAll48">ប្រទេសទាំង 48</span>
+              <span class="plan-feat" data-i18n="featProtectStrongest">ការពារខ្លាំងបំផុត</span>
+              <span class="plan-feat" data-i18n="featAdminSupport">ជំនួយពី Admin</span>
+              <span class="plan-feat" data-i18n="featPriority">អាទិភាព</span>
+              <span class="plan-feat" data-i18n="featAllMonthly">គ្រប់យ៉ាងនៅក្នុង Pro ប្រចាំខែ</span>
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- ===== Save prompt modal ===== -->
     <div class="mini-overlay" id="savePromptOverlay" role="dialog" aria-modal="true">
@@ -1117,41 +1247,7 @@
         <div class="profile-row"><span data-i18n="emailLabel">អ៊ីមែល</span><b id="profileEmail">—</b></div>
         <div class="profile-row"><span data-i18n="registeredLabel">ចុះឈ្មោះនៅ</span><b id="profileDate">—</b></div>
         <div class="profile-row"><span data-i18n="planLabel">គម្រោង</span><b id="profilePlan">Free</b></div>
-        <div class="profile-pricing">
-          <h4 data-i18n="pricingTitle">តម្លៃ</h4>
-          <button type="button" class="plan-option selected" data-plan="free">
-            <span class="plan-head"><span data-i18n="planFree">Free</span><span class="plan-price">$0</span></span>
-            <span class="plan-feats">
-              <span class="plan-feat" data-i18n="feat10Day">10 អ៊ីមែលក្នុងមួយថ្ងៃ</span>
-              <span class="plan-feat" data-i18n="feat5Countries">ប្រទេស 5៖ កម្ពុជា, សិង្ហបុរី, ថៃ, វៀតណាម, អាមេរិក</span>
-              <span class="plan-feat" data-i18n="featProtectBasic">ការពារមូលដ្ឋាន៖ IP + ប្រទេស</span>
-              <span class="plan-feat" data-i18n="featOneMailbox">អ៊ីមែលសកម្ម 1</span>
-              <span class="plan-feat" data-i18n="featStdDomains">Domain ធម្មតា</span>
-            </span>
-          </button>
-          <button type="button" class="plan-option" data-plan="pro-monthly">
-            <span class="plan-head"><span data-i18n="planProMonthly">Pro — ប្រចាំខែ</span><span class="plan-price">$2.99 / <span data-i18n="perMonth">ខែ</span></span></span>
-            <span class="plan-feats">
-              <span class="plan-feat" data-i18n="feat100Day">100 អ៊ីមែលក្នុងមួយថ្ងៃ</span>
-              <span class="plan-feat" data-i18n="featAll48">ប្រទេសទាំង 48</span>
-              <span class="plan-feat" data-i18n="featProtectFull">ការពារពេញលេញ៖ IP + ប្រទេស + ជ្រើស Proxy</span>
-              <span class="plan-feat" data-i18n="featCustomNames">ដាក់ឈ្មោះផ្ទាល់ខ្លួន</span>
-              <span class="plan-feat" data-i18n="featSavedMailboxes">រក្សាទុកអ៊ីមែល</span>
-              <span class="plan-feat" data-i18n="featRestore">ស្តារអ៊ីមែលឡើងវិញ</span>
-            </span>
-          </button>
-          <button type="button" class="plan-option" data-plan="pro-yearly">
-            <span class="plan-head"><span data-i18n="planProYearly">Pro — ប្រចាំឆ្នាំ</span><span class="plan-price"><span class="old-price">$19.99</span>$11.99 / <span data-i18n="perYear">ឆ្នាំ</span><span class="off-badge" data-i18n="off40">បញ្ចុះ 40%</span></span></span>
-            <span class="plan-feats">
-              <span class="plan-feat" data-i18n="featUnlimitedEmails">អ៊ីមែលគ្មានកំណត់</span>
-              <span class="plan-feat" data-i18n="featAll48">ប្រទេសទាំង 48</span>
-              <span class="plan-feat" data-i18n="featProtectStrongest">ការពារខ្លាំងបំផុត</span>
-              <span class="plan-feat" data-i18n="featAdminSupport">ជំនួយពី Admin</span>
-              <span class="plan-feat" data-i18n="featPriority">អាទិភាព</span>
-              <span class="plan-feat" data-i18n="featAllMonthly">គ្រប់យ៉ាងនៅក្នុង Pro ប្រចាំខែ</span>
-            </span>
-          </button>
-        </div>
+        <button type="button" class="btn primary" id="profileUpgradeBtn"><span aria-hidden="true">★</span> <span data-i18n="upgradeBtn">Upgrade</span></button>
         <div class="profile-row"><span data-i18n="languageRow">ភាសា</span><span class="seg" id="profileLangSeg"><button type="button" data-lang="km">ខ្មែរ</button><button type="button" data-lang="en">EN</button></span></div>
         <div class="profile-row"><span data-i18n="themeRow">រចនាប័ទ្ម</span><span class="seg" id="profileThemeSeg"><button type="button" data-theme="light" data-i18n="themeDay">ថ្ងៃ</button><button type="button" data-theme="dark" data-i18n="themeNight">យប់</button><button type="button" data-theme="auto" data-i18n="themeAuto">ស្វ័យប្រវត្តិ</button></span></div>
         <button type="button" class="btn danger" id="signOutBtn" data-i18n="signOut">ចាកចេញ</button>
@@ -1210,7 +1306,11 @@
            domain list. The live list is always preferred when it
            loads. */
         var FALLBACK_DOMAINS = [{ "domain": "euploading.com", "isActive": true }];
-        var POLL_SECONDS = 20;
+        var POLL_SECONDS = 5;
+        /* Poll backoff: on a Mail.tm rate-limit (429/503) the poll
+           interval doubles 5 -> 10 -> 20s until a poll succeeds,
+           then it returns to 5s. Never hammer the API. */
+        var POLL_MAX_SECONDS = 20;
         /* Plan daily limits: Free 10/day, Pro Monthly 100/day,
            Pro Yearly unlimited. Everyone is Free for now; the plan
            comes from the profile when paid plans exist. */
@@ -1262,7 +1362,7 @@ var I18N = {
     "step2Title": "យកទៅចុះឈ្មោះ",
     "step2Text": "បិទភ្ជាប់អ៊ីមែលនេះទៅក្នុងគេហទំព័រ ឬកម្មវិធីដែលអ្នកចង់សាកល្បង រួចស្នើឱ្យគេផ្ញើលេខកូដ។",
     "step3Title": "រង់ចាំសារចូល",
-    "step3Text": "ទុកទំព័រនេះចំហរ។ ប្រអប់សារធ្វើបច្ចុប្បន្នភាពរៀងរាល់ ២០ វិនាទី — សារថ្មីនឹងលេចឡើងដោយខ្លួនឯង។",
+    "step3Text": "ទុកទំព័រនេះចំហរ។ ប្រអប់សារធ្វើបច្ចុប្បន្នភាពរៀងរាល់ ៥ វិនាទី — សារថ្មីនឹងលេចឡើងដោយខ្លួនឯង។",
     "step4Title": "បើកសារ យកលេខកូដ",
     "step4Text": "ចុចលើសារដើម្បីអាន។ បើមានលេខកូដ OTP ប្រព័ន្ធនឹងបង្ហាញវាធំៗឲ្យអ្នកចម្លងបានភ្លាម។",
     "whyTitle": "ហេតុអ្វីគួរប្រើ MovMail?",
@@ -1464,7 +1564,20 @@ var I18N = {
     "featRestore": "ស្តារអ៊ីមែលឡើងវិញ",
     "featAdminSupport": "ជំនួយពី Admin",
     "featPriority": "អាទិភាព",
-    "featAllMonthly": "គ្រប់យ៉ាងនៅក្នុង Pro ប្រចាំខែ"
+    "featAllMonthly": "គ្រប់យ៉ាងនៅក្នុង Pro ប្រចាំខែ",
+    "waitForCode": "⏱ កំពុងរង់ចាំកូដ… {n} វិ",
+    "waitForConfirm": "⏱ កំពុងរង់ចាំការបញ្ជាក់… {n} វិ",
+    "waitForAny": "⏱ កំពុងរង់ចាំ… {n} វិ",
+    "extractedIn": "✓ {n} វិ",
+    "upgradeBtn": "Upgrade",
+    "upgradeTitle": "កញ្ចប់",
+    "bestValue": "ល្អបំផុត",
+    "otpDetected": "✦ បានរកឃើញ OTP",
+    "confirmDetected": "✦ ត្រូវបញ្ជាក់អ៊ីមែល",
+    "heroFrom": "ពី {sender}",
+    "copyOtp": "ចម្លង OTP",
+    "autoRefreshEvery": "ធ្វើបច្ចុប្បន្នភាពរៀងរាល់ {n} វិនាទី",
+    "heroDismiss": "បិទ"
   },
   "en": {
     "docTitle": "MovMail.com — Temporary Email",
@@ -1504,7 +1617,7 @@ var I18N = {
     "step2Title": "Sign up with it",
     "step2Text": "Paste this email into the website or app you want to try, then ask it to send you a code.",
     "step3Title": "Wait for the message",
-    "step3Text": "Keep this page open. The inbox refreshes every 20 seconds — new messages appear on their own.",
+    "step3Text": "Keep this page open. The inbox refreshes every 5 seconds — new messages appear on their own.",
     "step4Title": "Open the message, get the code",
     "step4Text": "Click a message to read it. If it contains an OTP code, it will be shown large so you can copy it right away.",
     "whyTitle": "Why use MovMail?",
@@ -1706,7 +1819,20 @@ var I18N = {
     "featRestore": "Restore mailboxes",
     "featAdminSupport": "Admin support",
     "featPriority": "Priority",
-    "featAllMonthly": "Everything in Pro Monthly"
+    "featAllMonthly": "Everything in Pro Monthly",
+    "waitForCode": "⏱ Waiting for code… {n}s",
+    "waitForConfirm": "⏱ Waiting for confirm… {n}s",
+    "waitForAny": "⏱ Waiting… {n}s",
+    "extractedIn": "✓ {n}s",
+    "upgradeBtn": "Upgrade",
+    "upgradeTitle": "Plans",
+    "bestValue": "Best value",
+    "otpDetected": "✦ OTP DETECTED",
+    "confirmDetected": "✦ Confirm your email",
+    "heroFrom": "from {sender}",
+    "copyOtp": "Copy OTP",
+    "autoRefreshEvery": "Auto-refreshing every {n}s",
+    "heroDismiss": "Dismiss"
   }
 };
         var lang = "km";
@@ -1775,7 +1901,7 @@ var I18N = {
 
         var state = {
           address: "", password: "", token: "", accountId: "",
-          messages: [], timer: null, countdown: POLL_SECONDS,
+          messages: [], timer: null, countdown: POLL_SECONDS, pollInterval: POLL_SECONDS,
           creating: false, checking: false, retryCount: 0,
           failed: false, retrying: false, lastErrorCode: "",
           createTimer: null, pollFailed: false
@@ -1982,6 +2108,7 @@ var I18N = {
           hideError();
           stopPolling();
           state.token = ""; state.messages = [];
+          heroDismissed = {};
           renderMessages();
           addrText.textContent = t("addrGenerating");
           addrText.classList.add("loading");
@@ -2810,21 +2937,49 @@ var I18N = {
           return candidates[0].href;
         }
 
-        /* ---------- detail enrichment (OTP + confirm link, cached) ---------- */
-        function enrichMessage(m){
-          if (!m || !m.id || m._detailFetched || m._detailFetching) return;
-          if (m._detailNextTry && Date.now() < m._detailNextTry) return;
+        /* ---------- detail enrichment (OTP + confirm link, cached) ----------
+           At most 2 detail fetches run at once so a burst of new
+           messages never hammers Mail.tm into a 429. The queue is
+           keyed by message id, and results are always applied to
+           the CURRENT message object (polls replace the objects),
+           so a fetch that finishes after a poll is never lost. */
+        var enrichQueue = [], enrichQueued = {}, enrichActive = 0;
+        function currentMsgById(id){
+          var found = null;
+          state.messages.forEach(function(x){ if (x && x.id === id) found = x; });
+          return found;
+        }
+        function queueEnrich(m){
+          if (!m || !m.id || enrichQueued[m.id]) return;
+          enrichQueued[m.id] = true;
+          enrichQueue.push(m.id);
+          pumpEnrich();
+        }
+        function pumpEnrich(){
+          while (enrichActive < 2 && enrichQueue.length){
+            var id = enrichQueue.shift();
+            delete enrichQueued[id];
+            var m = currentMsgById(id);
+            if (!m || m._detailFetched || m._detailFetching) continue;
+            if (m._detailNextTry && Date.now() < m._detailNextTry) continue;
+            enrichActive++;
+            runEnrich(m);
+          }
+        }
+        function runEnrich(m){
           m._detailFetching = true;
           api("/messages/" + m.id).then(function(detail){
-            m._detailFetching = false;
-            m._detailFetched = true;
-            m._detailRetries = 0;
+            var cur = currentMsgById(m.id) || m;
+            cur._detailFetching = false;
+            cur._detailFetched = true;
+            cur._detailRetries = 0;
             var text = (detail && detail.text) || "";
-            var otp = extractOtp((m.subject || "") + " " + text);
-            if (otp) m._otp = otp;
-            var url = extractConfirmUrl(detail, m.subject || "");
-            if (url) m._confirmUrl = url;
+            var otp = extractOtp((cur.subject || "") + " " + text);
+            if (otp){ cur._otp = otp; noteExtracted(cur); }
+            var url = extractConfirmUrl(detail, cur.subject || "");
+            if (url){ cur._confirmUrl = url; noteExtracted(cur); }
             if (otp || url) renderMessages();
+            enrichActive--; pumpEnrich();
           }).catch(function(err){
             /* quiet: no banner. On a rate-limit (429/503) or network
                error, retry after 10s, up to 3 times — that is what makes
@@ -2832,16 +2987,49 @@ var I18N = {
                that, keep retrying in a 60s window on every later poll,
                forever: a failed enrich never needs a manual refresh.
                Other HTTP errors (e.g. 404) go straight to the 60s window. */
-            m._detailFetching = false;
-            if ((!err || !err.status || err.status === 429 || err.status === 503) && (m._detailRetries || 0) < 3){
-              m._detailRetries = (m._detailRetries || 0) + 1;
-              m._detailNextTry = Date.now() + 10000;
+            var cur = currentMsgById(m.id) || m;
+            cur._detailFetching = false;
+            if ((!err || !err.status || err.status === 429 || err.status === 503) && (cur._detailRetries || 0) < 3){
+              cur._detailRetries = (cur._detailRetries || 0) + 1;
+              cur._detailNextTry = Date.now() + 10000;
             } else {
-              m._detailRetries = 0;
-              m._detailNextTry = Date.now() + 60000;
+              cur._detailRetries = 0;
+              cur._detailNextTry = Date.now() + 60000;
             }
+            enrichActive--; pumpEnrich();
           });
         }
+        function enrichMessage(m){
+          if (!m || !m.id || m._detailFetched || m._detailFetching) return;
+          if (m._detailNextTry && Date.now() < m._detailNextTry) return;
+          /* Code first, body later: when the code or confirm is
+             already known from the list payload (subject/intro),
+             the full body is NOT read up front. It is read later,
+             in the background, for completeness (reader view) —
+             only once the deferred time has come, so a body
+             download can never delay the code/confirm. */
+          if (m._otp || m._confirmUrl){
+            if (!m._detailDeferredAt) m._detailDeferredAt = Date.now() + 12000;
+            if (Date.now() < m._detailDeferredAt) return;
+          }
+          queueEnrich(m);
+        }
+
+        /* Background completeness pass: bodies for messages whose
+           code/confirm is already on screen are read later, in the
+           background, one at a time — never up front, and never
+           while a poll is in flight, so they can never delay a
+           new code. */
+        setInterval(function(){
+          if (state.checking) return;
+          for (var i = 0; i < state.messages.length; i++){
+            var m = state.messages[i];
+            if (m && m._detailDeferredAt && Date.now() >= m._detailDeferredAt && !m._detailFetched && !m._detailFetching){
+              enrichMessage(m);
+              return;
+            }
+          }
+        }, 2000);
 
         /* ---------- messages ---------- */
         function fetchMessages(first){
@@ -2854,24 +3042,61 @@ var I18N = {
             state.messages.forEach(function(old){ if (old && old.id) oldById[old.id] = old; });
             msgs.forEach(function(nw){
               var old = oldById[nw.id];
-              if (!old) return;
+              if (!old){ nw._waitSince = Date.now(); return; }
               if (old.seen) nw.seen = true;
               if (old._otp) nw._otp = old._otp;
               if (old._confirmUrl) nw._confirmUrl = old._confirmUrl;
               if (old._detailFetched) nw._detailFetched = true;
+              if (old._detailFetching) nw._detailFetching = true;
               if (old._detailRetries) nw._detailRetries = old._detailRetries;
               if (old._detailNextTry) nw._detailNextTry = old._detailNextTry;
+              if (old._detailDeferredAt) nw._detailDeferredAt = old._detailDeferredAt;
+              if (old._waitSince) nw._waitSince = old._waitSince;
+              if (old._waitSecs != null) nw._waitSecs = old._waitSecs;
+            });
+            /* INSTANT extraction: try the list response itself first
+               (subject + intro preview). A code in the subject or a
+               confirm link in the preview shows its Copy/Confirm
+               button at once — the row never waits for the detail
+               fetch. Only the code (or only the Confirm word) is
+               read up front; the full body is read later, in the
+               background, for completeness (reader view). */
+            msgs.forEach(function(nw){
+              if (!nw._otp){
+                var o = extractOtp((nw.subject || "") + " " + (nw.intro || ""));
+                if (o){ nw._otp = o; noteExtracted(nw); }
+              }
+              if (!nw._confirmUrl){
+                var u = extractConfirmUrl({ text: nw.intro || "", html: [] }, nw.subject || "");
+                if (u){ nw._confirmUrl = u; noteExtracted(nw); }
+              }
+              /* Code first: the code/confirm is already on screen,
+                 so the full body waits — it is read later, in the
+                 background, for completeness (reader view). */
+              if ((nw._otp || nw._confirmUrl) && !nw._detailFetched && !nw._detailDeferredAt){
+                nw._detailDeferredAt = Date.now() + 12000;
+              }
             });
             state.messages = msgs;
+            /* A successful poll resets the interval back to 5s. */
+            state.pollInterval = POLL_SECONDS;
             if (state.pollFailed){ state.pollFailed = false; statusText.textContent = t("statusWaiting"); }
             renderMessages();
             state.messages.slice(0, 10).forEach(enrichMessage);
             fetchSavedMessages();
             if (!first && hadNew) showToast(t("toastNewMsg"));
-          }).catch(function(){
-            /* Self-healing: the 20s timer keeps running and the next
+          }).catch(function(err){
+            /* On a rate-limit (429/503) the poll interval doubles
+               5 -> 10 -> 20s, so the next polls back off instead of
+               hammering Mail.tm. Any other failure keeps 5s. */
+            /* Self-healing: the 5s timer keeps running and the next
                poll retries automatically — no click needed. Just show
                a small reconnecting status instead of an error. */
+            if (err && (err.status === 429 || err.status === 503)){
+              state.pollInterval = Math.min((state.pollInterval || POLL_SECONDS) * 2, POLL_MAX_SECONDS);
+              state.countdown = state.pollInterval;
+              updateCountdown();
+            }
             state.pollFailed = true;
             statusText.textContent = t("reconnecting");
           }).then(function(){
@@ -2882,8 +3107,55 @@ var I18N = {
            new rows animate in, never the whole list on a re-render.
            The timestamp window keeps the animation alive through the
            quick re-render that follows enrichment (OTP/confirm
-           lookup), while a later 20s poll never re-animates. */
+           lookup), while a later 5s poll never re-animates. */
         var seenMsgIds = {};
+        /* ---------- waiting-for-code/confirm chip (live ticking timer) ----------
+           A fresh message with no code/confirm extracted yet shows a
+           ticking "Waiting for code… Ns" / "Waiting for confirm… Ns"
+           chip instead of a bare row, so the user sees the site is
+           already working on it. When the code/confirm lands, the
+           chip is replaced by the button plus "✓ Ns" — how long the
+           wait actually was. */
+        function waitKindFor(m){
+          var hay = ((m.subject || "") + " " + (m.intro || ""));
+          var hasDigits = /\b\d{4,8}\b/.test(hay);
+          var hasConfirm = /confirm|verify|activate/i.test(hay);
+          if (hasDigits && !hasConfirm) return "code";
+          if (hasConfirm && !hasDigits) return "confirm";
+          return "any";
+        }
+        function waitChipText(kind, secs){
+          if (kind === "code") return t("waitForCode", {n: secs});
+          if (kind === "confirm") return t("waitForConfirm", {n: secs});
+          return t("waitForAny", {n: secs});
+        }
+        function noteExtracted(m){
+          /* First time a code/confirm lands on this message, record
+             how long the wait was — only if we were waiting ≥ 1s. */
+          if (!m || m._waitSecs != null || !m._waitSince) return;
+          var s = Math.floor((Date.now() - m._waitSince) / 1000);
+          if (s >= 1) m._waitSecs = s;
+        }
+        function updateWaitChips(){
+          var now = Date.now();
+          var chips = document.querySelectorAll("[data-wait-since]");
+          for (var i = 0; i < chips.length; i++){
+            var el = chips[i];
+            var since = parseInt(el.getAttribute("data-wait-since"), 10);
+            if (!since) continue;
+            var secs = Math.floor((now - since) / 1000);
+            if (secs >= 180){
+              /* Row chips disappear after 3 minutes; the reader chip
+                 just hides (it is reused for the next message). */
+              if (el.getAttribute("data-wait-remove")) el.remove();
+              else el.classList.remove("show");
+              continue;
+            }
+            el.textContent = waitChipText(el.getAttribute("data-wait-kind") || "any", secs);
+          }
+        }
+        /* Tick every second so every waiting chip counts up live. */
+        setInterval(updateWaitChips, 1000);
         function buildMsgItem(m){
             var li = document.createElement("li");
             li.className = "msg-item" + (m.seen ? " seen" : "");
@@ -2968,7 +3240,43 @@ var I18N = {
                 });
                 quick.appendChild(confirmLink);
               }
+              /* How long the wait actually was, once the code/confirm
+                 landed (only shown if we were waiting ≥ 1s). */
+              if (m._waitSecs != null){
+                var done = document.createElement("span");
+                done.className = "wait-done";
+                done.textContent = t("extractedIn", {n: m._waitSecs});
+                quick.appendChild(done);
+              }
               li.appendChild(quick);
+            } else {
+              /* No code/confirm yet: a fresh message (under 3 minutes
+                 old) shows a live ticking "Waiting for code… Ns" /
+                 "Waiting for confirm… Ns" chip instead of a bare row. */
+              if (!m._waitSince){
+                var createdMs = new Date(m.createdAt || 0).getTime() || 0;
+                if (!createdMs || (Date.now() - createdMs) < 180000) m._waitSince = Date.now();
+              }
+              if (m._waitSince){
+                var wsecs = Math.floor((Date.now() - m._waitSince) / 1000);
+                var ageMs = new Date(m.createdAt || 0).getTime() || 0;
+                var ageOk = !ageMs || (Date.now() - ageMs) < 180000;
+                /* Once the detail fetch has finished and found
+                   nothing, there is nothing left to wait for — the
+                   chip goes away (a newsletter never had a code). */
+                if (wsecs < 180 && ageOk && !m._detailFetched){
+                  var quickW = document.createElement("div");
+                  quickW.className = "msg-quick";
+                  var wc = document.createElement("span");
+                  wc.className = "wait-chip";
+                  wc.setAttribute("data-wait-since", String(m._waitSince));
+                  wc.setAttribute("data-wait-kind", waitKindFor(m));
+                  wc.setAttribute("data-wait-remove", "1");
+                  wc.textContent = waitChipText(waitKindFor(m), wsecs);
+                  quickW.appendChild(wc);
+                  li.appendChild(quickW);
+                }
+              }
             }
             return li;
         }
@@ -3002,6 +3310,103 @@ var I18N = {
           return all;
         }
 
+        /* ---------- OTP hero card (TempMail Pro style) ----------
+           Shows the newest UNREAD message that already has a code or a
+           confirm action — from the list payload itself (subject/intro),
+           so it appears in the SAME render as the message row and never
+           waits for the detail fetch. Reading the message, dismissing
+           the card, or generating a new address clears it (a newer
+           code/confirm takes over). */
+        var heroDismissed = {};
+        function heroSender(m){
+          return (m.from && (m.from.name || "")) || (m.from && m.from.address) || "?";
+        }
+        function updateHero(all){
+          var hero = $("otpHero");
+          if (!hero) return;
+          var target = null;
+          for (var i = 0; i < all.length; i++){
+            var m = all[i];
+            if (m.seen || heroDismissed[m.id]) continue;
+            if (m._otp || m._confirmUrl){ target = m; break; }
+          }
+          if (!target){
+            hero.classList.remove("show");
+            hero.innerHTML = "";
+            hero._mid = null; hero._code = null; hero._lang = null;
+            return;
+          }
+          var code = target._otp || target._confirmUrl || "";
+          var kind = target._otp ? "otp" : "confirm";
+          if (hero._mid === target.id && hero._code === code && hero._lang === lang) return;
+          /* Never yank the card away while its Copy button is flashing ✓. */
+          var curCopy = hero.querySelector(".otp-hero-copy");
+          if (hero._mid === target.id && curCopy && curCopy.classList.contains("done")) return;
+          hero._mid = target.id; hero._code = code; hero._lang = lang;
+          hero.innerHTML = "";
+          hero.classList.add("show");
+          var top = document.createElement("div");
+          top.className = "otp-hero-top";
+          var lbl = document.createElement("span");
+          lbl.textContent = kind === "otp" ? t("otpDetected") : t("confirmDetected");
+          var from = document.createElement("span");
+          from.className = "otp-hero-from";
+          from.textContent = "· " + t("heroFrom", {sender: heroSender(target)});
+          var sp = document.createElement("span");
+          sp.className = "spacer";
+          var dis = document.createElement("button");
+          dis.type = "button";
+          dis.className = "otp-hero-dismiss";
+          dis.setAttribute("aria-label", t("heroDismiss"));
+          dis.textContent = "✕";
+          dis.addEventListener("click", function(e){
+            e.stopPropagation();
+            heroDismissed[target.id] = true;
+            updateHero(mergedMessages());
+          });
+          top.appendChild(lbl); top.appendChild(from); top.appendChild(sp); top.appendChild(dis);
+          hero.appendChild(top);
+          var row = document.createElement("div");
+          row.className = "otp-hero-row";
+          if (kind === "otp"){
+            var codeBtn = document.createElement("button");
+            codeBtn.type = "button";
+            codeBtn.className = "otp-hero-code";
+            codeBtn.setAttribute("aria-label", t("copyOtp"));
+            codeBtn.textContent = target._otp;
+            codeBtn.addEventListener("click", function(){
+              copyText(target._otp, t("toastCopiedCode"));
+              flashCheck(codeBtn, t("copiedCheck"));
+            });
+            var copyBtn = document.createElement("button");
+            copyBtn.type = "button";
+            copyBtn.className = "otp-hero-copy";
+            copyBtn.textContent = t("copyOtp");
+            copyBtn.addEventListener("click", function(){
+              copyText(target._otp, t("toastCopiedCode"));
+              flashCheck(copyBtn, t("copiedCheck"));
+            });
+            row.appendChild(codeBtn);
+            row.appendChild(copyBtn);
+          } else {
+            var cBtn = document.createElement("a");
+            cBtn.className = "confirm-btn otp-hero-confirm";
+            cBtn.href = target._confirmUrl;
+            cBtn.target = "_blank";
+            cBtn.rel = "noopener";
+            cBtn.textContent = t("confirmEmail");
+            cBtn.addEventListener("click", function(){
+              flashCheck(cBtn, t("confirmDone"));
+            });
+            row.appendChild(cBtn);
+          }
+          hero.appendChild(row);
+          var subj = document.createElement("div");
+          subj.className = "otp-hero-subject";
+          subj.textContent = target.subject || t("noSubject");
+          hero.appendChild(subj);
+        }
+
         function renderMessages(){
           var all = mergedMessages();
           countBadge.textContent = all.length;
@@ -3011,11 +3416,13 @@ var I18N = {
             emptyTitle.textContent = state.token ? t("emptyReadyTitle") : t("emptyPreparingTitle");
             emptyText.textContent = state.token ? t("emptyReadyText") : t("emptyPreparingText");
             waitingBar.style.display = state.token ? "block" : "none";
+            updateHero(all);
             return;
           }
           emptyState.style.display = "none";
           waitingBar.style.display = "none";
           all.forEach(function(m){ msgList.appendChild(buildMsgItem(m)); });
+          updateHero(all);
         }
 
 
@@ -3032,6 +3439,7 @@ var I18N = {
             createdAt: row.received_at || raw.createdAt || row.created_at,
             seen: true,
             _saved: true,
+            _detailFetched: true,
             _accountAddress: row.account_address || "",
             _textBody: text,
             _htmlBody: html
@@ -3089,6 +3497,12 @@ var I18N = {
           return kw ? m[0] : "";
         }
         function openMessage(m){
+          /* Reading starts the moment the message is opened — mark
+             it seen at once (on the CURRENT object) so the hero
+             moves on immediately, instead of waiting for the body
+             to finish loading. */
+          var curOpen = currentMsgById(m.id) || m;
+          if (!curOpen.seen){ curOpen.seen = true; renderMessages(); }
           openAnimated(overlay);
           document.body.style.overflow = "hidden";
           $("readerSubject").textContent = m.subject || t("noSubject");
@@ -3112,12 +3526,40 @@ var I18N = {
           } else if (confirmStrip){
             confirmStrip.classList.remove("show");
           }
+          /* Reader waiting chip: while the detail is still loading
+             and no code/confirm is known yet, show a ticking
+             "Waiting for code… Ns" chip instead of a blank area. */
+          var readerWait = $("readerWaitChip");
+          if (readerWait){
+            if (m._otp || m._confirmUrl){
+              readerWait.classList.remove("show");
+            } else {
+              if (!m._waitSince) m._waitSince = Date.now();
+              readerWait.setAttribute("data-wait-since", String(m._waitSince));
+              readerWait.setAttribute("data-wait-kind", waitKindFor(m));
+              readerWait.textContent = waitChipText(waitKindFor(m), Math.floor((Date.now() - m._waitSince) / 1000));
+              readerWait.classList.add("show");
+            }
+          }
 
           var readerSeq = (state.readerSeq = (state.readerSeq || 0) + 1);
           var readerAttempts = 0;
           function showDetail(detail){
             if (readerSeq !== state.readerSeq) return;
-            m.seen = true; renderMessages();
+            /* Apply state to the CURRENT message object, not the
+               closure's copy: a 5s poll may have replaced the
+               objects while the detail was loading, and writing
+               seen/otp to the stale copy would silently lose the
+               update (the hero would keep showing a message that
+               was already read). */
+            var cur = currentMsgById(m.id) || m;
+            cur.seen = true;
+            /* The body is now loaded — the background pass must not
+               fetch it again. */
+            cur._detailFetched = true;
+            renderMessages();
+            var rwHide = $("readerWaitChip");
+            if (rwHide) rwHide.classList.remove("show");
             var body = $("readerBody");
             body.innerHTML = "";
             var text = detail.text || "";
@@ -3126,13 +3568,15 @@ var I18N = {
             var otp = extractOtp((m.subject || "") + " " + text);
             if (otp){
               currentOtp = otp;
-              m._otp = otp;
+              cur._otp = otp;
+              noteExtracted(cur);
               $("otpCode").textContent = otp;
               $("otpStrip").classList.add("show");
             }
             var confirmUrl = extractConfirmUrl(detail, m.subject || "");
             if (confirmUrl){
-              m._confirmUrl = confirmUrl;
+              cur._confirmUrl = confirmUrl;
+              noteExtracted(cur);
               var cs = $("confirmStrip"), rb = $("readerConfirmBtn");
               if (cs && rb){ rb.href = confirmUrl; rb.textContent = t("confirmEmail"); cs.classList.add("show"); }
             }
@@ -3178,6 +3622,8 @@ var I18N = {
               return;
             }
             readerAttempts = 0;
+            var rwFail = $("readerWaitChip");
+            if (rwFail) rwFail.classList.remove("show");
             $("readerBody").innerHTML = '<p style="padding:16px 22px;color:var(--red)">' + t("readerLoadFailed") + '</p>';
           });
           }
@@ -3185,10 +3631,33 @@ var I18N = {
         }
         function closeMessage(){
           state.readerSeq = (state.readerSeq || 0) + 1;
+          var rwClose = $("readerWaitChip");
+          if (rwClose) rwClose.classList.remove("show");
           closeAnimated(overlay, ".reader", function(){ document.body.style.overflow = ""; });
         }
         $("readerClose").addEventListener("click", closeMessage);
         overlay.addEventListener("click", function(e){ if (e.target === overlay) closeMessage(); });
+        /* ---------- Upgrade popup (small, bottom-right) ----------
+           The pricing cards moved out of the profile panel into this
+           popup, opened from the floating Upgrade button (bottom-right)
+           or the small Upgrade button inside the profile. Paid plans
+           stay display-only: "Coming soon", no payment/checkout. */
+        function openUpgradePopup(){
+          closeProfilePanel();
+          closeBellPanel();
+          openAnimated($("upgradeOverlay"));
+        }
+        function closeUpgradePopup(){ closeAnimated($("upgradeOverlay"), ".upgrade-popup", null); }
+        $("upgradeFab").addEventListener("click", openUpgradePopup);
+        $("profileUpgradeBtn").addEventListener("click", openUpgradePopup);
+        $("upgradeClose").addEventListener("click", closeUpgradePopup);
+        $("upgradeOverlay").addEventListener("click", function(e){ if (e.target === $("upgradeOverlay")) closeUpgradePopup(); });
+        document.addEventListener("keydown", function(e){ if (e.key === "Escape"){ closeUpgradePopup(); } });
+        /* Keep the Upgrade FAB clear of the minimized mailbox pill:
+           while the pill is showing, the FAB lifts above it. */
+        function syncUpgradeFabPos(){
+          document.body.classList.toggle("pill-open", !!($("floatPill") && $("floatPill").classList.contains("open")));
+        }
         document.addEventListener("keydown", function(e){ if (e.key === "Escape"){ closeMessage(); closeFloatPanel(); closeProfilePanel(); closeBellPanel(); } });
         $("otpCopyBtn").addEventListener("click", function(){
           if (currentOtp){ flashCheck($("otpCopyBtn"), t("copiedCheck")); copyText(currentOtp, t("toastCopiedCode")); }
@@ -3333,14 +3802,14 @@ var I18N = {
           }
           floatBody.appendChild(msgsWrap);
           /* If the pill is showing, hide it — the full panel is opening. */
-          if (floatPill.classList.contains("open")) closeAnimated(floatPill, null);
+          if (floatPill.classList.contains("open")) closeAnimated(floatPill, null, syncUpgradeFabPos);
           resetFloatPosIfOffscreen();
           openAnimated(floatPanel);
         }
         function closeFloatPanel(){
           closeAnimated(floatPanel, null, function(){ floatMailbox = null; });
           /* ✕ closes everything: the pill goes away too. */
-          if (floatPill.classList.contains("open")) closeAnimated(floatPill, null);
+          if (floatPill.classList.contains("open")) closeAnimated(floatPill, null, syncUpgradeFabPos);
         }
         /* Minimize: collapse to the obvious green pill at bottom-center.
            Tapping the pill expands back into a compact, on-screen window. */
@@ -3350,12 +3819,13 @@ var I18N = {
           closeAnimated(floatPanel, null, function(){
             floatPillName.textContent = mb.name || mb.address || "";
             openAnimated(floatPill);
+            syncUpgradeFabPos();
           });
         }
         function expandFloatPanel(){
           if (!floatMailbox) return;
           var mb = floatMailbox;
-          closeAnimated(floatPill, null);
+          closeAnimated(floatPill, null, syncUpgradeFabPos);
           /* Always re-open as a compact window at a visible spot. */
           floatPanel.style.left = "";
           floatPanel.style.top = "";
@@ -3869,12 +4339,12 @@ var I18N = {
         /* ---------- polling ---------- */
         function startPolling(){
           stopPolling();
-          state.countdown = POLL_SECONDS;
+          state.countdown = state.pollInterval || POLL_SECONDS;
           updateCountdown();
           state.timer = setInterval(function(){
             state.countdown--;
             if (state.countdown <= 0){
-              state.countdown = POLL_SECONDS;
+              state.countdown = state.pollInterval || POLL_SECONDS;
               fetchMessages(false);
             }
             updateCountdown();
@@ -3887,6 +4357,10 @@ var I18N = {
           countdownText.textContent = state.token
             ? t("countdown", {n: state.countdown})
             : "";
+          /* "Auto-refreshing every 5s" indicator: always reflects the
+             real poll interval (5s, or the backed-off 10s/20s on 429). */
+          var ri = $("refreshIndicatorText");
+          if (ri) ri.textContent = t("autoRefreshEvery", {n: state.pollInterval || POLL_SECONDS});
         }
         document.addEventListener("visibilitychange", function(){
           if (!document.hidden && state.token) fetchMessages(false);
