@@ -15,7 +15,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script>try{var __l=localStorage.getItem("movmail-lang");if(__l==="en"||__l==="km"){document.documentElement.lang=__l==="en"?"en":"km";window.__MOVMAIL_LANG=__l;}}catch(e){}try{var __t=localStorage.getItem("movmail-theme");if(__t!=="light"&&__t!=="dark")__t="auto";document.documentElement.dataset.theme=__t;}catch(e){document.documentElement.dataset.theme="auto";}try{var __a=localStorage.getItem("movmail-accent");if(["green","ocean","sunset","royal","rose","midnight"].indexOf(__a)<0)__a="green";document.documentElement.dataset.accent=__a;}catch(e){document.documentElement.dataset.accent="green";}</script>
+    <script>try{var __l=localStorage.getItem("movmail-lang");if(__l==="en"||__l==="km"){document.documentElement.lang=__l==="en"?"en":"km";window.__MOVMAIL_LANG=__l;}}catch(e){}try{var __t=localStorage.getItem("movmail-theme");if(__t!=="light"&&__t!=="dark")__t="auto";document.documentElement.dataset.theme=__t;}catch(e){document.documentElement.dataset.theme="auto";}try{var __a=localStorage.getItem("movmail-accent");if(["green","ocean","sunset","royal","rose","midnight"].indexOf(__a)<0)__a="green";document.documentElement.dataset.accent=__a;}catch(e){document.documentElement.dataset.accent="green";}try{var __m=document.querySelector('meta[name="theme-color"]');if(__m){var __h={green:"#087f5b",ocean:"#0b6fa4",sunset:"#c2410c",royal:"#6d28d9",rose:"#be185d",midnight:"#1e40af"}[document.documentElement.dataset.accent||"green"];if(__h)__m.setAttribute("content",__h);}}catch(e){}</script>
     <style>
       /* The `hidden` attribute must always hide, even on elements whose
          class sets display (e.g. .btn sets inline-flex, which otherwise
@@ -118,7 +118,7 @@
         html[data-theme="auto"][data-accent="midnight"]{--accent:#60a5fa;--accent-strong:#93c5fd;--accent-soft:#152238;--accent-ink:#bfdbfe}
       }
       *{box-sizing:border-box}
-      html{scroll-behavior:smooth}
+      html{scroll-behavior:smooth;background:var(--bg)}
       body{
         margin:0;background:var(--bg);color:var(--ink);
         font-family:"Noto Sans Khmer",-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
@@ -147,15 +147,15 @@
       .brand-name{font-weight:800;font-size:20px;letter-spacing:.4px;line-height:1.15}
       .brand-name em{font-style:normal;color:var(--accent)}
       @media (prefers-color-scheme: dark){ .brand-name em{color:var(--accent)} }
-      .brand-sub{display:block;font-size:12px;color:#9db1a5;line-height:1.2}
+      .brand-sub{display:block;font-size:12px;color:rgba(255,255,255,.72);line-height:1.2}
       nav{margin-left:auto;display:flex;gap:2px}
       nav a{
-        color:#cfe0d7;text-decoration:none;font-size:14.5px;font-weight:600;
+        color:rgba(255,255,255,.88);text-decoration:none;font-size:14.5px;font-weight:600;
         padding:10px 12px;border-radius:8px;min-height:44px;display:flex;align-items:center;white-space:nowrap;
       }
       nav a:hover{background:rgba(255,255,255,.08);color:#fff}
       .lang-switch{display:flex;gap:4px;margin-left:10px;flex:none}
-      .lang-btn{min-height:36px;padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#cfe0d7;font-weight:700;font-size:13.5px;cursor:pointer}
+      .lang-btn{min-height:36px;padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:transparent;color:rgba(255,255,255,.88);font-weight:700;font-size:13.5px;cursor:pointer}
       .lang-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
       .lang-btn:hover{color:#fff}
       @media (max-width:560px){ .lang-switch{margin-left:4px} .lang-btn{padding:6px 8px} }
@@ -172,7 +172,7 @@
       .mail-card h1 .en{font-size:12.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--faint);display:block;margin-top:2px}
       .addr-box{
         margin:14px auto 6px;max-width:640px;background:var(--surface-2);
-        border:1.5px dashed var(--faint);border-radius:10px;
+        border:none;border-radius:10px;
         padding:16px 14px;display:flex;align-items:center;justify-content:center;gap:10px;
       }
       .addr-text{
@@ -197,6 +197,14 @@
       .btn:active{transform:scale(.98)}
       .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
       .btn.primary:hover{background:var(--accent-strong)}
+      /* v1.4: every action on the mailbox card uses the accent colour,
+         so no button stays dark (or green) under another theme. */
+      .mail-card .actions .btn{background:var(--accent);border-color:var(--accent);color:#fff}
+      .mail-card .actions .btn:hover{background:var(--accent-strong)}
+      .mail-card .actions .btn.danger:hover{background:var(--red-bg);border-color:var(--red);color:var(--red)}
+      /* Dark mode: accent fills are light, so accent buttons need dark text. */
+      html[data-theme="dark"] .btn.primary,html[data-theme="dark"] .btn-sm.primary,html[data-theme="dark"] .btn-sm.done,html[data-theme="dark"] .mail-card .actions .btn,html[data-theme="dark"] .icon-btn,html[data-theme="dark"] .avatar-btn,html[data-theme="dark"] .lang-btn.active,html[data-theme="dark"] .otp-hero-copy.done,html[data-theme="dark"] .confirm-btn.done,html[data-theme="dark"] .chip-copy.done,html[data-theme="dark"] .otp-strip button.done,html[data-theme="dark"] .success-check{color:var(--hdr1)}
+      @media (prefers-color-scheme:dark){html[data-theme="auto"] .btn.primary,html[data-theme="auto"] .btn-sm.primary,html[data-theme="auto"] .btn-sm.done,html[data-theme="auto"] .mail-card .actions .btn,html[data-theme="auto"] .icon-btn,html[data-theme="auto"] .avatar-btn,html[data-theme="auto"] .lang-btn.active,html[data-theme="auto"] .otp-hero-copy.done,html[data-theme="auto"] .confirm-btn.done,html[data-theme="auto"] .chip-copy.done,html[data-theme="auto"] .otp-strip button.done,html[data-theme="auto"] .success-check{color:var(--hdr1)}}
       .btn.danger:hover{background:var(--red-bg);border-color:var(--red);color:var(--red)}
       .btn:disabled{opacity:.55;cursor:wait}
       .btn .spin{animation:rot 1s linear infinite}
@@ -207,7 +215,7 @@
         font-size:14px;color:var(--muted);
       }
       .live-dot{width:9px;height:9px;border-radius:50%;background:var(--accent);display:inline-block;margin-right:7px;animation:pulse 1.8s ease-in-out infinite;vertical-align:1px}
-      @keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(8,127,91,.35)}50%{opacity:.65;box-shadow:0 0 0 6px rgba(8,127,91,0)}}
+      @keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 var(--accent)}50%{opacity:.65;box-shadow:0 0 0 6px transparent}}
       @media (prefers-reduced-motion: reduce){
         .live-dot,.btn .spin{animation:none}
         html{scroll-behavior:auto}
@@ -246,11 +254,11 @@
       }
       .inbox-head .spacer{flex:1}
       .icon-btn{
-        width:44px;height:44px;border-radius:9px;border:1px solid var(--border);
-        background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--ink);
+        width:44px;height:44px;border-radius:9px;border:1px solid var(--accent);
+        background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;
       }
       .icon-btn svg{width:19px;height:19px}
-      .icon-btn:hover{background:var(--accent-soft)}
+      .icon-btn:hover{background:var(--accent-strong)}
       .icon-btn .spin{animation:rot 1s linear infinite}
       .col-head{
         display:grid;grid-template-columns:1fr 130px;gap:10px;
@@ -304,7 +312,7 @@
         color:var(--muted);background:var(--surface);border:1px solid var(--border);
         border-radius:999px;padding:4px 10px;white-space:nowrap;
       }
-      .refresh-indicator .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;animation:heroPulse 1.6s ease-in-out infinite}
+      .refresh-indicator .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:heroPulse 1.6s ease-in-out infinite}
       .refresh-indicator.warn .dot{background:#d97706;animation:none}
       .refresh-indicator.err .dot{background:#dc2626;animation:none}
       .refresh-indicator.idle .dot{background:#9ca3af;animation:none}
@@ -330,7 +338,7 @@
         padding:12px 22px;font-weight:800;font-size:15px;min-height:48px;cursor:pointer;
       }
       .otp-hero-copy:hover{background:var(--accent-strong)}
-      .otp-hero-copy.done{background:#1e9e6a}
+      .otp-hero-copy.done{background:var(--accent)}
       .otp-hero-confirm{padding:13px 24px;font-size:16px;min-height:50px;border-radius:10px}
       .otp-hero-subject{font-size:14px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       @media (max-width:560px){
@@ -453,7 +461,7 @@
       .btn-sm.primary:hover{background:var(--accent-strong)}
       .btn-sm.danger{color:var(--red)}
       .btn-sm.danger:hover{background:var(--red-bg);border-color:var(--red)}
-      .btn-sm.done{background:#1e9e6a;border-color:#1e9e6a;color:#fff}
+      .btn-sm.done{background:var(--accent);border-color:var(--accent);color:#fff}
       .btn-sm:disabled{opacity:.55;cursor:wait}
 
       /* ---------- Current mailbox profile (IP / location) ---------- */
@@ -528,7 +536,7 @@
       }
       .float-head{
         display:flex;align-items:center;gap:10px;padding:11px 12px 11px 16px;
-        background:linear-gradient(135deg,#0a2e22,#087f5b);color:#fff;cursor:grab;
+        background:linear-gradient(135deg,var(--hdr1),var(--hdr2));color:#fff;cursor:grab;
         touch-action:none;user-select:none;-webkit-user-select:none;flex:none;
       }
       .float-head:active{cursor:grabbing}
@@ -544,14 +552,14 @@
         background:rgba(255,255,255,.14);color:#fff;font-size:16px;line-height:1;flex:none;cursor:pointer;
       }
       .float-min:hover{background:rgba(255,255,255,.28)}
-      /* Minimized pill: obvious green dock at bottom-center, never a
+      /* Minimized pill: obvious themed dock at bottom-center, never a
          bare dark strip. Logo + "Mailbox" + mailbox name + expand chevron. */
       .float-pill{
         position:fixed;z-index:71;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));
         transform:translateX(-50%);
         display:none;align-items:center;gap:8px;max-width:92vw;
         padding:8px 14px 8px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.35);
-        background:linear-gradient(135deg,#0a2e22,#087f5b);color:#fff;
+        background:linear-gradient(135deg,var(--hdr1),var(--hdr2));color:#fff;
         box-shadow:var(--shadow-lg);cursor:pointer;font-size:14px;font-weight:800;
       }
       .float-pill.open{display:flex}
@@ -595,7 +603,7 @@
         position:fixed;z-index:69;right:14px;bottom:calc(16px + env(safe-area-inset-bottom,0px));
         display:inline-flex;align-items:center;gap:6px;
         padding:9px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.35);
-        background:linear-gradient(135deg,#0a2e22,#087f5b);color:#fff;
+        background:linear-gradient(135deg,var(--hdr1),var(--hdr2));color:#fff;
         box-shadow:var(--shadow-lg);cursor:pointer;font-size:14px;font-weight:800;
       }
       /* When the minimized mailbox pill is showing at bottom-center,
@@ -625,7 +633,7 @@
       .reader-actions .confirm-strip{flex:1 1 160px;margin:14px 0 4px;display:none}
       .reader-actions .confirm-strip.show{display:flex}
       .reader-actions .confirm-strip .confirm-btn{width:100%;padding:12px 16px;font-size:16px}
-      .confirm-btn.done,.chip-copy.done,.otp-strip button.done{background:#1e9e6a;border-color:#1e9e6a}
+      .confirm-btn.done,.chip-copy.done,.otp-strip button.done{background:var(--accent);border-color:var(--accent)}
 
       /* ---------- New-message animation (blurry -> clear, smooth) ---------- */
       @keyframes msgIn{from{opacity:0;filter:blur(8px);transform:translateY(6px)}to{opacity:1;filter:blur(0);transform:translateY(0)}}
@@ -700,13 +708,13 @@
       /* ---------- Header profile avatar ---------- */
       .profile-slot{display:flex;align-items:center;margin-left:10px;flex:none}
       .avatar-btn{width:38px;height:38px;min-height:38px;border-radius:50%;border:2px solid rgba(255,255,255,.55);background:var(--accent);color:#fff;font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex:none}
-      .profile-signup-btn{background:#fff;border-color:#fff;color:#065f46}
+      .profile-signup-btn{background:#fff;border-color:#fff;color:var(--hdr2)}
       @media (max-width:560px){ .profile-slot{margin-left:4px} }
 
       /* ---------- Notification bell (next to the avatar) ---------- */
       .bell-btn{position:relative;width:38px;height:38px;min-height:38px;border-radius:50%;border:2px solid rgba(255,255,255,.55);background:rgba(255,255,255,.12);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex:none;margin-right:8px}
       .bell-btn svg{display:block}
-      .bell-badge{position:absolute;top:-5px;right:-5px;min-width:19px;height:19px;border-radius:999px;background:#2563eb;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid #0a9d6e}
+      .bell-badge{position:absolute;top:-5px;right:-5px;min-width:19px;height:19px;border-radius:999px;background:var(--accent);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--hdr3)}
       .bell-badge.zero{background:#dc2626}
       .bell-badge.gift{background:#7c3aed}
 
@@ -812,7 +820,7 @@
       .auth-switch{margin:14px 0 0;text-align:center}
       .link-btn{background:none;border:none;color:var(--accent);font-weight:700;font-size:14.5px;cursor:pointer;padding:6px;min-height:36px}
       .success-modal{text-align:center}
-      .success-check{width:64px;height:64px;border-radius:50%;background:#1e9e6a;color:#fff;font-size:34px;font-weight:800;display:flex;align-items:center;justify-content:center;margin:6px auto 14px}
+      .success-check{width:64px;height:64px;border-radius:50%;background:var(--accent);color:#fff;font-size:34px;font-weight:800;display:flex;align-items:center;justify-content:center;margin:6px auto 14px}
       .success-modal p{margin:0 0 16px;color:var(--muted);font-size:14.5px}
 
       /* ---------- Quota countdown line (small, calm — never a big toast) ---------- */
@@ -923,7 +931,7 @@
       .shop-actions{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
       .shop-status{font-size:12.5px;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);color:var(--muted)}
       .shop-status.pending{color:#b45309;border-color:#f59e0b;background:#fef3c7}
-      .shop-status.approved{color:#047857;border-color:#10b981;background:#d1fae5}
+      .shop-status.approved{color:var(--accent-ink);border-color:var(--accent);background:var(--accent-soft)}
       .shop-status.mismatch{color:#b91c1c;border-color:#ef4444;background:#fee2e2}
       .shop-spin{display:inline-block;width:18px;height:18px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:rot 1s linear infinite;vertical-align:middle}
       .shop-loading{padding:14px 4px;color:var(--muted);font-size:14px}
@@ -943,7 +951,7 @@
       /* v1.3: listing health — green = works, red = broken, don't buy. */
       .shop-card.bad{border-color:#f87171}
       .shop-health-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-left:7px;vertical-align:middle}
-      .shop-health-dot.good{background:#16a34a;box-shadow:0 0 0 2px #bbf7d0}
+      .shop-health-dot.good{background:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
       .shop-health-dot.bad{background:#dc2626;box-shadow:0 0 0 2px #fecaca}
       .shop-health-badge{display:inline-block;font-size:12px;font-weight:800;color:#b91c1c;background:#fee2e2;border:1px solid #fca5a5;border-radius:999px;padding:2px 9px;margin-top:4px}
       /* v1.3: "New" badge on fresh listings — red text on yellow. */
@@ -952,7 +960,7 @@
       /* v1.3: bought mailbox logo on the top card. */
       .bought-logo-row{display:flex;align-items:center;gap:8px;margin:10px 0 0}
       .bought-logo{width:48px;height:48px;aspect-ratio:1/1;object-fit:cover;border-radius:10px;border:1px solid var(--border);background:var(--surface-2)}
-      .bought-chip{font-size:12px;font-weight:800;color:#047857;background:#d1fae5;border:1px solid #10b981;border-radius:999px;padding:3px 10px}
+      .bought-chip{font-size:12px;font-weight:800;color:var(--accent-ink);background:var(--accent-soft);border:1px solid var(--accent);border-radius:999px;padding:3px 10px}
       @media (max-width:480px){
         .shop-card{padding:12px}
         .shop-price{font-size:18px}
@@ -1067,7 +1075,6 @@
         <div class="status-row" aria-live="polite">
           <span><span class="live-dot" aria-hidden="true"></span><span id="statusText" data-i18n="statusConnectingShort">កំពុងភ្ជាប់…</span></span>
           <span id="countdownText"></span>
-          <span id="expiryText" data-i18n="expiry">អ៊ីមែលនេះដំណើរការភ្លាមៗ មិនបាច់ចុះឈ្មោះ</span>
         </div>
       </div>
 
@@ -2353,7 +2360,6 @@ var I18N = {
     "statusConnectingShort": "កំពុងភ្ជាប់…",
     "statusWaiting": "កំពុងរង់ចាំអ៊ីមែលថ្មី…",
     "statusNoConn": "គ្មានការតភ្ជាប់",
-    "expiry": "អ៊ីមែលនេះដំណើរការភ្លាមៗ មិនបាច់ចុះឈ្មោះ",
     "countdown": "ធ្វើបច្ចុប្បន្នភាពដោយស្វ័យប្រវត្តិក្នុង {n} វិនាទី",
     "inboxTitle": "ប្រអប់សារ",
     "colFrom": "អ្នកផ្ញើ / ចំណងជើង",
@@ -2717,7 +2723,6 @@ var I18N = {
     "statusConnectingShort": "Connecting…",
     "statusWaiting": "Waiting for new email…",
     "statusNoConn": "No connection",
-    "expiry": "Works instantly, no sign-up needed",
     "countdown": "Auto-refresh in {n} seconds",
     "inboxTitle": "Inbox",
     "colFrom": "Sender / Subject",
@@ -3111,7 +3116,6 @@ var I18N = {
           }
           if (errorBanner.classList.contains("show") && state.lastErrorCode)
             errorText.textContent = t("errorConnect", {code: state.lastErrorCode, generate: t("generate")});
-          expiryText.textContent = t("expiry");
           updateCountdown();
           renderMessages();
           renderSavedMessages();
@@ -5413,6 +5417,7 @@ var I18N = {
           var th = (choice === "light" || choice === "dark" || choice === "auto") ? choice : "auto";
           try { localStorage.setItem(THEME_KEY, th); } catch(e) {}
           document.documentElement.dataset.theme = th;
+          syncThemeColor();
           try { document.documentElement.style.colorScheme = th === "dark" ? "dark" : th === "light" ? "light" : "light dark"; } catch(e) {}
           syncThemeSeg();
         }
@@ -5438,10 +5443,27 @@ var I18N = {
           try { var s = localStorage.getItem(ACCENT_KEY); if (ACCENTS.indexOf(s) >= 0) a = s; } catch(e) {}
           return a;
         }
+        /* v1.4: keep the phone status-bar / nav-bar colour on the theme.
+           The meta theme-color is set from the computed --hdr2 value,
+           so it follows the accent in light and dark mode alike. */
+        function syncThemeColor(){
+          try {
+            var m = document.querySelector('meta[name="theme-color"]');
+            if (!m) return;
+            var c = "";
+            try { c = getComputedStyle(document.documentElement).getPropertyValue("--hdr2").trim(); } catch(e) {}
+            if (!c){
+              var map = {green:"#087f5b",ocean:"#0b6fa4",sunset:"#c2410c",royal:"#6d28d9",rose:"#be185d",midnight:"#1e40af"};
+              c = map[currentAccent()] || "#087f5b";
+            }
+            m.setAttribute("content", c);
+          } catch(e) {}
+        }
         function applyAccent(name){
           var a = ACCENTS.indexOf(name) >= 0 ? name : "green";
           try { localStorage.setItem(ACCENT_KEY, a); } catch(e) {}
           document.documentElement.dataset.accent = a;
+          syncThemeColor();
           syncAccentPicker();
         }
         function syncAccentPicker(){
@@ -7066,6 +7088,7 @@ var I18N = {
         updateAvatarUI();
         updateBellBadge();
         applyTheme(currentTheme());
+        syncThemeColor();
         loadMarketListings(true);
         restoreCurrentSessionOrCreate();
         /* Sign-up gate: if no profile exists yet, show it on top of
