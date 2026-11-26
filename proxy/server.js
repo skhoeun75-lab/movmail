@@ -25,6 +25,8 @@
 
 const http = require("http");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 
 const UPSTREAM = "https://api.mail.tm";
 const PORT = parseInt(process.env.PORT, 10) || 10000;
@@ -35,6 +37,33 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Movmail-Address, X-Movmail-Gmail, X-Admin-Token",
 };
+
+/* ---------- Admin panel (temporary live home) ---------- */
+// The admin site is served from this same service at /admin/ until it
+// gets its own repo + Render static site. Files live in ./admin/ next
+// to this file and are loaded once at startup into memory (fixed set of
+// three files — no user-controlled paths). NOT linked from the MovMail
+// website anywhere. The admin calls the absolute API base
+// https://movmail-proxy.onrender.com, so it works from any origin.
+const ADMIN_FILES = {};
+try {
+  const adminDir = path.join(__dirname, "admin");
+  ADMIN_FILES["/admin/"] = {
+    type: "text/html; charset=utf-8",
+    body: fs.readFileSync(path.join(adminDir, "admin.html")),
+  };
+  ADMIN_FILES["/admin"] = ADMIN_FILES["/admin/"];
+  ADMIN_FILES["/admin/admin.js"] = {
+    type: "application/javascript; charset=utf-8",
+    body: fs.readFileSync(path.join(adminDir, "admin.js")),
+  };
+  ADMIN_FILES["/admin/admin.css"] = {
+    type: "text/css; charset=utf-8",
+    body: fs.readFileSync(path.join(adminDir, "admin.css")),
+  };
+} catch (e) {
+  console.log("admin files not loaded:", String((e && e.message) || e));
+}
 
 /* ---------- Saved messages (Render PostgreSQL, optional) ---------- */
 
@@ -1055,6 +1084,22 @@ const server = http.createServer((req, res) => {
   // Health check
   if (req.method === "GET" && url.pathname === "/") {
     sendJson(res, 200, { ok: true, service: "movmail-proxy" });
+    return;
+  }
+
+  // Admin panel (temporary home on this service)
+  if (req.method === "GET" && Object.prototype.hasOwnProperty.call(ADMIN_FILES, url.pathname)) {
+    const f = ADMIN_FILES[url.pathname];
+    res.writeHead(200, {
+      ...CORS_HEADERS,
+      "Content-Type": f.type,
+      "Content-Length": f.body.length,
+    });
+    res.end(f.body);
+    return;
+  }
+  if (req.method === "GET" && url.pathname.startsWith("/admin/")) {
+    sendJson(res, 404, { error: "not found" });
     return;
   }
 

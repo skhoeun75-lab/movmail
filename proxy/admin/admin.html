@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MovMail Admin — ផ្ទាំងគ្រប់គ្រង</title>
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
+    </span>
+    <div class="brand-text">
+      <strong>MovMail</strong>
+      <span class="admin-badge" data-i18n="adminPanel">ផ្ទាំងគ្រប់គ្រង</span>
+    </div>
+  </div>
+  <div class="top-actions">
+    <button id="langToggle" class="btn btn-ghost" type="button">EN</button>
+    <button id="signOutBtn" class="btn btn-ghost" type="button" hidden data-i18n="signOut">ចាកចេញ</button>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- ============ AUTH VIEW ============ -->
+  <section id="view-auth" class="auth-wrap">
+    <div class="card auth-card">
+      <h1 data-i18n="adminPanel">ផ្ទាំងគ្រប់គ្រង</h1>
+      <p class="muted" data-i18n="adminOnly">សម្រាប់តែអ្នកគ្រប់គ្រង MovMail ប៉ុណ្ណោះ</p>
+
+      <!-- First run: set password -->
+      <form id="setupForm" hidden novalidate>
+        <p class="setup-note" data-i18n="setupNote">លើកដំបូង៖ កំណត់ពាក្យសម្ងាត់អ្នកគ្រប់គ្រងរបស់អ្នក។ ពាក្យសម្ងាត់នេះរក្សាទុកតែក្នុងឧបករណ៍នេះប៉ុណ្ណោះ (ជា hash)។</p>
+        <label class="field">
+          <span data-i18n="name">ឈ្មោះ</span>
+          <input id="setupName" type="text" autocomplete="username" placeholder="Sokhoeun">
+        </label>
+        <label class="field">
+          <span data-i18n="password">ពាក្យសម្ងាត់</span>
+          <input id="setupPass" type="password" autocomplete="new-password" minlength="8">
+        </label>
+        <label class="field">
+          <span data-i18n="confirmPassword">បញ្ជាក់ពាក្យសម្ងាត់</span>
+          <input id="setupPass2" type="password" autocomplete="new-password" minlength="8">
+        </label>
+        <p class="error" id="setupError" hidden></p>
+        <button class="btn btn-primary btn-block" type="submit" data-i18n="savePassword">រក្សាទុកពាក្យសម្ងាត់</button>
+      </form>
+
+      <!-- Returning: login -->
+      <form id="loginForm" hidden novalidate>
+        <label class="field">
+          <span data-i18n="name">ឈ្មោះ</span>
+          <input id="loginName" type="text" autocomplete="username" placeholder="Sokhoeun">
+        </label>
+        <label class="field">
+          <span data-i18n="password">ពាក្យសម្ងាត់</span>
+          <input id="loginPass" type="password" autocomplete="current-password">
+        </label>
+        <p class="error" id="loginError" hidden></p>
+        <button class="btn btn-primary btn-block" type="submit" data-i18n="login">ចូលប្រើ</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ============ APP VIEW ============ -->
+  <section id="view-app" hidden>
+    <div class="stats" id="statsRow">
+      <div class="card stat"><span class="stat-num" id="statUsers">0</span><span class="stat-label" data-i18n="totalUsers">អ្នកប្រើសរុប</span></div>
+      <div class="card stat"><span class="stat-num" id="statActive">0</span><span class="stat-label" data-i18n="activeToday">សកម្មថ្ងៃនេះ</span></div>
+      <div class="card stat"><span class="stat-num" id="statReceipts">0</span><span class="stat-label" data-i18n="pendingReceipts">វិក្កយបត្ររង់ចាំ</span></div>
+      <div class="card stat"><span class="stat-num" id="statCodes">0</span><span class="stat-label" data-i18n="activeCodes">កូដសកម្ម</span></div>
+    </div>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab active" type="button" data-tab="users" role="tab" data-i18n="users">អ្នកប្រើប្រាស់</button>
+      <button class="tab" type="button" data-tab="codes" role="tab" data-i18n="codes">កូដ</button>
+      <button class="tab" type="button" data-tab="receipts" role="tab" data-i18n="receipts">វិក្កយបត្រ</button>
+      <button class="tab" type="button" data-tab="settings" role="tab" data-i18n="settings">ការកំណត់</button>
+    </nav>
+
+    <!-- USERS -->
+    <div class="tab-panel" id="panel-users">
+      <div class="card">
+        <div class="toolbar">
+          <input id="userSearch" type="search" data-i18n-ph="searchPlaceholder" placeholder="ស្វែងរកតាមឈ្មោះ / Gmail / ប្រទេស…">
+          <select id="userFilter" aria-label="Filter">
+            <option value="all" data-i18n="filterAll">ទាំងអស់</option>
+            <option value="normal" data-i18n="filterNormal">ធម្មតា</option>
+            <option value="risk" data-i18n="filterRisk">មានហានិភ័យ</option>
+            <option value="blocked" data-i18n="filterBlocked">បានបិទ</option>
+          </select>
+          <button id="refreshUsersBtn" class="btn btn-secondary" type="button" data-i18n="refresh">ធ្វើឱ្យថ្មី</button>
+        </div>
+        <p class="error" id="usersError" hidden></p>
+        <div class="table-scroll">
+          <table class="users-table">
+            <thead>
+              <tr>
+                <th data-i18n="name">ឈ្មោះ</th>
+                <th>Gmail</th>
+                <th data-i18n="country">ប្រទេស</th>
+                <th data-i18n="city">ទីក្រុង</th>
+                <th>IP</th>
+                <th data-i18n="device">ឧបករណ៍</th>
+                <th data-i18n="connection">ការតភ្ជាប់</th>
+                <th data-i18n="registered">ចុះឈ្មោះ</th>
+                <th data-i18n="plan">កញ្ចប់</th>
+                <th data-i18n="status">ស្ថានភាព</th>
+              </tr>
+            </thead>
+            <tbody id="usersBody"></tbody>
+          </table>
+        </div>
+        <p class="muted empty-note" id="usersEmpty" hidden data-i18n="noUsers">មិនមានអ្នកប្រើប្រាស់ទេ</p>
+      </div>
+    </div>
+
+    <!-- CODES -->
+    <div class="tab-panel" id="panel-codes" hidden>
+      <div class="card">
+        <h2 data-i18n="generateCode">បង្កើតកូដថ្មី</h2>
+        <form id="codeForm" class="code-form" novalidate>
+          <label class="field">
+            <span data-i18n="usesPerDay">ចំនួនប្រើក្នុងមួយថ្ងៃ (10–100)</span>
+            <input id="codeAmount" type="number" min="10" max="100" step="1" value="10" inputmode="numeric">
+          </label>
+          <label class="field">
+            <span data-i18n="expiry">ផុតកំណត់</span>
+            <input id="codeExpiry" type="datetime-local">
+          </label>
+          <button class="btn btn-primary" type="submit" data-i18n="generate">បង្កើត</button>
+        </form>
+        <p class="error" id="codeError" hidden></p>
+        <div id="newCodeBox" class="new-code" hidden>
+          <span class="new-code-label" data-i18n="yourCode">កូដរបស់អ្នក៖</span>
+          <code id="newCodeValue"></code>
+          <button id="copyCodeBtn" class="btn btn-secondary" type="button" data-i18n="copy">ចម្លង</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2 data-i18n="codesList">បញ្ជីកូដ</h2>
+        <p class="error" id="codesError" hidden></p>
+        <div id="codesList" class="codes-list"></div>
+        <p class="muted empty-note" id="codesEmpty" hidden data-i18n="noCodes">មិនមានកូដទេ</p>
+      </div>
+    </div>
+
+    <!-- RECEIPTS -->
+    <div class="tab-panel" id="panel-receipts" hidden>
+      <div class="card">
+        <h2 data-i18n="pendingReceiptsTitle">វិក្កយបត្ររង់ចាំការអនុម័ត</h2>
+        <p class="muted" data-i18n="receiptNote">ចុចលើរូបភាពដើម្បីមើលធំ។ សូមពិនិត្យដោយខ្លួនឯងថាវិក្កយបត្រពិតឬអត់ — ប្រព័ន្ធមិនបានផ្ទៀងផ្ទាត់ដោយស្វ័យប្រវត្តិទេ។</p>
+        <p class="error" id="receiptsError" hidden></p>
+        <div id="receiptsList" class="receipts-list"></div>
+        <p class="muted empty-note" id="receiptsEmpty" hidden data-i18n="noReceipts">មិនមានវិក្កយបត្ររង់ចាំទេ</p>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="tab-panel" id="panel-settings" hidden>
+      <div class="card">
+        <h2 data-i18n="apiSettings">ការកំណត់ API</h2>
+        <p class="muted"><span data-i18n="apiBaseLabel">អាសយដ្ឋាន Proxy API៖</span> <code id="apiBaseShown"></code></p>
+        <label class="field">
+          <span data-i18n="adminToken">Admin API Token</span>
+          <input id="tokenInput" type="password" autocomplete="off" data-i18n-ph="tokenPlaceholder" placeholder="បិទភ្ជាប់ token នៅទីនេះ">
+        </label>
+        <p class="muted small" data-i18n="tokenNote">Token នេះរក្សាទុកតែក្នុងឧបករណ៍នេះ ហើយផ្ញើជា X-Admin-Token លើរាល់ការហៅ API របស់អ្នកគ្រប់គ្រង។</p>
+        <button id="saveTokenBtn" class="btn btn-primary" type="button" data-i18n="save">រក្សាទុក</button>
+      </div>
+      <div class="card">
+        <h2 data-i18n="changePassword">ប្តូរពាក្យសម្ងាត់</h2>
+        <form id="changePassForm" novalidate>
+          <label class="field">
+            <span data-i18n="currentPassword">ពាក្យសម្ងាត់បច្ចុប្បន្ន</span>
+            <input id="changePassOld" type="password" autocomplete="current-password">
+          </label>
+          <label class="field">
+            <span data-i18n="newPassword">ពាក្យសម្ងាត់ថ្មី</span>
+            <input id="changePassNew" type="password" autocomplete="new-password" minlength="8">
+          </label>
+          <label class="field">
+            <span data-i18n="confirmPassword">បញ្ជាក់ពាក្យសម្ងាត់</span>
+            <input id="changePassNew2" type="password" autocomplete="new-password" minlength="8">
+          </label>
+          <p class="error" id="changePassError" hidden></p>
+          <button class="btn btn-primary" type="submit" data-i18n="changePasswordBtn">ប្តូរពាក្យសម្ងាត់</button>
+        </form>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- User detail drawer -->
+<div id="drawerOverlay" class="drawer-overlay" hidden></div>
+<aside id="userDrawer" class="drawer" hidden aria-label="User details">
+  <div class="drawer-head">
+    <h2 id="drawerTitle"></h2>
+    <button id="drawerClose" class="btn btn-ghost" type="button" aria-label="Close">✕</button>
+  </div>
+  <div id="drawerBody" class="drawer-body"></div>
+  <div class="drawer-foot">
+    <label class="field" id="blockReasonWrap" hidden>
+      <span data-i18n="blockReason">មូលហេតុបិទ</span>
+      <input id="blockReason" type="text" data-i18n-ph="blockReasonPh" placeholder="ឧ. ប៉ុនប៉ង hack ដើម្បីប្រើមិនកំណត់">
+    </label>
+    <button id="blockBtn" class="btn btn-danger btn-block" type="button" data-i18n="block">បិទគណនី</button>
+    <button id="unblockBtn" class="btn btn-primary btn-block" type="button" hidden data-i18n="unblock">បើកគណនីវិញ</button>
+    <p class="error" id="drawerError" hidden></p>
+  </div>
+</aside>
+
+<!-- Receipt lightbox -->
+<div id="lightbox" class="lightbox" hidden>
+  <button id="lightboxClose" class="btn btn-ghost lightbox-close" type="button" aria-label="Close">✕</button>
+  <img id="lightboxImg" alt="Receipt">
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="admin.js"></script>
+</body>
+</html>
