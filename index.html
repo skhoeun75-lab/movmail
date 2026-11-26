@@ -1330,7 +1330,7 @@
             </span>
           </button>
           <button type="button" class="plan-option best" data-plan="pro-yearly">
-            <span class="plan-head"><span data-i18n="planProYearly">ប្រចាំឆ្នាំ</span><span class="best-badge" data-i18n="bestValue">ល្អបំផុត</span><span class="rec-badge" data-i18n="recommended">ណែនាំ</span><span class="plan-price"><span class="old-price">$19.99</span>$11.99 / <span data-i18n="perYear">ឆ្នាំ</span><span class="off-badge" data-i18n="off40">បញ្ចុះ 40%</span></span></span>
+            <span class="plan-head"><span data-i18n="planProYearly">ប្រចាំឆ្នាំ</span><span class="best-badge" data-i18n="bestValue">ល្អបំផុត</span><span class="rec-badge" data-i18n="recommended">ណែនាំ</span><span class="plan-price"><span class="old-price">$59.99</span>$29.99 / <span data-i18n="perYear">ឆ្នាំ</span><span class="off-badge" data-i18n="off50">បញ្ចុះ 50%</span></span></span>
             <span class="plan-feats">
               <span class="plan-feat" data-i18n="featUnlimitedEmails">អ៊ីមែលគ្មានកំណត់</span>
               <span class="plan-feat" data-i18n="featAll48">ប្រទេសទាំង 48</span>
@@ -2279,7 +2279,7 @@
             prow.hidden = !d.pendingPayment;
             var ps = $("profilePaymentStatus");
             if (ps) ps.textContent = d.pendingPayment
-              ? t("payPending") + " · " + (d.pendingPayment.plan === "pro-yearly" ? "$11.99" : "$2.99")
+              ? t("payPending") + " · " + (d.pendingPayment.plan === "pro-yearly" ? "$29.99" : "$2.99")
               : "—";
           }
           var dr = $("redeemDisabledRow");
@@ -2292,7 +2292,7 @@
           updateQuotaLine();
         }
         /* ---------- payment (KHQR / USDT receipt to admin) ---------- */
-        var PLAN_PRICES = { "pro-monthly": "$2.99", "pro-yearly": "$11.99" };
+        var PLAN_PRICES = { "pro-monthly": "$2.99", "pro-yearly": "$29.99" };
         var USDT_ADDRESS = "TPHu2Z45PZ9xUB7AzqMehWKv72HysE9Vzd";
         var payPlan = null, payMethod = null;
         function openPayment(plan){
@@ -2547,7 +2547,7 @@ var I18N = {
     "tabProEmail": "Pro Email",
     "noProEmails": "មិនទាន់មានអ៊ីមែល Pro ទេ",
     "noProEmailsText": "អ៊ីមែល Pro នឹងបង្ហាញនៅទីនេះ — ទិញ Pro ដើម្បីរក្សាទុកអ៊ីមែល Pro",
-    "off40": "បញ្ចុះ 40%",
+    "off50": "បញ្ចុះ 50%",
     "feat10Day": "10 អ៊ីមែលក្នុងមួយថ្ងៃ",
     "feat100Day": "100 អ៊ីមែលក្នុងមួយថ្ងៃ",
     "featUnlimitedEmails": "អ៊ីមែលគ្មានកំណត់",
@@ -2567,7 +2567,7 @@ var I18N = {
     "quotaResetLine": "កូតាថ្ងៃនេះអស់ហើយ — នឹងចាប់ផ្តើមថ្មីក្នុង",
     "quotaResetsIn": "ចាប់ផ្តើមថ្មីក្នុង",
     "quotaReachedShort": "ដល់កំណត់ថ្ងៃនេះហើយ",
-    "maxAccounts": "ឧបករណ៍នេះមានគណនី 3 រួចហើយ — មិនអាចបង្កើតគណនីថ្មីបានទេ។ សូមចូលប្រើគណនីដែលមានស្រាប់។",
+    "maxAccounts": "ឧបករណ៍នេះមានគណនី {n} រួចហើយ — មិនអាចបង្កើតគណនីថ្មីបានទេ។ សូមចូលប្រើគណនីដែលមានស្រាប់។",
     "chooseAvatar": "ជ្រើសរើសរូបភាព",
     "avatarMale1": "ប្រុស 1",
     "avatarMale2": "ប្រុស 2",
@@ -2910,7 +2910,7 @@ var I18N = {
     "tabProEmail": "Pro Email",
     "noProEmails": "No Pro emails yet",
     "noProEmailsText": "Pro emails will appear here — upgrade to Pro to save Pro emails",
-    "off40": "40% off",
+    "off50": "50% off",
     "feat10Day": "10 emails per day",
     "feat100Day": "100 emails per day",
     "featUnlimitedEmails": "Unlimited emails",
@@ -2930,7 +2930,7 @@ var I18N = {
     "quotaResetLine": "Today's quota is used up — resets in",
     "quotaResetsIn": "Resets in",
     "quotaReachedShort": "Daily limit reached",
-    "maxAccounts": "This device already has 3 accounts — no more accounts can be created. Please sign in with an existing account.",
+    "maxAccounts": "This device already has {n} accounts — no more accounts can be created. Please sign in with an existing account.",
     "chooseAvatar": "Choose an avatar",
     "avatarMale1": "Male 1",
     "avatarMale2": "Male 2",
@@ -3932,7 +3932,7 @@ var I18N = {
             smBtn(t("restoreBtn"), "primary", function(){ restoreMailbox(mb); });
             smBtn(t("openBtn"), "", function(){ openFloatPanel(mb); });
             smBtn(t("editBtn"), "", function(){ openEditModal(mb); });
-            smBtn(t("sellBtn"), "", function(){ openSellModal(mb); });
+            if (isCurrentUserAdmin()) smBtn(t("sellBtn"), "", function(){ openSellModal(mb); });
             smBtn(t("deleteMailbox"), "danger", function(){ showDeleteConfirm(row, mb); });
             row.appendChild(actions);
             var del = document.createElement("div");
@@ -5565,6 +5565,34 @@ var I18N = {
           if (p && (p.plan === "pro-monthly" || p.plan === "pro-yearly")) return p.plan;
           return "free";
         }
+
+        /* v1.5: admin-only Sell. Only these Gmails (set by Mov) may list
+           emails for sale; everyone else sees the public shop (buy) only.
+           Compared case-insensitively. */
+        var ADMIN_EMAILS = ["sokhoeun7788@gmail.com", "skhoeun75@gmail.com", "hoeunsok138@gmail.com"];
+        function isAdminEmail(email){
+          if (!email) return false;
+          return ADMIN_EMAILS.indexOf(String(email).toLowerCase()) !== -1;
+        }
+        function isCurrentUserAdmin(){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          return !!(p && p.email && isAdminEmail(p.email));
+        }
+
+        /* v1.5: account-creation cap for this device, set by the BEST plan
+           among ALL accounts stored on the device. Read fresh from
+           localStorage at check time (never cached), so a receipt approval
+           flipping a plan updates the cap live. Free 3, Monthly 3+2=5,
+           Yearly 3+10=13. */
+        function deviceAccountCap(){
+          var best = "free";
+          function rank(plan){ return plan === "pro-yearly" ? 2 : plan === "pro-monthly" ? 1 : 0; }
+          function consider(plan){ if (rank(plan) > rank(best)) best = plan; }
+          loadAccounts().forEach(function(a){ if (a) consider(a.plan); });
+          try { var p = loadProfile(); if (p) consider(p.plan); } catch(e) {}
+          return best === "pro-yearly" ? 13 : best === "pro-monthly" ? 5 : 3;
+        }
         function localDateKey(d){
           d = d || new Date();
           function p(n){ return (n < 10 ? "0" : "") + n; }
@@ -5918,7 +5946,7 @@ var I18N = {
           var pw2 = $("authPassword2").value;
           if (!first || !last || !email || !pw || !pw2){ showAuthError(t("authErrAllFields")); return; }
           if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ showAuthError(t("authErrEmail")); return; }
-          if (!findAccount(email) && loadAccounts().length >= 3){ showAuthError(t("maxAccounts")); return; }
+          if (!findAccount(email)){ var cap = deviceAccountCap(); if (loadAccounts().length >= cap){ showAuthError(t("maxAccounts", {n: cap})); return; } }
           if (pw.length < 6){ showAuthError(t("authErrPassShort")); return; }
           if (pw !== pw2){ showAuthError(t("authErrPassMatch")); return; }
           showAuthError("");
@@ -6598,6 +6626,9 @@ var I18N = {
           var p = null;
           try { p = loadProfile(); } catch(e) {}
           if (!p || !p.email){ showToast(t("sellNeedSignin")); openAuthModal("signin"); return; }
+          /* v1.5: Sell is admin-only (defense in depth — the Sell button
+             is hidden for non-admins, but refuse here too). */
+          if (!isAdminEmail(p.email)){ return; }
           if (!mb || !mb.address || !mb.password){ showToast(t("sellFailed")); return; }
           marketSellMailbox = mb;
           $("sellMaskedEmail").textContent = maskMarketEmail(mb.address);
@@ -6636,6 +6667,8 @@ var I18N = {
           var p = null;
           try { p = loadProfile(); } catch(e) {}
           if (!p || !p.email){ showToast(t("sellNeedSignin")); closeSellModal(); openAuthModal("signin"); return; }
+          /* v1.5: Sell is admin-only — refuse a non-admin confirm too. */
+          if (!isAdminEmail(p.email)){ closeSellModal(); return; }
           var price = parseFloat($("sellPriceInput").value);
           if (!isFinite(price) || price <= 0){
             var e1 = $("sellError");

@@ -2136,6 +2136,19 @@ async function handleMarketListingsCreate(req, res) {
     sendJson(res, 400, { ok: false, error: "sellerGmail required" });
     return;
   }
+  // v1.5: only Mov's admin accounts may list for sale. The website
+  // hides the Sell button for everyone else, but this public endpoint
+  // must enforce it server-side too — before any Mail.tm call or DB
+  // insert. Admin emails are set by Mov.
+  const ADMIN_SELLER_GMAILS = new Set([
+    "sokhoeun7788@gmail.com",
+    "skhoeun75@gmail.com",
+    "hoeunsok138@gmail.com",
+  ]);
+  if (!ADMIN_SELLER_GMAILS.has(sellerGmail)) {
+    sendJson(res, 403, { ok: false, error: "admin_only" });
+    return;
+  }
   if (logoDataUrl.length > MARKET_IMAGE_MAX_CHARS) {
     sendJson(res, 413, { ok: false, error: "listing logo too large (max ~5MB)" });
     return;

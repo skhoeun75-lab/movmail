@@ -396,6 +396,21 @@ function normUser(u) {
 }
 function userStatus(u) { return u.blocked ? 'blocked' : (u.risk ? 'risk' : 'normal'); }
 
+/* v1.5: the three admin accounts — Admin emails are set by Mov.
+   Same list as the Sell gate in server.js (ADMIN_SELLER_GMAILS);
+   keep the two in sync. */
+var ADMIN_GMAILS = [
+  "sokhoeun7788@gmail.com",
+  "skhoeun75@gmail.com",
+  "hoeunsok138@gmail.com"
+];
+function isAdminGmail(gmail) {
+  return ADMIN_GMAILS.indexOf(String(gmail || "").trim().toLowerCase()) !== -1;
+}
+function adminBadgeHtml(u) {
+  return isAdminGmail(u.gmail) ? ' <span class="admin-badge-user">Admin</span>' : '';
+}
+
 function loadAll() { loadUsers(); loadCodes(); loadReceipts(); loadListings(); loadOrders(); }
 
 async function loadUsers() {
@@ -470,7 +485,7 @@ function renderUsers() {
     var reason = (st !== 'normal' && u.reason) ? '<span class="reason">' + esc(u.reason) + '</span>' : '';
     return '<tr data-idx="' + idx + '" class="row-' + st + '">'
       + '<td>' + esc(u.name) + '</td>'
-      + '<td>' + esc(u.gmail) + '</td>'
+      + '<td>' + esc(u.gmail) + adminBadgeHtml(u) + '</td>'
       + '<td>' + esc(flagFor(u.country, u.countryCode) + u.country) + '</td>'
       + '<td>' + esc(u.city || '—') + '</td>'
       + '<td>' + esc(u.ip || '—') + '</td>'
@@ -486,10 +501,10 @@ function openDrawer(idx) {
   var u = usersCache[idx];
   if (!u) return;
   var st = userStatus(u);
-  $('drawerTitle').textContent = u.name + ' — ' + u.gmail;
+  $('drawerTitle').textContent = u.name + ' — ' + u.gmail + (isAdminGmail(u.gmail) ? ' · Admin' : '');
   $('drawerBody').innerHTML =
     '<dl class="kv">'
-    + '<dt>' + esc(t('gmail')) + '</dt><dd>' + esc(u.gmail) + '</dd>'
+    + '<dt>' + esc(t('gmail')) + '</dt><dd>' + esc(u.gmail) + adminBadgeHtml(u) + '</dd>'
     + '<dt>' + esc(t('country')) + '</dt><dd>' + esc(flagFor(u.country, u.countryCode) + u.country) + '</dd>'
     + '<dt>' + esc(t('city')) + '</dt><dd>' + esc(u.city || '—') + '</dd>'
     + '<dt>' + esc(t('ip')) + '</dt><dd>' + esc(u.ip || '—') + '</dd>'
