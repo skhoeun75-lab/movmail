@@ -17,6 +17,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script>try{var __l=localStorage.getItem("movmail-lang");if(__l==="en"||__l==="km"){document.documentElement.lang=__l==="en"?"en":"km";window.__MOVMAIL_LANG=__l;}}catch(e){}try{var __t=localStorage.getItem("movmail-theme");if(__t!=="light"&&__t!=="dark")__t="auto";document.documentElement.dataset.theme=__t;}catch(e){document.documentElement.dataset.theme="auto";}</script>
     <style>
+      /* The `hidden` attribute must always hide, even on elements whose
+         class sets display (e.g. .btn sets inline-flex, which otherwise
+         overrides the UA stylesheet and leaves the button visible). */
+      [hidden]{display:none!important}
       /* ---------- Theme: Day / Night / Auto ----------
          Day (light) is the default. Night (dark) is the current dark
          look. Auto follows the OS and updates live. Every colour on
@@ -730,10 +734,10 @@
         </div>
 
         <div class="ip-line" id="ipLine" hidden>
-          <span><span data-i18n="ipLabel">IP</span>៖ <span class="ip-val mono" id="ipValue">—</span></span>
+          <span><span data-i18n="ipLabel">IP</span><span data-i18n="colon">៖</span> <span class="ip-val mono" id="ipValue">—</span></span>
           <span id="ipLocation">—</span>
-          <span><span data-i18n="proxyLabel">Proxy</span>៖ <span class="ip-val" id="ipProxy">—</span></span>
-          <span><span data-i18n="createdLabel">បង្កើត</span>៖ <span class="ip-val" id="ipCreated">—</span></span>
+          <span><span data-i18n="proxyLabel">Proxy</span><span data-i18n="colon">៖</span> <span class="ip-val" id="ipProxy">—</span></span>
+          <span><span data-i18n="createdLabel">បង្កើត</span><span data-i18n="colon">៖</span> <span class="ip-val" id="ipCreated">—</span></span>
           <span class="verified-badge" id="verifiedBadge" hidden>✓ <span data-i18n="verifiedBadge">បានផ្ទៀងផ្ទាត់</span></span>
           <span class="ip-note" data-i18n="ipDisplayNote">IP សម្រាប់បង្ហាញតែប៉ុណ្ណោះ</span>
         </div>
@@ -1293,6 +1297,7 @@ var I18N = {
     "saveEmail": "រក្សាទុក",
     "openPanel": "បើកផ្ទាំង",
     "ipLabel": "IP",
+    "colon": "៖",
     "ipLabel2": "IP / ទីតាំង",
     "ipDisplayNote": "IP សម្រាប់បង្ហាញតែប៉ុណ្ណោះ",
     "mailboxesTitle": "អ៊ីមែលដែលបានរក្សាទុក",
@@ -1531,6 +1536,7 @@ var I18N = {
     "saveEmail": "Save",
     "openPanel": "Open panel",
     "ipLabel": "IP",
+    "colon": ":",
     "ipLabel2": "IP / Location",
     "ipDisplayNote": "Display only",
     "mailboxesTitle": "Saved emails",
@@ -2461,7 +2467,7 @@ var I18N = {
             var meta = document.createElement("div");
             meta.className = "mailbox-ip";
             var metaTxt = document.createElement("span");
-            metaTxt.textContent = t("proxyLabel") + "៖ " + proxyLabelText(mb.proxy || "auto") + " · " + t("createdLabel") + "៖ " + shortDate(mb.createdAt);
+            metaTxt.textContent = t("proxyLabel") + t("colon") + " " + proxyLabelText(mb.proxy || "auto") + " · " + t("createdLabel") + t("colon") + " " + shortDate(mb.createdAt);
             meta.appendChild(metaTxt);
             if (profileComplete(mb, mb.proxy || "auto")){
               var vb = document.createElement("span");
@@ -3196,7 +3202,7 @@ var I18N = {
             var d = document.createElement("div");
             d.className = "row-line";
             var b = document.createElement("b");
-            b.textContent = label + "៖ ";
+            b.textContent = label + t("colon") + " ";
             d.appendChild(b);
             d.appendChild(document.createTextNode(value));
             meta.appendChild(d);
