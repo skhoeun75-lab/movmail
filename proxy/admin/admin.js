@@ -89,7 +89,20 @@ const I18N = {
     createListing: 'បង្កើតបញ្ជីលក់ដោយដៃ', createListingBtn: 'បង្កើតបញ្ជីលក់',
     listingEmail: 'អ៊ីមែលលក់', listingEmailPh: 'example@euploading.com',
     listingPassword: 'ពាក្យសម្ងាត់អ៊ីមែល', listingPrice: 'តម្លៃ ($)', listingTitle: 'ចំណងជើង',
+    listingLogo: 'រូបសញ្ញា', listingToken: 'Token', listingTokenPh: 'ឧ. 1B Token',
+    errLogoTooBig: 'រូបភាពធំពេក (អតិបរមា 5MB)។',
+    priceShort: 'តម្លៃ', paid: 'បានបង់', amountMismatch: 'ចំនួនមិនត្រូវគ្នា',
     listingTitlePh: 'ឧ. គណនី PUBG', sellerGmail: 'Gmail អ្នកលក់',
+    healthGood: 'ល្អ', healthBad: 'មិនល្អ', healthChecked: 'បានពិនិត្យ',
+    listingNew: 'ថ្មី',
+    checkHealth: 'ពិនិត្យ', checking: 'កំពុងពិនិត្យ…',
+    markBad: 'សម្គាល់មិនល្អ', markGood: 'សម្គាល់ល្អ',
+    autoDeleteIn: 'លុបដោយស្វ័យប្រវត្តិក្នុង {n} ម៉ោង',
+    autoDeleteSoon: 'លុបដោយស្វ័យប្រវត្តិក្នុងពេលតិចជាង 1 ម៉ោង',
+    listingIp: 'IP', listingIpPh: 'ឧ. 103.146.x.x',
+    listingCountryCity: 'ប្រទេស / ទីក្រុង', listingCountryCityPh: 'ឧ. Cambodia, Phnom Penh',
+    toastHealthChecked: 'បានពិនិត្យសុខភាពរួចហើយ។', toastHealthSet: 'បានកំណត់សុខភាពរួចហើយ។',
+    errHealth: 'បរាជ័យក្នុងការពិនិត្យ/កំណត់សុខភាព។',
     listingsList: 'បញ្ជីលក់ទាំងអស់', noListings: 'មិនមានបញ្ជីលក់ទេ',
     ordersTitle: 'ការបញ្ជាទិញពីហាង', noOrders: 'មិនមានការបញ្ជាទិញទេ', buyer: 'អ្នកទិញ',
     orderNote: 'ការអនុម័តការបញ្ជាទិញនឹងលក់អ៊ីមែលនោះឱ្យអ្នកទិញនោះតែម្នាក់គត់ ហើយដកវាចេញពីហាងសាធារណៈ។ សូមពិនិត្យវិក្កយបត្រដោយខ្លួនឯងថាពិតឬអត់។',
@@ -154,7 +167,20 @@ const I18N = {
     createListing: 'Create a listing manually', createListingBtn: 'Create listing',
     listingEmail: 'Email to sell', listingEmailPh: 'example@euploading.com',
     listingPassword: 'Email password', listingPrice: 'Price ($)', listingTitle: 'Title',
+    listingLogo: 'Logo', listingToken: 'Token', listingTokenPh: 'e.g. 1B Token',
+    errLogoTooBig: 'Image too large (max 5MB).',
+    priceShort: 'Price', paid: 'Paid', amountMismatch: 'Amount mismatch',
     listingTitlePh: 'e.g. PUBG account', sellerGmail: 'Seller Gmail',
+    healthGood: 'Good', healthBad: 'Bad', healthChecked: 'Checked',
+    listingNew: 'New',
+    checkHealth: 'Check', checking: 'Checking…',
+    markBad: 'Mark bad', markGood: 'Mark good',
+    autoDeleteIn: 'Auto-deletes in {n}h',
+    autoDeleteSoon: 'Auto-deletes in less than 1h',
+    listingIp: 'IP', listingIpPh: 'e.g. 103.146.x.x',
+    listingCountryCity: 'Country / City', listingCountryCityPh: 'e.g. Cambodia, Phnom Penh',
+    toastHealthChecked: 'Health checked.', toastHealthSet: 'Health updated.',
+    errHealth: 'Failed to check/update health.',
     listingsList: 'All listings', noListings: 'No listings yet',
     ordersTitle: 'Shop orders', noOrders: 'No orders yet', buyer: 'Buyer',
     orderNote: 'Approving an order sells that email to this buyer only and removes it from the public shop. Please judge yourself whether a receipt is genuine.',
@@ -804,12 +830,16 @@ function onReceiptThumbClick(e) {
 /* ============================================================================
    Market — public Email Account shop (Version 1.2).
    API contract (all X-Admin-Token):
-     GET  /api/admin/market/listings            -> [{id, maskedEmail, sellerGmail, price, title, status, createdAt}]
-     POST /api/admin/market/listings            -> {ok:true, listing:{...}} or 400 (Mail.tm verification failed)
+     GET  /api/admin/market/listings            -> [{id, maskedEmail, sellerGmail, price, title, status, createdAt, logoDataUrl, token, health, health_checked_at, health_bad_since, ip, country, city}]
+     POST /api/admin/market/listings            -> body {email, password, price, title, sellerGmail, logoDataUrl, token, ip, country, city}; {ok:true, listing:{...}} or 400 (Mail.tm verification failed)
+     POST /api/admin/market/listings/:id/check  -> re-checks the listing by Mail.tm login; {ok:true, listing:{...}}
+     POST /api/admin/market/listings/:id/health -> body {health:'good'|'bad'}; manual health flip (Mail.tm login cannot detect a game/AI company banning the account)
      DELETE /api/admin/market/listings/:id      -> {ok:true} (status "removed")
+   A 'bad' listing is auto-deleted by the server 24h after health_bad_since
+   (lazy expiry) — the admin only displays the countdown, never deletes.
        — if the server only has POST .../:id/remove, the client falls back
          to it on 404/405 (see removeListing).
-     GET  /api/admin/market/orders             -> [{id, listingId, maskedEmail, buyerGmail, price, method, imageDataUrl, status, createdAt}]
+     GET  /api/admin/market/orders             -> [{id, listingId, maskedEmail, buyerGmail, price, amountPaid, method, imageDataUrl, status, createdAt}]
      POST /api/admin/market/orders/:id/approve -> {ok:true} (listing becomes sold to that buyer)
      POST /api/admin/market/orders/:id/reject  -> {ok:true} (listing stays active)
    The listing PASSWORD is sent once on manual create and is never stored
@@ -818,22 +848,37 @@ function onReceiptThumbClick(e) {
 function normListing(l) {
   l = l || {};
   /* Real server shape: id, maskedEmail, sellerGmail, price, title,
-     status ('active'|'sold'|'removed'), createdAt. No password field
-     is ever returned. */
+     status ('active'|'sold'|'removed'), createdAt, logoDataUrl, token.
+     No password field is ever returned. */
   return {
     id: l.id,
     maskedEmail: l.maskedEmail || l.masked_email || l.email || '',
     sellerGmail: l.sellerGmail || l.seller || l.seller_gmail || 'admin',
     price: l.price,
     title: l.title || '',
+    logoDataUrl: l.logoDataUrl || l.logo || l.logo_url || '',
+    token: l.token || '',
     status: String(l.status || 'active').toLowerCase(),
-    createdAt: l.createdAt || l.created_at || ''
+    createdAt: l.createdAt || l.created_at || '',
+    /* Health (v1.3): 'good' | 'bad'. Legacy listings have no health field
+       — treated as good. healthCheckedAt: last check time ('' = never).
+       healthBadSince: when it turned bad ('' = not bad). */
+    health: String(l.health || l.healthStatus || 'good').toLowerCase(),
+    healthCheckedAt: l.health_checked_at || l.healthCheckedAt || l.health_checked || '',
+    healthBadSince: l.health_bad_since || l.healthBadSince || '',
+    /* IP profile (v1.3): stored on the listing at creation and adopted
+       permanently by the bought mailbox on Restore. */
+    ip: l.ip || l.ipAddress || '',
+    country: l.country || '',
+    city: l.city || '',
+    countryCode: l.countryCode || l.country_code || ''
   };
 }
 function normOrder(o) {
   o = o || {};
   /* Real server shape: id, listingId, maskedEmail, buyerGmail, price,
-     method ('KHQR'|'USDT'), imageDataUrl, status
+     amountPaid (what the buyer actually paid; may be absent on old
+     orders), method ('KHQR'|'USDT'), imageDataUrl, status
      ('pending'|'approved'|'rejected'), createdAt. */
   return {
     id: o.id,
@@ -841,6 +886,7 @@ function normOrder(o) {
     maskedEmail: o.maskedEmail || o.masked_email || o.email || '',
     buyerGmail: o.buyerGmail || o.buyer || o.buyer_gmail || o.gmail || '',
     price: o.price,
+    amountPaid: (o.amountPaid != null ? o.amountPaid : (o.paid != null ? o.paid : o.amount_paid)),
     method: o.method || '',
     imageDataUrl: o.imageDataUrl || o.imageUrl || '',
     status: String(o.status || 'pending').toLowerCase(),
@@ -876,20 +922,79 @@ function listingPill(st) {
   if (st === 'removed') return '<span class="pill pill-red">' + esc(t('removed')) + '</span>';
   return '<span class="pill pill-grey">' + esc(st) + '</span>';
 }
+/* ---------- Listing health (Version 1.3) ----------
+   health: 'good' (legacy listings have no health field — treat as good)
+   or 'bad'. healthCheckedAt: last automatic/manual check time.
+   healthBadSince: when it turned bad; the server auto-deletes a bad
+   listing 24h after that (lazy expiry — the admin only shows the
+   countdown, it never deletes by itself). */
+function listingHealth(l) {
+  return String(l.health || 'good').toLowerCase() === 'bad' ? 'bad' : 'good';
+}
+function autoDeleteText(l, nowMs) {
+  if (!l.healthBadSince) return '—';
+  var badSince = new Date(l.healthBadSince).getTime();
+  if (isNaN(badSince)) return '—';
+  var remain = badSince + 24 * 3600 * 1000 - (nowMs || Date.now());
+  if (remain <= 0) return t('autoDeleteSoon');
+  /* Whole hours, rounded: bad 2h ago -> ~22h, bad 23h ago -> ~1h. */
+  var hours = Math.round(remain / 3600000);
+  if (hours < 1) return t('autoDeleteSoon');
+  return t('autoDeleteIn').replace('{n}', String(hours));
+}
+function listingIpLine(l) {
+  /* Flag + country/city + IP; '—' when the listing has no IP profile. */
+  var place = [l.country, l.city].filter(function (x) { return !!x; }).join(', ');
+  var parts = [];
+  if (place) parts.push(flagFor(l.country, l.countryCode) + place);
+  if (l.ip) parts.push('IP ' + l.ip);
+  if (!parts.length) return '—';
+  return parts.join(' · ');
+}
+/* v1.3: "New" badge — listed < 2 hours ago. Pure render-time
+   check on createdAt; missing/invalid → no badge, never crash;
+   future createdAt (clock skew) counts as new. */
+function isNewListing(l) {
+  if (!l || !l.createdAt) return false;
+  var t0 = new Date(l.createdAt).getTime();
+  if (isNaN(t0)) return false;
+  return Date.now() - t0 < 2 * 60 * 60 * 1000;
+}
 function renderListings() {
   $('listingsList').innerHTML = listingsCache.map(function (l) {
+    var health = listingHealth(l);
+    var isBad = health === 'bad';
     var removeBtn = (l.status === 'active' || l.status === 'sold')
       ? '<button class="btn btn-danger" type="button" data-listing-remove="' + esc(l.id) + '">' + esc(t('remove')) + '</button>'
       : '';
-    return '<div class="listing-row status-' + esc(l.status) + '" data-listing-id="' + esc(l.id) + '">'
+    var healthPill = isBad
+      ? '<span class="pill pill-red">' + esc(t('healthBad')) + '</span>'
+      : '<span class="pill pill-green">' + esc(t('healthGood')) + '</span>';
+    /* Manual toggle (Mail.tm login cannot detect a game/AI company
+       banning the account, so the admin flips health by hand). */
+    var healthToggleBtn = isBad
+      ? '<button class="btn btn-secondary" type="button" data-listing-health="good" data-id="' + esc(l.id) + '">' + esc(t('markGood')) + '</button>'
+      : '<button class="btn btn-secondary" type="button" data-listing-health="bad" data-id="' + esc(l.id) + '">' + esc(t('markBad')) + '</button>';
+    var checkBtn = '<button class="btn btn-secondary" type="button" data-listing-check="' + esc(l.id) + '">' + esc(t('checkHealth')) + '</button>';
+    var countdownLine = isBad
+      ? '<div class="l-line l-auto-delete">' + esc(autoDeleteText(l)) + '</div>'
+      : '';
+    return '<div class="listing-row status-' + esc(l.status) + (isBad ? ' health-bad' : '') + '" data-listing-id="' + esc(l.id) + '">'
+      + (l.logoDataUrl
+        ? '<img class="listing-thumb" src="' + esc(l.logoDataUrl) + '" alt="">'
+        : '')
       + '<div class="listing-info">'
-      + '<div class="l-email">' + esc(l.maskedEmail) + '</div>'
+      + '<div class="l-email">' + esc(l.maskedEmail) + (isNewListing(l) ? ' <span class="listing-new-badge">' + esc(t('listingNew')) + '</span>' : '') + '</div>'
       + '<div class="l-title">' + esc(l.title) + '</div>'
       + '<div class="l-line">' + esc(fmtPrice(l.price)) + ' · ' + esc(t('sellerGmail')) + ': ' + esc(l.sellerGmail) + '</div>'
+      + (l.token ? '<div class="l-line">' + esc(t('listingToken')) + ': ' + esc(l.token) + '</div>' : '')
+      + '<div class="l-line">' + esc(t('listingIp')) + ': ' + esc(listingIpLine(l)) + '</div>'
+      + '<div class="l-line">' + healthPill + ' ' + esc(t('healthChecked')) + ': ' + esc(fmtDate(l.healthCheckedAt)) + '</div>'
+      + countdownLine
       + '<div class="l-line">' + esc(t('created')) + ': ' + esc(fmtDate(l.createdAt)) + '</div>'
       + '</div>'
       + listingPill(l.status)
-      + '<div class="listing-actions">' + removeBtn + '</div>'
+      + '<div class="listing-actions">' + checkBtn + healthToggleBtn + removeBtn + '</div>'
       + '</div>';
   }).join('');
   show($('listingsEmpty'), listingsCache.length === 0);
@@ -906,6 +1011,15 @@ function renderOrders() {
         ? '<span class="pill pill-green">' + esc(t('approved')) + '</span>'
         : '<span class="pill pill-red">' + esc(t('rejected')) + '</span>');
     var img = o.imageDataUrl || '';
+    /* "Price $X · Paid $Y" — paid is '—' when missing (old orders).
+       Red flag only when both numbers exist and differ by > $0.005. */
+    var paidNum = (o.amountPaid == null || o.amountPaid === '') ? null : Number(o.amountPaid);
+    var priceNum = (o.price == null || o.price === '') ? null : Number(o.price);
+    var paidTxt = paidNum == null || isNaN(paidNum) ? '—' : fmtPrice(paidNum);
+    var mismatch = paidNum != null && priceNum != null && !isNaN(paidNum) && !isNaN(priceNum)
+      && Math.abs(paidNum - priceNum) > 0.005;
+    var priceLine = esc(t('priceShort')) + ' ' + esc(fmtPrice(o.price)) + ' · ' + esc(t('paid')) + ' ' + esc(paidTxt)
+      + (mismatch ? ' <span class="pill pill-red">' + esc(t('amountMismatch')) + '</span>' : '');
     var actions = o.status === 'pending'
       ? '<div class="receipt-actions">'
         + '<button class="btn btn-primary" type="button" data-order-action="approve" data-id="' + esc(o.id) + '">' + esc(t('approve')) + '</button>'
@@ -921,7 +1035,8 @@ function renderOrders() {
       + '<div class="receipt-info">'
       + '<div class="r-gmail">' + esc(o.maskedEmail) + '</div>'
       + '<div class="r-line">' + esc(t('buyer')) + ': ' + esc(o.buyerGmail) + '</div>'
-      + '<div class="r-line">' + esc(fmtPrice(o.price)) + ' · ' + esc(t('method')) + ': ' + esc(o.method || '—') + '</div>'
+      + '<div class="r-line">' + priceLine + '</div>'
+      + '<div class="r-line">' + esc(t('method')) + ': ' + esc(o.method || '—') + '</div>'
       + '<div class="r-line">' + esc(fmtDate(o.createdAt)) + '</div>'
       + '</div>'
       + pill
@@ -929,6 +1044,28 @@ function renderOrders() {
       + '</div>';
   }).join('');
   show($('ordersEmpty'), sorted.length === 0);
+}
+var LOGO_MAX_BYTES = 5 * 1024 * 1024; /* ~5MB, same as receipt images (server MARKET_IMAGE_MAX_CHARS) */
+function readFileAsDataURL(file) {
+  return new Promise(function (resolve, reject) {
+    var r = new FileReader();
+    r.onload = function () { resolve(r.result); };
+    r.onerror = function () { reject(new Error('read')); };
+    r.readAsDataURL(file);
+  });
+}
+function onListingLogoChange() {
+  var file = $('listingLogo').files && $('listingLogo').files[0];
+  var prev = $('listingLogoPreview');
+  if (!file) { prev.removeAttribute('src'); prev.hidden = true; return; }
+  if (file.size > LOGO_MAX_BYTES) {
+    $('listingLogo').value = '';
+    prev.removeAttribute('src');
+    prev.hidden = true;
+    return showError($('listingError'), t('errLogoTooBig'));
+  }
+  showError($('listingError'), '');
+  readFileAsDataURL(file).then(function (url) { prev.src = url; prev.hidden = false; });
 }
 async function onListingSubmit(e) {
   e.preventDefault();
@@ -941,6 +1078,23 @@ async function onListingSubmit(e) {
   if (!email || !pass || !title || priceRaw === '' || isNaN(price) || price <= 0) {
     return showError($('listingError'), t('errListingFields'));
   }
+  var logoFile = $('listingLogo').files && $('listingLogo').files[0];
+  var token = $('listingToken').value.trim();
+  var ip = $('listingIp').value.trim();
+  var ccRaw = $('listingCountryCity').value.trim();
+  /* "Country, City" — split on the first comma; a bare country with no
+     comma is accepted as country only. */
+  var ccParts = ccRaw.split(',');
+  var country = (ccParts[0] || '').trim();
+  var city = ccParts.slice(1).join(',').trim();
+  var logoDataUrl = '';
+  if (logoFile) {
+    if (logoFile.size > LOGO_MAX_BYTES) {
+      return showError($('listingError'), t('errLogoTooBig'));
+    }
+    try { logoDataUrl = await readFileAsDataURL(logoFile); }
+    catch (err) { return showError($('listingError'), t('errListing')); }
+  }
   showError($('listingError'), '');
   var btn = $('createListingBtn');
   btn.disabled = true;
@@ -949,8 +1103,14 @@ async function onListingSubmit(e) {
        the field is cleared below and no cache ever holds it. */
     await api('/api/admin/market/listings', {
       method: 'POST',
-      body: { email: email, password: pass, price: price, title: title, sellerGmail: seller }
+      body: { email: email, password: pass, price: price, title: title, sellerGmail: seller, logoDataUrl: logoDataUrl, token: token, ip: ip, country: country, city: city }
     });
+    $('listingLogo').value = '';
+    $('listingLogoPreview').removeAttribute('src');
+    $('listingLogoPreview').hidden = true;
+    $('listingToken').value = '';
+    $('listingIp').value = '';
+    $('listingCountryCity').value = '';
     $('listingEmail').value = '';
     $('listingPass').value = '';
     $('listingPrice').value = '';
@@ -976,6 +1136,42 @@ async function removeListing(id) {
   }
 }
 async function onListingsClick(e) {
+  /* Per-listing health check: one call per click (button disabled +
+     spinner while the check runs, so it can never be hammered). */
+  var checkBtn = e.target.closest('[data-listing-check]');
+  if (checkBtn) {
+    var checkId = checkBtn.dataset.listingCheck;
+    checkBtn.disabled = true;
+    var checkLabel = checkBtn.textContent;
+    checkBtn.innerHTML = '<span class="spinner spinner-dark" aria-hidden="true"></span> ' + esc(t('checking'));
+    try {
+      await api('/api/admin/market/listings/' + encodeURIComponent(checkId) + '/check', { method: 'POST' });
+      toast(t('toastHealthChecked'));
+      loadListings();
+    } catch (err) {
+      showError($('listingsError'), err && err.message ? err.message : t('errHealth'));
+      checkBtn.disabled = false;
+      checkBtn.textContent = checkLabel;
+    }
+    return;
+  }
+  /* Manual health toggle — the admin flips health by hand because a
+     Mail.tm login cannot detect a game/AI company banning the account. */
+  var healthBtn = e.target.closest('[data-listing-health]');
+  if (healthBtn) {
+    var healthId = healthBtn.dataset.id;
+    var target = healthBtn.dataset.listingHealth === 'bad' ? 'bad' : 'good';
+    healthBtn.disabled = true;
+    try {
+      await api('/api/admin/market/listings/' + encodeURIComponent(healthId) + '/health', { method: 'POST', body: { health: target } });
+      toast(t('toastHealthSet'));
+      loadListings();
+    } catch (err) {
+      showError($('listingsError'), err && err.message ? err.message : t('errHealth'));
+      healthBtn.disabled = false;
+    }
+    return;
+  }
   var btn = e.target.closest('[data-listing-remove]');
   if (!btn) return;
   var id = btn.dataset.listingRemove;
@@ -1077,6 +1273,7 @@ function init() {
     else onReceiptThumbClick(e);
   });
   $('listingForm').addEventListener('submit', onListingSubmit);
+  $('listingLogo').addEventListener('change', onListingLogoChange);
   $('listingsList').addEventListener('click', onListingsClick);
   $('ordersList').addEventListener('click', function (e) {
     if (e.target.closest('[data-order-action]')) onOrderActionClick(e);

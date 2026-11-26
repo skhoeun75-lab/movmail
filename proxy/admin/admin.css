@@ -147,6 +147,12 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
 .pill-red { background: var(--red-bg); color: var(--red); }
 .pill-amber { background: var(--amber-bg); color: var(--amber); }
 .pill-grey { background: var(--grey-bg); color: var(--muted); }
+/* v1.3: "New" badge on fresh listings — red text on yellow. */
+.listing-new-badge {
+  display: inline-block; font-size: 12px; font-weight: 800; color: #dc2626;
+  background: #fef08a; border: 1px solid #facc15; border-radius: 999px; padding: 2px 9px;
+  vertical-align: middle; white-space: nowrap;
+}
 .reason { display: block; font-size: 12px; color: var(--red); white-space: normal; max-width: 220px; }
 .empty-note { text-align: center; padding: 8px 0 4px; }
 
@@ -311,10 +317,26 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
 }
 .listing-row.status-sold { background: var(--grey-bg); }
 .listing-row.status-removed { background: var(--red-bg); border-color: var(--red-border); }
+/* Bad-health listing: red tint + red auto-delete countdown line. */
+.listing-row.health-bad { background: var(--red-bg); border-color: var(--red-border); }
+.l-auto-delete { color: var(--red); font-weight: 700; }
+/* Dark spinner for the small secondary Check button (white spinner
+   would be invisible on a white button). */
+.spinner-dark { border-color: rgba(0, 0, 0, .18); border-top-color: var(--accent); }
 .listing-info { flex: 1 1 220px; font-size: 14px; min-width: 0; }
 .listing-info .l-email { font-weight: 700; word-break: break-all; }
 .listing-info .l-line { color: var(--muted); font-size: 13px; word-break: break-word; }
 .listing-info .l-title { font-weight: 600; }
+/* Manual-create logo preview + listing thumbnail: square 1:1, cover. */
+.listing-logo-preview {
+  display: block; width: 72px; aspect-ratio: 1 / 1; object-fit: cover;
+  border-radius: 10px; border: 1px solid var(--border); margin-top: 8px;
+  background: var(--grey-bg);
+}
+.listing-thumb {
+  width: 72px; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 10px;
+  border: 1px solid var(--border); flex: 0 0 72px; background: var(--grey-bg);
+}
 .listing-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .order-row.status-approved { background: var(--green-bg); }
 .order-row.status-rejected { background: var(--red-bg); border-color: var(--red-border); }

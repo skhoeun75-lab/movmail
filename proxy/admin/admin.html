@@ -200,6 +200,11 @@
       <div class="card">
         <h2 data-i18n="createListing">បង្កើតបញ្ជីលក់ដោយដៃ</h2>
         <form id="listingForm" class="market-form" novalidate>
+          <label class="field field-logo">
+            <span data-i18n="listingLogo">រូបសញ្ញា</span>
+            <input id="listingLogo" type="file" accept="image/*">
+            <img id="listingLogoPreview" class="listing-logo-preview" hidden alt="">
+          </label>
           <label class="field">
             <span data-i18n="listingEmail">អ៊ីមែលលក់</span>
             <input id="listingEmail" type="email" autocomplete="off" data-i18n-ph="listingEmailPh" placeholder="example@euploading.com">
@@ -207,6 +212,10 @@
           <label class="field">
             <span data-i18n="listingPassword">ពាក្យសម្ងាត់អ៊ីមែល</span>
             <input id="listingPass" type="password" autocomplete="off">
+          </label>
+          <label class="field">
+            <span data-i18n="listingToken">Token</span>
+            <input id="listingToken" type="text" autocomplete="off" data-i18n-ph="listingTokenPh" placeholder="1B Token">
           </label>
           <label class="field">
             <span data-i18n="listingPrice">តម្លៃ ($)</span>
@@ -219,6 +228,14 @@
           <label class="field">
             <span data-i18n="sellerGmail">Gmail អ្នកលក់</span>
             <input id="listingSeller" type="email" autocomplete="off" value="admin">
+          </label>
+          <label class="field">
+            <span data-i18n="listingIp">IP</span>
+            <input id="listingIp" type="text" autocomplete="off" data-i18n-ph="listingIpPh" placeholder="103.146.x.x">
+          </label>
+          <label class="field">
+            <span data-i18n="listingCountryCity">ប្រទេស / ទីក្រុង</span>
+            <input id="listingCountryCity" type="text" autocomplete="off" data-i18n-ph="listingCountryCityPh" placeholder="Cambodia, Phnom Penh">
           </label>
           <button id="createListingBtn" class="btn btn-primary" type="submit" data-i18n="createListingBtn">បង្កើតបញ្ជីលក់</button>
         </form>

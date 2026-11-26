@@ -924,13 +924,35 @@
       .shop-status{font-size:12.5px;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);color:var(--muted)}
       .shop-status.pending{color:#b45309;border-color:#f59e0b;background:#fef3c7}
       .shop-status.approved{color:#047857;border-color:#10b981;background:#d1fae5}
+      .shop-status.mismatch{color:#b91c1c;border-color:#ef4444;background:#fee2e2}
       .shop-spin{display:inline-block;width:18px;height:18px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:rot 1s linear infinite;vertical-align:middle}
       .shop-loading{padding:14px 4px;color:var(--muted);font-size:14px}
       .shop-masked-preview{font-size:13.5px;color:var(--muted);margin:0 0 12px;overflow-wrap:anywhere}
+      .shop-logo-wrap{flex:0 0 auto}
+      .shop-logo{width:56px;height:56px;aspect-ratio:1/1;object-fit:cover;border-radius:12px;border:1px solid var(--border);background:var(--surface-2);display:block}
+      .shop-token{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+      .shop-count-badge{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--accent);color:#fff;font-size:12px;font-weight:800;vertical-align:middle;white-space:nowrap}
+      .shop-paid{font-size:13px;font-weight:700;color:var(--accent-ink);white-space:nowrap}
+      .sell-logo-preview{width:96px;height:96px;aspect-ratio:1/1;object-fit:cover;border-radius:12px;border:1px solid var(--border);margin:8px 0 12px;display:none}
+      .sell-logo-preview.show{display:block}
       .my-orders{margin-bottom:14px}
       .my-orders h3{font-size:14.5px;margin:0 0 8px}
       .order-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13.5px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--surface)}
       .order-row .mono{overflow-wrap:anywhere;word-break:break-all}
+      .order-logo{width:40px;height:40px;aspect-ratio:1/1;object-fit:cover;border-radius:9px;border:1px solid var(--border);background:var(--surface-2);flex:0 0 auto}
+      /* v1.3: listing health — green = works, red = broken, don't buy. */
+      .shop-card.bad{border-color:#f87171}
+      .shop-health-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-left:7px;vertical-align:middle}
+      .shop-health-dot.good{background:#16a34a;box-shadow:0 0 0 2px #bbf7d0}
+      .shop-health-dot.bad{background:#dc2626;box-shadow:0 0 0 2px #fecaca}
+      .shop-health-badge{display:inline-block;font-size:12px;font-weight:800;color:#b91c1c;background:#fee2e2;border:1px solid #fca5a5;border-radius:999px;padding:2px 9px;margin-top:4px}
+      /* v1.3: "New" badge on fresh listings — red text on yellow. */
+      .shop-new-badge{display:inline-block;font-size:12px;font-weight:800;color:#dc2626;background:#fef08a;border:1px solid #facc15;border-radius:999px;padding:2px 9px;margin-left:7px;vertical-align:middle;white-space:nowrap}
+      .shop-actions .btn-sm:disabled{cursor:not-allowed}
+      /* v1.3: bought mailbox logo on the top card. */
+      .bought-logo-row{display:flex;align-items:center;gap:8px;margin:10px 0 0}
+      .bought-logo{width:48px;height:48px;aspect-ratio:1/1;object-fit:cover;border-radius:10px;border:1px solid var(--border);background:var(--surface-2)}
+      .bought-chip{font-size:12px;font-weight:800;color:#047857;background:#d1fae5;border:1px solid #10b981;border-radius:999px;padding:3px 10px}
       @media (max-width:480px){
         .shop-card{padding:12px}
         .shop-price{font-size:18px}
@@ -977,6 +999,11 @@
 
         <div class="addr-box">
           <span class="addr-text mono loading gmail-pill" id="addrText">កំពុងបង្កើតអ៊ីមែល…</span>
+        </div>
+
+        <div class="bought-logo-row" id="boughtLogoRow" hidden>
+          <img class="bought-logo" id="boughtLogoImg" alt="" />
+          <span class="bought-chip" data-i18n="marketBoughtLabel">បានទិញ</span>
         </div>
 
         <div class="ip-line" id="ipLine" hidden>
@@ -1577,6 +1604,11 @@
         <input type="number" id="sellPriceInput" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" />
         <label for="sellTitleInput" data-i18n="sellTitleLabel">ចំណងជើង / កំណត់ចំណាំ</label>
         <input type="text" id="sellTitleInput" maxlength="80" />
+        <label for="sellLogoInput" data-i18n="sellLogoLabel">រូបសញ្ញា (Logo)</label>
+        <input type="file" id="sellLogoInput" accept="image/*" />
+        <img id="sellLogoPreview" class="sell-logo-preview" alt="" />
+        <label for="sellTokenInput" data-i18n="sellTokenLabel">Token</label>
+        <input type="text" id="sellTokenInput" maxlength="80" data-i18n-placeholder="sellTokenPlaceholder" placeholder="1B Token" />
         <div class="redeem-status err" id="sellError" hidden></div>
         <div class="mini-actions">
           <button class="btn" id="sellCancelBtn" data-i18n="cancelBtn">បោះបង់</button>
@@ -1613,6 +1645,8 @@
         <div class="pay-receipt" id="mktReceiptBox" hidden>
           <label for="mktReceiptInput" data-i18n="payUploadReceipt">បង្ហោះរូបថតវិក្កយបត្រទូទាត់</label>
           <input type="file" id="mktReceiptInput" accept="image/*" />
+          <label for="mktAmountInput" data-i18n="marketAmountPaidLabel">ចំនួនទឹកប្រាក់ដែលបានបង់ ($)</label>
+          <input type="number" id="mktAmountInput" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" />
           <button type="button" class="btn primary" id="mktSendBtn" data-i18n="paySend">ផ្ញើទៅ Admin</button>
           <div class="redeem-status" id="mktStatus" hidden></div>
         </div>
@@ -2031,7 +2065,7 @@
           state.messages = []; state.failed = false; state.retrying = false;
           state.retryCount = 0; state.creating = false;
           savedState.messages = []; savedState.loaded = false; savedState.lastFetch = 0;
-          currentIp = null; heroDismissed = {};
+          currentIp = null; currentBoughtLogo = null; currentBought = false; heroDismissed = {};
           addrText.textContent = "—";
           addrText.classList.remove("loading");
           statusText.textContent = "";
@@ -2055,7 +2089,8 @@
           var keep = {
             address: state.address, password: state.password, token: state.token,
             accountId: state.accountId, createdAt: state.createdAt,
-            messages: state.messages, ip: currentIp
+            messages: state.messages, ip: currentIp,
+            boughtLogo: currentBoughtLogo, bought: currentBought
           };
           switchAccount(email);
           if (keep.address && keep.token){
@@ -2063,6 +2098,8 @@
             state.token = keep.token; state.accountId = keep.accountId;
             state.createdAt = keep.createdAt; state.messages = keep.messages || [];
             if (keep.ip) currentIp = keep.ip;
+            currentBoughtLogo = keep.boughtLogo || null;
+            currentBought = !!keep.bought;
             addrText.textContent = state.address;
             addrText.classList.remove("loading");
             statusText.textContent = t("statusWaiting");
@@ -2623,6 +2660,10 @@ var I18N = {
     "sellMaskedLabel": "អ៊ីមែលដែលបង្ហាញ៖",
     "sellPriceLabel": "តម្លៃ ($)",
     "sellTitleLabel": "ចំណងជើង / កំណត់ចំណាំ",
+    "sellLogoLabel": "រូបសញ្ញា (Logo)",
+    "sellTokenLabel": "Token",
+    "sellTokenPlaceholder": "1B Token",
+    "sellLogoTooBig": "រូបភាពធំពេក — សូមជ្រើសរើសរូបតូចជាង 5MB។",
     "sellNeedPrice": "សូមបញ្ចូលតម្លៃធំជាង $0។",
     "sellNeedSignin": "សូមចូលប្រើជាមុនដើម្បីដាក់លក់។",
     "sellFailed": "ដាក់លក់មិនបានសម្រេច។ សូមព្យាយាមម្តងទៀត។",
@@ -2633,6 +2674,10 @@ var I18N = {
     "marketPayTitle": "ទិញ Email Account",
     "marketReceiptSent": "បានផ្ញើ — សូមរង់ចាំ Admin អនុម័ត",
     "marketNeedReceipt": "សូមជ្រើសរើសរូបថតវិក្កយបត្រជាមុន។",
+    "marketAmountPaidLabel": "ចំនួនទឹកប្រាក់ដែលបានបង់ ($)",
+    "marketNeedAmountPaid": "សូមបញ្ចូលចំនួនទឹកប្រាក់ដែលបានបង់។",
+    "marketPaidLabel": "បានបង់ {amount}",
+    "marketAmountMismatch": "ចំនួនមិនត្រូវគ្នា",
     "marketSendFailed": "ផ្ញើវិក្កយបត្រមិនបានសម្រេច។ សូមព្យាយាមម្តងទៀត។",
     "marketOrderPending": "កំពុងរង់ចាំ Admin អនុម័ត",
     "marketOrderApproved": "បានអនុម័ត",
@@ -2641,6 +2686,12 @@ var I18N = {
     "restoreBoughtSuccess": "បានយកអ៊ីមែលដែលទិញមកប្រើហើយ",
     "restoreBoughtFailed": "យកអ៊ីមែលមកប្រើវិញមិនបានសម្រេច",
     "marketRevealing": "កំពុងបង្ហាញអ៊ីមែល…",
+    "marketHealthGood": "ដំណើរការល្អ",
+    "marketNew": "ថ្មី",
+    "marketHealthBad": "មិនគួរទិញ",
+    "marketHealthBadToast": "អ៊ីមែលនេះមានបញ្ហា — សូមកុំទិញ",
+    "marketBoughtLabel": "បានទិញ",
+    "marketBoughtIpLocked": "IP នេះជាប់ជាមួយអ៊ីមែលដែលបានទិញ មិនអាចប្តូរបានទេ",
     "shopSold": "លក់រួច",
     "heroDismiss": "បិទ"
   },
@@ -2973,6 +3024,10 @@ var I18N = {
     "sellMaskedLabel": "Shown as:",
     "sellPriceLabel": "Price ($)",
     "sellTitleLabel": "Title / note",
+    "sellLogoLabel": "Logo",
+    "sellTokenLabel": "Token",
+    "sellTokenPlaceholder": "1B Token",
+    "sellLogoTooBig": "Image too large — please choose an image under 5MB.",
     "sellNeedPrice": "Please enter a price greater than $0.",
     "sellNeedSignin": "Please sign in first to list an email.",
     "sellFailed": "Could not list this email. Please try again.",
@@ -2983,6 +3038,10 @@ var I18N = {
     "marketPayTitle": "Buy Email Account",
     "marketReceiptSent": "Sent — waiting for admin approval",
     "marketNeedReceipt": "Please choose a receipt photo first.",
+    "marketAmountPaidLabel": "Amount paid ($)",
+    "marketNeedAmountPaid": "Please enter the amount you paid.",
+    "marketPaidLabel": "Paid {amount}",
+    "marketAmountMismatch": "Amount mismatch",
     "marketSendFailed": "Could not send the receipt. Please try again.",
     "marketOrderPending": "Waiting for admin approval",
     "marketOrderApproved": "Approved",
@@ -2991,6 +3050,12 @@ var I18N = {
     "restoreBoughtSuccess": "Bought email restored",
     "restoreBoughtFailed": "Could not restore this email",
     "marketRevealing": "Revealing email…",
+    "marketHealthGood": "Working",
+    "marketNew": "New",
+    "marketHealthBad": "Don't buy",
+    "marketHealthBadToast": "This account has a problem — please don't buy it",
+    "marketBoughtLabel": "Bought",
+    "marketBoughtIpLocked": "This IP is attached to the bought email and can't be changed",
     "shopSold": "Sold",
     "heroDismiss": "Dismiss"
   }
@@ -3333,6 +3398,8 @@ var I18N = {
             state.failed = false;
             state.retrying = false;
             state.createdAt = new Date().toISOString();
+            /* A freshly generated address is never a bought one. */
+            currentBoughtLogo = null; currentBought = false;
             if (!currentIp) currentIp = generateIpProfile();
             updateIpLine();
             addrText.textContent = state.address;
@@ -3664,6 +3731,20 @@ var I18N = {
         }
         /* The IP profile shown for the current mailbox. */
         var currentIp = null;
+        /* v1.3: a bought shop mailbox keeps the listing's logo + IP
+           profile forever — its IP is never regenerated. */
+        var currentBoughtLogo = null;
+        var currentBought = false;
+        function isBoughtMailbox(mb){ return !!(mb && (mb.bought === true || mb.bought === "true")); }
+        function updateBoughtLogo(){
+          var row = $("boughtLogoRow"), img = $("boughtLogoImg");
+          if (!row || !img) return;
+          if (state.address && currentBought && currentBoughtLogo){
+            img.onerror = function(){ row.hidden = true; };
+            img.src = currentBoughtLogo;
+            row.hidden = false;
+          } else row.hidden = true;
+        }
         function ipText(p){
           if (!p) return "—";
           return (p.flag ? p.flag + " " : "") + p.ip + " · " + p.country + ", " + p.city;
@@ -3689,6 +3770,7 @@ var I18N = {
         function updateIpLine(){
           var line = $("ipLine");
           if (!line) return;
+          updateBoughtLogo();
           if (!state.address){ line.hidden = true; return; }
           /* The profile must never be empty: generate one if missing. */
           if (!currentIp) currentIp = generateIpProfile();
@@ -3744,6 +3826,9 @@ var I18N = {
               if (state.accountId) list[i].accountId = state.accountId;
               if (!list[i].tier) list[i].tier = "free";
               if (currentIp) list[i].ip = currentIp.ip, list[i].country = currentIp.country, list[i].city = currentIp.city, list[i].flag = currentIp.flag;
+              /* v1.3: a saved bought mailbox keeps its listing logo +
+                 bought flag, so its IP is never regenerated later. */
+              if (currentBought){ list[i].bought = true; if (currentBoughtLogo) list[i].logo = currentBoughtLogo; }
               saveMailboxes(list);
               renderMailboxes();
               return list[i];
@@ -3762,6 +3847,8 @@ var I18N = {
             city: currentIp ? currentIp.city : "",
             flag: currentIp ? currentIp.flag : "",
             proxy: "auto",
+            bought: currentBought,
+            logo: currentBoughtLogo || "",
             createdAt: new Date().toISOString()
           };
           list.unshift(mb);
@@ -3928,6 +4015,7 @@ var I18N = {
             clearCurrentSession();
             stopPolling();
             state.address = ""; state.password = ""; state.token = ""; state.accountId = "";
+            currentBoughtLogo = null; currentBought = false;
             state.messages = []; state.failed = false; state.retrying = false; state.retryCount = 0;
             savedState.messages = []; savedState.loaded = false; savedState.lastFetch = 0;
             addrText.textContent = "—";
@@ -3996,7 +4084,7 @@ var I18N = {
           mb = findMailbox(mb.address) || mb;
           /* Keep the current session so we can roll back if the
              restore fails (e.g. the address is taken). */
-          var old = { address: state.address, password: state.password, token: state.token, accountId: state.accountId, messages: state.messages };
+          var old = { address: state.address, password: state.password, token: state.token, accountId: state.accountId, messages: state.messages, boughtLogo: currentBoughtLogo, bought: currentBought };
           function adopt(token, accountId){
             state.address = mb.address;
             state.password = mb.password;
@@ -4009,6 +4097,10 @@ var I18N = {
             addrText.classList.remove("loading");
             statusText.textContent = t("statusWaiting");
             if (mb.ip) currentIp = { ip: mb.ip, country: mb.country, city: mb.city, flag: mb.flag };
+            /* v1.3: restoring a bought saved mailbox brings its
+               listing logo + IP back; a normal mailbox clears them. */
+            currentBoughtLogo = mb.logo || null;
+            currentBought = !!mb.bought;
             state.createdAt = mb.createdAt || new Date().toISOString();
             /* Free users may only pick the 5 free countries, so do
                not switch the picker to a locked country on restore —
@@ -4033,6 +4125,8 @@ var I18N = {
             state.address = old.address; state.password = old.password;
             state.token = old.token; state.accountId = old.accountId;
             state.messages = old.messages;
+            currentBoughtLogo = old.boughtLogo; currentBought = old.bought;
+            updateBoughtLogo();
             addrText.textContent = state.address || t("addrFailed");
             renderMessages();
             showToast(t("toastRestoreFailed"));
@@ -4124,6 +4218,8 @@ var I18N = {
           editIpDraft = null;
         }
         $("editNewIpBtn").addEventListener("click", function(){
+          /* v1.3: a bought mailbox keeps its listing IP forever. */
+          if (editingMailbox && isBoughtMailbox(editingMailbox)){ showToast(t("marketBoughtIpLocked")); return; }
           editIpDraft = generateIpProfile();
           updateEditIpPreview();
         });
@@ -4137,7 +4233,8 @@ var I18N = {
             if (m.address === editingMailbox.address){
               m.name = name;
               m.proxy = $("editProxySelect").value || "auto";
-              if (editIpDraft && editIpDraft.ip){
+              /* v1.3: never overwrite a bought mailbox's listing IP. */
+              if (editIpDraft && editIpDraft.ip && !isBoughtMailbox(editingMailbox)){
                 m.ip = editIpDraft.ip; m.country = editIpDraft.country;
                 m.city = editIpDraft.city; m.flag = editIpDraft.flag;
               }
@@ -4147,7 +4244,7 @@ var I18N = {
           /* If the edited mailbox is the active one, apply its
              profile and proxy choice right away. */
           if (state.address === editingMailbox.address){
-            if (editIpDraft && editIpDraft.ip) currentIp = editIpDraft;
+            if (editIpDraft && editIpDraft.ip && !isBoughtMailbox(editingMailbox)) currentIp = editIpDraft;
             updateIpLine();
             applyProxyPref($("editProxySelect").value || "auto");
           }
@@ -5121,6 +5218,7 @@ var I18N = {
             token: state.token || "",
             ip: currentIp ? currentIp.ip : "", country: currentIp ? currentIp.country : "",
             city: currentIp ? currentIp.city : "", flag: currentIp ? currentIp.flag : "",
+            logo: currentBoughtLogo || "", bought: currentBought,
             proxy: currentProxyPref || "auto", createdAt: state.createdAt || ""
           };
         }
@@ -6041,6 +6139,9 @@ var I18N = {
               accountId: state.accountId || "", createdAt: state.createdAt || "",
               ip: currentIp ? currentIp.ip : "", country: currentIp ? currentIp.country : "",
               city: currentIp ? currentIp.city : "", flag: currentIp ? currentIp.flag : "",
+              /* v1.3: a bought mailbox keeps its listing logo + IP
+                 profile in the session so a reload still shows them. */
+              bought: currentBought, logo: currentBoughtLogo || "",
               proxy: (typeof currentProxyPref !== "undefined" ? currentProxyPref : "auto") || "auto"
             };
             saveAcctData(d);
@@ -6058,6 +6159,10 @@ var I18N = {
           state.failed = false; state.retrying = false; state.retryCount = 0;
           state.createdAt = mb.createdAt || new Date().toISOString();
           if (mb.ip) currentIp = { ip: mb.ip, country: mb.country, city: mb.city, flag: mb.flag };
+          /* v1.3: restore the bought listing's logo + IP with the
+             session — never generate a fresh IP for a bought mailbox. */
+          currentBoughtLogo = mb.logo || null;
+          currentBought = !!mb.bought;
           hideError();
           addrText.textContent = state.address;
           addrText.classList.remove("loading");
@@ -6091,7 +6196,8 @@ var I18N = {
             address: cur.address, password: cur.password, token: cur.token || "",
             accountId: cur.accountId || "", createdAt: cur.createdAt || "",
             ip: cur.ip || "", country: cur.country || "", city: cur.city || "",
-            flag: cur.flag || "", proxy: cur.proxy || "auto"
+            flag: cur.flag || "", proxy: cur.proxy || "auto",
+            logo: cur.logo || "", bought: !!cur.bought
           };
           state.address = mb.address;
           state.password = mb.password;
@@ -6120,12 +6226,13 @@ var I18N = {
 
         /* ---------- v1.2: Email Account Shop (public marketplace) ----------
            Contract (proxy, built in parallel — use exactly this):
-             GET  /api/market/listings                     -> [{id, maskedEmail, price, title, createdAt, sold}]
-             POST /api/market/listings {address, password, price, title, sellerGmail}
-             POST /api/market/orders {listingId, gmail, method, imageDataUrl} -> {ok, orderId, status:"pending"}
-             GET  /api/market/orders?gmail=<buyerGmail>    -> [{id, listingId, status, price, method, createdAt, fullEmail?}]
+             GET  /api/market/listings                     -> [{id, maskedEmail, price, title, token, logo, health, createdAt, sold}]
+                  (health is "good" or "bad"; missing = legacy row, treat as good)
+             POST /api/market/listings {address, password, price, title, token, logoDataUrl, sellerGmail, ip, country, city, flag}
+             POST /api/market/orders {listingId, gmail, method, imageDataUrl, amountPaid} -> {ok, orderId, status:"pending"}
+             GET  /api/market/orders?gmail=<buyerGmail>    -> [{id, listingId, status, price, amountPaid, method, createdAt, fullEmail?}]
                   (fullEmail present ONLY when status is "approved")
-             POST /api/market/restore {listingId, gmail}  -> {ok, token, accountId, address}
+             POST /api/market/restore {listingId, gmail}  -> {ok, token, accountId, address, logo, ip, country, city, flag}
            All market calls go through apiAdmin (proxy bases only, never
            api.mail.tm). The shop is PUBLIC: listings load with no
            sign-in; only Buy / Sell need a signed-in Gmail. Listing
@@ -6165,12 +6272,32 @@ var I18N = {
           }
           return null;
         }
+        /* v1.3: listing logos cached by id so My Orders can still show
+           the logo after the listing is sold — sold listings leave the
+           public list, and the order shape itself carries no logo, so
+           the matched listing (while it lasts), the order's own logo
+           field (if the server ever returns one), then this cache are
+           the sources, in that order. */
+        var MARKET_LOGOS_KEY = "movmail-market-logos";
+        function marketLogoCache(id){
+          try { var c = JSON.parse(localStorage.getItem(MARKET_LOGOS_KEY) || "{}"); return c[String(id)] || ""; } catch(e){ return ""; }
+        }
+        function marketCacheLogo(id, url){
+          if (!id || !url) return;
+          try { var c = JSON.parse(localStorage.getItem(MARKET_LOGOS_KEY) || "{}"); c[String(id)] = url; localStorage.setItem(MARKET_LOGOS_KEY, JSON.stringify(c)); } catch(e){}
+        }
+        function marketLogoForOrder(o, listing){
+          if (listing && (listing.logoDataUrl || listing.logo)) return listing.logoDataUrl || listing.logo;
+          if (o && (o.logoDataUrl || o.logo)) return o.logoDataUrl || o.logo;
+          return marketLogoCache(o && o.listingId);
+        }
         function loadMarketListings(quiet){
           var ld = $("shopLoading");
           if (ld) ld.hidden = false;
           return apiAdmin("/api/market/listings").then(function(data){
             var arr = Array.isArray(data) ? data : (data && Array.isArray(data.listings) ? data.listings : []);
             marketListings = arr;
+            arr.forEach(function(l){ if (l) marketCacheLogo(l.id, l.logoDataUrl || l.logo); });
             if (ld) ld.hidden = true;
             renderMarketListings();
             return arr;
@@ -6212,6 +6339,21 @@ var I18N = {
             row.className = "order-row";
             var listing = null;
             marketListings.forEach(function(l){ if (l && String(l.id) === String(o.listingId)) listing = l; });
+            /* v1.3: show the listing logo thumb on the order row.
+               The matched listing is the live source; after the
+               listing is sold it is gone from the public list, so
+               fall back to the order's logo field, then the local
+               logo cache keyed by listing id. */
+            if (listing && (listing.logoDataUrl || listing.logo)) marketCacheLogo(o.listingId, listing.logoDataUrl || listing.logo);
+            var orderLogo = marketLogoForOrder(o, listing);
+            if (orderLogo){
+              var oim = document.createElement("img");
+              oim.className = "order-logo";
+              oim.src = orderLogo;
+              oim.alt = "";
+              oim.onerror = function(){ oim.style.display = "none"; };
+              row.appendChild(oim);
+            }
             var label = document.createElement("span");
             label.className = "mono";
             label.textContent = (listing && (listing.title || listing.maskedEmail)) || String(o.listingId || "");
@@ -6220,7 +6362,24 @@ var I18N = {
             var st = document.createElement("span");
             st.className = "shop-status " + (o.status === "approved" ? "approved" : "pending");
             st.textContent = o.status === "approved" ? t("marketOrderApproved") : t("marketOrderPending");
-            row.appendChild(label); row.appendChild(price); row.appendChild(st);
+            row.appendChild(label); row.appendChild(price);
+            if (o.amountPaid != null && isFinite(Number(o.amountPaid)) && Number(o.amountPaid) > 0){
+              var paid = document.createElement("span");
+              paid.className = "shop-paid";
+              paid.textContent = t("marketPaidLabel", { amount: formatMarketPrice(o.amountPaid) });
+              row.appendChild(paid);
+              /* v1.3: red mismatch flag, mirroring the admin Orders
+                 row — same 0.005 tolerance. */
+              var priceNum = Number(o.price != null ? o.price : (listing && listing.price));
+              var paidNum = Number(o.amountPaid);
+              if (isFinite(priceNum) && isFinite(paidNum) && Math.abs(paidNum - priceNum) > 0.005){
+                var mm = document.createElement("span");
+                mm.className = "shop-status mismatch";
+                mm.textContent = t("marketAmountMismatch");
+                row.appendChild(mm);
+              }
+            }
+            row.appendChild(st);
             if (o.status === "approved" && o.fullEmail){
               /* v1.2 fix: My Orders must NOT depend on marketListings.
                  GET /api/market/listings returns active-only, so an
@@ -6244,6 +6403,33 @@ var I18N = {
             listEl.appendChild(row);
           });
         }
+        /* v1.3: group ACTIVE listings with identical (title + token +
+           price) into one shop card. The card shows the FIRST listing's
+           logo/title/token/price, and Buy / reveal / Restore all key off
+           that first listing's id. Sold listings are filtered out by the
+           caller before grouping. */
+        function groupMarketListings(list){
+          var groups = [];
+          list.forEach(function(l){
+            if (!l) return;
+            var key = String(l.title || "") + "\u0000" + String(l.token || "") + "\u0000" + String(Number(l.price) || l.price);
+            var g = null;
+            for (var i = 0; i < groups.length; i++){ if (groups[i].key === key){ g = groups[i]; break; } }
+            if (!g){ g = { key: key, first: l, count: 0, ids: [] }; groups.push(g); }
+            g.count++;
+            g.ids.push(l.id);
+          });
+          return groups;
+        }
+        /* v1.3: "New" badge — listed < 2 hours ago. Pure render-time
+           check on createdAt; missing/invalid → no badge, never crash;
+           future createdAt (clock skew) counts as new. */
+        function isNewListing(l){
+          if (!l || !l.createdAt) return false;
+          var t0 = new Date(l.createdAt).getTime();
+          if (isNaN(t0)) return false;
+          return Date.now() - t0 < 2 * 60 * 60 * 1000;
+        }
         function renderMarketListings(){
           var listEl = $("shopList"), empty = $("shopEmptyState"), badge = $("shopCountBadge");
           if (!listEl) return;
@@ -6253,18 +6439,49 @@ var I18N = {
           if (badge) badge.textContent = String(shown.length);
           listEl.innerHTML = "";
           if (empty) empty.style.display = shown.length ? "none" : "block";
-          shown.forEach(function(l){
+          groupMarketListings(shown).forEach(function(g){
+            var l = g.first;
+            /* v1.3: listing health — "bad" = broken, don't buy.
+               Legacy rows carry no health field and count as good.
+               Grouped listings share one card: the first listing's
+               health is the card's health (Buy keys off its id). */
+            var healthBad = (l.health === "bad");
             var card = document.createElement("div");
-            card.className = "shop-card";
+            card.className = "shop-card" + (healthBad ? " bad" : "");
             var main = document.createElement("div");
             main.className = "shop-main";
             var ttl = document.createElement("div");
             ttl.className = "shop-title";
             ttl.textContent = l.title || l.maskedEmail || "";
+            var dot = document.createElement("span");
+            dot.className = "shop-health-dot " + (healthBad ? "bad" : "good");
+            dot.title = t(healthBad ? "marketHealthBad" : "marketHealthGood");
+            ttl.appendChild(dot);
             var masked = document.createElement("div");
             masked.className = "shop-masked mono";
             masked.textContent = l.maskedEmail || maskMarketEmail(l.maskedEmail || "");
+            /* v1.3: "New" badge next to the masked email while the
+               displayed (first) listing in the group is < 2h old. */
+            if (isNewListing(l)){
+              var nb = document.createElement("span");
+              nb.className = "shop-new-badge";
+              nb.textContent = t("marketNew");
+              masked.appendChild(document.createTextNode(" "));
+              masked.appendChild(nb);
+            }
             main.appendChild(ttl);
+            if (healthBad){
+              var hb = document.createElement("span");
+              hb.className = "shop-health-badge";
+              hb.textContent = t("marketHealthBad");
+              main.appendChild(hb);
+            }
+            if (l.token){
+              var tok = document.createElement("div");
+              tok.className = "shop-token";
+              tok.textContent = l.token;
+              main.appendChild(tok);
+            }
             main.appendChild(masked);
             var order = marketOrderFor(l.id);
             if (order && order.status === "approved" && order.fullEmail){
@@ -6292,10 +6509,33 @@ var I18N = {
                 }
               }
             }
+            /* Proxy returns the logo under `logo` (input key is
+               `logoDataUrl`); accept both so the thumbnail renders
+               whichever shape arrives. */
+            var logoUrl = l.logoDataUrl || l.logo;
+            if (logoUrl) marketCacheLogo(l.id, logoUrl);
+            if (logoUrl){
+              var logoWrap = document.createElement("div");
+              logoWrap.className = "shop-logo-wrap";
+              var logoImg = document.createElement("img");
+              logoImg.className = "shop-logo";
+              logoImg.src = logoUrl;
+              logoImg.alt = "";
+              logoImg.onerror = function(){ logoWrap.style.display = "none"; };
+              logoWrap.appendChild(logoImg);
+              card.appendChild(logoWrap);
+            }
             card.appendChild(main);
             var price = document.createElement("div");
             price.className = "shop-price";
             price.textContent = formatMarketPrice(l.price);
+            if (g.count > 1){
+              var cb = document.createElement("span");
+              cb.className = "shop-count-badge";
+              cb.textContent = "×" + g.count;
+              price.appendChild(document.createTextNode(" "));
+              price.appendChild(cb);
+            }
             card.appendChild(price);
             var acts = document.createElement("div");
             acts.className = "shop-actions";
@@ -6316,6 +6556,9 @@ var I18N = {
               buy.type = "button";
               buy.className = "btn-sm primary";
               buy.textContent = t("buyBtn");
+              /* v1.3: a red listing can never be bought from the UI —
+                 the button is disabled (the server also rejects it). */
+              buy.disabled = healthBad;
               buy.addEventListener("click", function(){ openMarketPay(l); });
               acts.appendChild(buy);
             }
@@ -6334,12 +6577,33 @@ var I18N = {
           $("sellMaskedEmail").textContent = maskMarketEmail(mb.address);
           $("sellPriceInput").value = "";
           $("sellTitleInput").value = mb.name || "";
+          var sli = $("sellLogoInput"); if (sli) sli.value = "";
+          var sti = $("sellTokenInput"); if (sti) sti.value = "";
+          var slp = $("sellLogoPreview"); if (slp){ slp.src = ""; slp.classList.remove("show"); }
           var err = $("sellError"); if (err) err.hidden = true;
           openAnimated($("sellOverlay"));
           setTimeout(function(){ $("sellPriceInput").focus(); }, 50);
         }
         function closeSellModal(){ closeAnimated($("sellOverlay"), ".mini-modal"); }
         $("sellCancelBtn").addEventListener("click", closeSellModal);
+        /* v1.3: square 1:1 logo preview, shown only after a file is chosen.
+           Files over ~5MB are rejected with the sell error text pattern. */
+        $("sellLogoInput").addEventListener("change", function(){
+          var f = this.files && this.files[0];
+          var pv = $("sellLogoPreview");
+          if (!pv) return;
+          if (!f){ pv.src = ""; pv.classList.remove("show"); return; }
+          if (f.size > 5 * 1024 * 1024){
+            var e0 = $("sellError");
+            if (e0){ e0.textContent = t("sellLogoTooBig"); e0.hidden = false; }
+            this.value = "";
+            pv.src = ""; pv.classList.remove("show");
+            return;
+          }
+          var r = new FileReader();
+          r.onload = function(){ pv.src = r.result; pv.classList.add("show"); };
+          r.readAsDataURL(f);
+        });
         $("sellConfirmBtn").addEventListener("click", function(){
           var mb = marketSellMailbox;
           if (!mb) return;
@@ -6354,25 +6618,52 @@ var I18N = {
             return;
           }
           var title = $("sellTitleInput").value.trim() || mb.name || "";
+          var token = ($("sellTokenInput") ? $("sellTokenInput").value : "").trim();
+          var logoFile = ($("sellLogoInput") && $("sellLogoInput").files) ? $("sellLogoInput").files[0] : null;
           var btn = $("sellConfirmBtn");
-          btn.disabled = true;
-          apiAdmin("/api/market/listings", { method: "POST", body: {
-            address: mb.address, password: mb.password,
-            price: price, title: title, sellerGmail: p.email
-          } }).then(function(){
-            btn.disabled = false;
-            closeSellModal();
-            showToast(t("sellSuccess"));
-            loadMarketListings();
-          }).catch(function(err){
-            btn.disabled = false;
-            var e2 = $("sellError");
-            e2.textContent = (err && err.status === 400) ? t("sellVerifyFailed") : t("sellFailed");
-            e2.hidden = false;
-          });
+          function sendListing(logoDataUrl){
+            btn.disabled = true;
+            apiAdmin("/api/market/listings", { method: "POST", body: {
+              address: mb.address, password: mb.password,
+              price: price, title: title, sellerGmail: p.email,
+              token: token, logoDataUrl: logoDataUrl || "",
+              /* v1.3: the saved mailbox's IP profile travels with the
+                 listing automatically — no new inputs on the Sell modal. */
+              ip: mb.ip || "", country: mb.country || "", city: mb.city || "", flag: mb.flag || ""
+            } }).then(function(){
+              btn.disabled = false;
+              closeSellModal();
+              showToast(t("sellSuccess"));
+              loadMarketListings();
+            }).catch(function(err){
+              btn.disabled = false;
+              var e2 = $("sellError");
+              e2.textContent = (err && err.status === 400) ? t("sellVerifyFailed") : t("sellFailed");
+              e2.hidden = false;
+            });
+          }
+          if (logoFile){
+            if (logoFile.size > 5 * 1024 * 1024){
+              var e3 = $("sellError");
+              e3.textContent = t("sellLogoTooBig"); e3.hidden = false;
+              return;
+            }
+            var lr = new FileReader();
+            lr.onload = function(){ sendListing(lr.result); };
+            lr.onerror = function(){
+              var e4 = $("sellError");
+              e4.textContent = t("sellFailed"); e4.hidden = false;
+            };
+            lr.readAsDataURL(logoFile);
+          } else {
+            sendListing("");
+          }
         });
         /* ---------- Buy: KHQR / USDT payment card + receipt ---------- */
         function openMarketPay(listing){
+          /* v1.3: never open the payment flow for a red listing, even
+             if the disabled Buy button is bypassed somehow. */
+          if (listing && listing.health === "bad"){ showToast(t("marketHealthBadToast")); return; }
           var p = null;
           try { p = loadProfile(); } catch(e) {}
           if (!p || !p.email){
@@ -6397,6 +6688,8 @@ var I18N = {
           $("mktSentBox").hidden = true;
           var st = $("mktStatus"); if (st) st.hidden = true;
           var ri = $("mktReceiptInput"); if (ri) ri.value = "";
+          var ai = $("mktAmountInput");
+          if (ai) ai.value = (isFinite(Number(listing.price)) && Number(listing.price) > 0) ? Number(listing.price).toFixed(2) : "";
           openAnimated($("marketPayOverlay"));
         }
         function closeMarketPay(){ closeAnimated($("marketPayOverlay"), ".mini-modal"); }
@@ -6432,13 +6725,17 @@ var I18N = {
           var p = null;
           try { p = loadProfile(); } catch(e) {}
           if (!l || !p){ mktErr("buyNeedSignin"); openAuthModal("signin"); return; }
+          /* v1.3: never send an order for a red listing. */
+          if (l.health === "bad"){ mktErr("marketHealthBadToast"); return; }
           if (!marketPayMethod){ mktErr("marketSendFailed"); return; }
+          var amountPaid = parseFloat($("mktAmountInput").value);
+          if (!isFinite(amountPaid) || amountPaid <= 0){ mktErr("marketNeedAmountPaid"); return; }
           var file = $("mktReceiptInput").files && $("mktReceiptInput").files[0];
           if (!file){ mktErr("marketNeedReceipt"); return; }
           var reader = new FileReader();
           reader.onload = function(){
             apiAdmin("/api/market/orders", { method: "POST", body: {
-              listingId: l.id, gmail: p.email, method: marketPayMethod, imageDataUrl: reader.result
+              listingId: l.id, gmail: p.email, method: marketPayMethod, imageDataUrl: reader.result, amountPaid: amountPaid
             } }).then(function(res){
               $("mktReceiptBox").hidden = true;
               $("mktSentBox").hidden = false;
@@ -6446,7 +6743,8 @@ var I18N = {
               showToast(t("marketReceiptSent"));
               marketOrders.push({
                 id: (res && res.orderId) || ("tmp-" + Date.now()), listingId: l.id,
-                status: "pending", price: l.price, method: marketPayMethod,
+                status: "pending", price: l.price, method: marketPayMethod, amountPaid: amountPaid,
+                logo: l.logoDataUrl || l.logo || "",
                 createdAt: new Date().toISOString()
               });
               /* Show the pending order at once from the local copy —
@@ -6460,7 +6758,7 @@ var I18N = {
           reader.readAsDataURL(file);
         });
         /* ---------- Restore a bought mailbox to the top of the page ---------- */
-        function adoptBoughtMailbox(listing, token, accountId, address){
+        function adoptBoughtMailbox(listing, token, accountId, address, res){
           stopPolling();
           state.address = address;
           state.password = "";
@@ -6469,7 +6767,19 @@ var I18N = {
           state.messages = [];
           state.failed = false; state.retrying = false; state.retryCount = 0;
           state.createdAt = new Date().toISOString();
-          if (!currentIp) currentIp = generateIpProfile();
+          /* v1.3: adopt the listing's IP profile + logo — NEVER generate
+             a fresh IP for a bought mailbox. The adopted profile stays
+             attached to this email forever (saved in the session and in
+             the saved row, so a reload keeps the exact same IP). The
+             restore response carries the profile; the listing itself is
+             the fallback when restoring from a shop card. */
+          var prof = null;
+          if (res && res.ip) prof = { ip: res.ip, country: res.country || "", city: res.city || "", flag: res.flag || "" };
+          else if (listing && listing.ip) prof = { ip: listing.ip, country: listing.country || "", city: listing.city || "", flag: listing.flag || "" };
+          if (prof && prof.ip) currentIp = prof;
+          else if (!currentIp) currentIp = generateIpProfile();
+          currentBoughtLogo = (res && (res.logoDataUrl || res.logo)) || (listing && (listing.logoDataUrl || listing.logo)) || null;
+          currentBought = true;
           hideError();
           addrText.textContent = address;
           addrText.classList.remove("loading");
@@ -6493,7 +6803,7 @@ var I18N = {
           if (!p || !p.email){ showToast(t("buyNeedSignin")); openAuthModal("signin"); return; }
           apiAdmin("/api/market/restore", { method: "POST", body: { listingId: listing.id, gmail: p.email } }).then(function(res){
             if (!res || !res.token || !res.address){ showToast(t("restoreBoughtFailed")); return; }
-            adoptBoughtMailbox(listing, res.token, res.accountId || "", res.address);
+            adoptBoughtMailbox(listing, res.token, res.accountId || "", res.address, res);
           }).catch(function(){ showToast(t("restoreBoughtFailed")); });
         }
         $("shopRefreshBtn").addEventListener("click", function(){
@@ -6578,6 +6888,9 @@ var I18N = {
         function applyNewIp(){
           /* Generate a fresh IP for the selected country and keep the
              saved mailbox's stored profile in sync. */
+          /* v1.3: a bought mailbox keeps its listing IP forever — the
+             Generate IP button never regenerates it. */
+          if (currentBought){ showToast(t("marketBoughtIpLocked")); return false; }
           currentIp = generateIpProfile();
           updateIpLine();
           if (currentIp) addNotification("notifIpGenerated", {ip: currentIp.ip});
@@ -6591,6 +6904,7 @@ var I18N = {
             });
             if (changed){ saveMailboxes(list); renderMailboxes(); }
           }
+          return true;
         }
         function buildCountryDropdown(){
           var dd = $("countryDropdown");
@@ -6630,8 +6944,7 @@ var I18N = {
               closeCountryDropdown();
               /* The displayed country must match the displayed IP, so
                  regenerate the IP for the new country at once. */
-              applyNewIp();
-              showToast(t("toastIpGenerated"));
+              if (applyNewIp()) showToast(t("toastIpGenerated"));
             });
             dd.appendChild(b);
           });
@@ -6661,8 +6974,7 @@ var I18N = {
         });
 
         $("generateIpBtn").addEventListener("click", function(){
-          applyNewIp();
-          showToast(t("toastIpGenerated"));
+          if (applyNewIp()) showToast(t("toastIpGenerated"));
         });
         $("saveBtn").addEventListener("click", function(){
           if (!state.address) return;

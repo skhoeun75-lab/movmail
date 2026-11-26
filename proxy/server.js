@@ -199,6 +199,19 @@ async function saveMessage(msg, address, detail) {
   } catch (err) {
     // Saving must never break the proxied request: log and move on.
     console.error("movmail-proxy: save failed for", msg.id + ":", err.message);
+    return;
+  }
+  // v1.3 ADDITION D: disable-keyword scan on every saved message.
+  // Only runs when the message was actually saved, and only touches
+  // the listings tables when the strict rule matches (subject+intro
+  // only — never the body). The scan only ever sets listings 'bad',
+  // never 'good', and a scan failure must never break the save.
+  try {
+    if (disableKeywordMatch(msg.subject, msg.intro)) {
+      await markListingsBadForAddress(address, msg.subject);
+    }
+  } catch (err) {
+    console.error("movmail-proxy: disable-keyword scan failed:", err.message);
   }
 }
 
@@ -400,6 +413,16 @@ const CREATE_API_TABLES_SQL = [
     "  password TEXT NOT NULL,",
     "  price NUMERIC NOT NULL,",
     "  title TEXT DEFAULT '',",
+    "  logo TEXT DEFAULT '',",
+    "  token TEXT DEFAULT '',",
+    "  health TEXT DEFAULT 'good',",
+    "  health_checked_at TIMESTAMPTZ,",
+    "  health_bad_since TIMESTAMPTZ,",
+    "  health_reason TEXT DEFAULT '',",
+    "  ip TEXT DEFAULT '',",
+    "  country TEXT DEFAULT '',",
+    "  city TEXT DEFAULT '',",
+    "  flag TEXT DEFAULT '',",
     "  seller_gmail TEXT NOT NULL,",
     "  status TEXT NOT NULL DEFAULT 'active',",
     "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
@@ -411,12 +434,30 @@ const CREATE_API_TABLES_SQL = [
     "  listing_id INT NOT NULL REFERENCES market_listings(id),",
     "  buyer_gmail TEXT NOT NULL,",
     "  price NUMERIC NOT NULL,",
+    "  amount_paid NUMERIC,",
     "  method TEXT NOT NULL,",
     "  image_data_url TEXT DEFAULT '',",
     "  status TEXT NOT NULL DEFAULT 'pending',",
     "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
     ")",
   ].join("\n"),
+];
+
+// v1.3 columns added to tables that already exist on Render: CREATE
+// TABLE IF NOT EXISTS never adds a column to an existing table, so
+// these run at every boot (idempotent) to migrate the live database.
+const ALTER_API_TABLES_SQL = [
+  "ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS logo TEXT DEFAULT ''",
+  "ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS token TEXT DEFAULT ''",
+  "ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS health TEXT DEFAULT 'good'",
+  "ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS health_checked_at TIMESTAMPTZ",
+  "ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS health_bad_since TIMESTAMPTZ",
+  "ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS health_reason TEXT DEFAULT ''",
+  "ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS ip TEXT DEFAULT ''",
+  "ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS country TEXT DEFAULT ''",
+  "ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS city TEXT DEFAULT ''",
+  "ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS flag TEXT DEFAULT ''",
+  "ALTER TABLE market_orders ADD COLUMN IF NOT EXISTS amount_paid NUMERIC",
 ];
 
 if (dbPool) {
@@ -426,6 +467,13 @@ if (dbPool) {
         await dbPool.query(sql);
       } catch (err) {
         console.error("movmail-proxy: cannot create api table:", err.message);
+      }
+    }
+    for (const sql of ALTER_API_TABLES_SQL) {
+      try {
+        await dbPool.query(sql);
+      } catch (err) {
+        console.error("movmail-proxy: cannot migrate api table:", err.message);
       }
     }
     console.log("movmail-proxy: accounts/admin tables ready");
@@ -993,6 +1041,15 @@ function listingPublicFromRow(r) {
     maskedEmail: maskEmail(r.email),
     price: Number(r.price),
     title: r.title || "",
+    logo: r.logo || "",
+    token: r.token || "",
+    health: healthOf(r),
+    healthCheckedAt: toIso(r.health_checked_at),
+    healthBadSince: toIso(r.health_bad_since),
+    ip: r.ip || "",
+    country: r.country || "",
+    city: r.city || "",
+    flag: r.flag || "",
     createdAt: toIso(r.created_at),
     sold: false,
   };
@@ -1007,6 +1064,18 @@ function listingAdminFromRow(r) {
     status: r.status,
     price: Number(r.price),
     title: r.title || "",
+    logo: r.logo || "",
+    token: r.token || "",
+    health: healthOf(r),
+    healthCheckedAt: toIso(r.health_checked_at),
+    healthBadSince: toIso(r.health_bad_since),
+    // v1.3 D: admin only — why the listing went red (matched message
+    // subject, or the manual marker). Never in the public shape.
+    healthReason: r.health_reason || "",
+    ip: r.ip || "",
+    country: r.country || "",
+    city: r.city || "",
+    flag: r.flag || "",
     createdAt: toIso(r.created_at),
   };
 }
@@ -1020,6 +1089,7 @@ function orderBuyerFromRow(r, listingEmail) {
     listingId: r.listing_id,
     status: r.status,
     price: Number(r.price),
+    amountPaid: r.amount_paid == null ? null : Number(r.amount_paid),
     method: r.method,
     createdAt: toIso(r.created_at),
   };
@@ -1035,6 +1105,7 @@ function orderAdminFromRow(r, listingEmail) {
     maskedEmail: maskEmail(listingEmail || ""),
     buyerGmail: r.buyer_gmail,
     price: Number(r.price),
+    amountPaid: r.amount_paid == null ? null : Number(r.amount_paid),
     method: r.method,
     imageDataUrl: r.image_data_url || "",
     status: r.status,
@@ -1042,12 +1113,330 @@ function orderAdminFromRow(r, listingEmail) {
   };
 }
 
-async function createListing(address, password, price, title, sellerGmail) {
+// v1.3 listing extras: logo is a data URI ('' when none), token is a
+// short text ('' when none). Neither is the listing password, which
+// never leaves the server.
+function cleanListingLogo(v) {
+  return typeof v === "string" ? v : "";
+}
+
+function cleanListingToken(v) {
+  return typeof v === "string" ? v.trim().slice(0, 120) : "";
+}
+
+// v1.3 listing health + IP profile.
+// health: 'good' | 'bad'. Legacy rows (health NULL) behave as good.
+// health_bad_since marks when a listing first went red; a red
+// listing auto-deletes (status 'removed') 24h after that moment,
+// lazily, on the next list fetch. ip/country/city/flag are the
+// mailbox's IP profile, captured at listing creation and adopted
+// permanently by the bought mailbox on Restore — never regenerated.
+// health_reason (admin shape only) records WHY a listing went red:
+// the subject of the disable notice that matched, or the manual
+// marker set by the admin toggle. It is cleared whenever health
+// returns to 'good'.
+function healthOf(r) {
+  return r && r.health ? String(r.health) : "good";
+}
+
+// v1.3 ADDITION D: disable-keyword health monitoring.
+//
+// When the company behind a listed email disables that account it
+// usually emails a notice TO the mailbox ("Your account has been
+// disabled", "Access is currently limited", ...). The proxy scans
+// every message it saves for a listed address, and the admin list
+// fetch re-scans recent saved messages for stale listings, and flips
+// matching listings red. The scan only ever sets 'bad', never 'good'.
+//
+// MATCH RULE (strict — no false positives on newsletters):
+//   (A) a strong disable keyword appears in the SUBJECT; OR
+//   (B) a strong disable keyword appears anywhere in subject+intro
+//       AND an account/action word also appears in subject+intro.
+// A newsletter merely mentioning "disconnect" in passing (keyword in
+// the intro only, no account word, not in the subject) does NOT
+// match. Matching is case-insensitive substring matching on the
+// lower-cased subject/intro; Khmer phrases match as-is (Khmer has
+// no case). Single vague words are never keywords — every entry
+// below is a disable phrase (or a disable-specific word: disabled,
+// suspended, terminated, disconnected).
+const DISABLE_KEYWORDS_EN = [
+  "disabled",
+  "suspended",
+  "terminated",
+  "disconnected",
+  "no longer have access",
+  "access is currently limited",
+  "your account has been disabled",
+];
+const DISABLE_KEYWORDS_KM = [
+  "គណនីត្រូវបានបិទ",
+  "គណនីរបស់អ្នកត្រូវបានបិទ",
+  "គណនីរបស់អ្នកត្រូវបានផ្អាក",
+  "សិទ្ធិចូលប្រើត្រូវបានកំណត់",
+  "អ្នកមិនមានសិទ្ធិចូលប្រើទៀតទេ",
+];
+const DISABLE_ACCOUNT_WORDS = ["account", "access", "login", "គណនី"];
+
+// Pure matcher: subject + intro -> true when the disable rule above
+// matches. Exported for tests only via the scan functions below;
+// it touches no I/O.
+function disableKeywordMatch(subject, intro) {
+  const subj = String(subject || "").toLowerCase();
+  const combined = subj + "\n" + String(intro || "").toLowerCase();
+  const allKeywords = DISABLE_KEYWORDS_EN.concat(DISABLE_KEYWORDS_KM);
+  // Rule (A): any strong keyword in the subject alone is enough.
+  for (const k of allKeywords) {
+    if (subj.indexOf(k) !== -1) return true;
+  }
+  // Rule (B): keyword anywhere + an account/action word anywhere.
+  let hasKeyword = false;
+  for (const k of allKeywords) {
+    if (combined.indexOf(k) !== -1) {
+      hasKeyword = true;
+      break;
+    }
+  }
+  if (!hasKeyword) return false;
+  for (const w of DISABLE_ACCOUNT_WORDS) {
+    if (combined.indexOf(w) !== -1) return true;
+  }
+  return false;
+}
+
+// Mark every ACTIVE listing for one address 'bad' from a disable
+// message. Never sets 'good'. Keeps the original health_bad_since
+// when already bad; health_reason becomes the matched message's
+// subject, truncated to 120 chars. Returns the updated rows.
+async function markListingsBadForAddress(address, subject) {
+  const addr = String(address || "").trim().toLowerCase();
+  if (!addr) return [];
+  const reason = String(subject || "").slice(0, 120);
+  let rows;
   if (!USE_MEMORY_STORE) {
     const r = await dbPool.query(
-      "INSERT INTO market_listings (email, password, price, title, seller_gmail)" +
-        " VALUES ($1,$2,$3,$4,$5) RETURNING *",
-      [address, password, price, title || "", sellerGmail]
+      "SELECT * FROM market_listings WHERE LOWER(email) = $1 AND status = 'active'",
+      [addr]
+    );
+    rows = r.rows;
+  } else {
+    rows = [...mem.listings.values()].filter(
+      (x) => String(x.email || "").toLowerCase() === addr && x.status === "active"
+    );
+  }
+  const updated = [];
+  for (const row of rows) {
+    const badSince =
+      healthOf(row) === "bad" && row.health_bad_since ? row.health_bad_since : new Date();
+    updated.push(await updateListingHealth(row.id, "bad", badSince, reason));
+  }
+  return updated;
+}
+
+// Scan the latest saved messages for one address (most recent
+// first, capped) for disable keywords. Returns the subject of the
+// first matching message, or null when nothing matches. The memory
+// store has no saved_messages table, so it always returns null
+// there — the scan only runs where messages are actually saved
+// (Postgres).
+async function findDisableMessageSubject(address, limit) {
+  const addr = String(address || "").trim().toLowerCase();
+  if (!addr || USE_MEMORY_STORE) return null;
+  const r = await dbPool.query(
+    "SELECT subject, intro FROM saved_messages WHERE account_address = $1" +
+      " ORDER BY received_at DESC NULLS LAST, created_at DESC LIMIT $2",
+    [addr, limit]
+  );
+  for (const row of r.rows) {
+    if (disableKeywordMatch(row.subject, row.intro)) {
+      return row.subject || "";
+    }
+  }
+  return null;
+}
+
+function cleanIpProfileField(v) {
+  return typeof v === "string" ? v.trim().slice(0, 80) : "";
+}
+
+function cleanIpProfile(body) {
+  const b = body || {};
+  return {
+    ip: cleanIpProfileField(b.ip),
+    country: cleanIpProfileField(b.country),
+    city: cleanIpProfileField(b.city),
+    flag: cleanIpProfileField(b.flag),
+  };
+}
+
+// Set health + health_checked_at=now (+ health_bad_since) on one
+// listing; returns the updated row (null when missing).
+// `reason` controls health_reason, admin shape only:
+//   - health 'good' -> always cleared to '' (any transition to good
+//     clears the reason, whoever caused it);
+//   - health 'bad' + a string -> set to that string (keyword scan
+//     passes the matched subject; the manual toggle passes its
+//     marker);
+//   - health 'bad' + null/undefined -> keep the existing reason
+//     (the Mail.tm login check uses this, so a keyword reason is
+//     never overwritten by a plain login failure).
+async function updateListingHealth(id, health, badSince, reason) {
+  const n = Number(id);
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "UPDATE market_listings SET health = $1, health_checked_at = NOW(), health_bad_since = $2, " +
+        // $3 needs an explicit ::text cast: without it Postgres
+        // cannot infer the parameter type inside the CASE and the
+        // query fails with "could not determine data type of
+        // parameter $3" (42P08).
+        "health_reason = CASE WHEN $1 = 'good' THEN '' WHEN $3::text IS NULL THEN health_reason ELSE $3::text END " +
+        "WHERE id = $4 RETURNING *",
+      [health, badSince, reason === undefined ? null : reason, n]
+    );
+    return r.rows[0] || null;
+  }
+  const row = mem.listings.get(n);
+  if (!row) return null;
+  row.health = health;
+  row.health_checked_at = new Date().toISOString();
+  row.health_bad_since = badSince ? new Date(badSince).toISOString() : null;
+  if (health === "good") row.health_reason = "";
+  else if (reason !== undefined && reason !== null) row.health_reason = reason;
+  if (row.health_reason === undefined) row.health_reason = "";
+  return row;
+}
+
+// Bump health_checked_at only (health untouched). Used when a login
+// check could not run at all (Mail.tm unreachable), so an outage
+// never flips listings red and never hammers the upstream.
+async function touchListingHealthChecked(id) {
+  const n = Number(id);
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "UPDATE market_listings SET health_checked_at = NOW() WHERE id = $1 RETURNING *",
+      [n]
+    );
+    return r.rows[0] || null;
+  }
+  const row = mem.listings.get(n);
+  if (!row) return null;
+  row.health_checked_at = new Date().toISOString();
+  return row;
+}
+
+// Re-run the Mail.tm login for one listing and apply the result.
+// Login OK -> 'good' (bad_since cleared). Wrong credentials -> 'bad'
+// (bad_since kept when already bad, else now). Upstream unreachable
+// (mailTmLogin error starting "Mail.tm unreachable") -> health left
+// unchanged, only health_checked_at bumped.
+async function checkListingHealth(row) {
+  const login = await mailTmLogin(row.email, row.password);
+  if (!login.ok && String(login.error || "").indexOf("Mail.tm unreachable:") === 0) {
+    return await touchListingHealthChecked(row.id);
+  }
+  if (login.ok) {
+    return await updateListingHealth(row.id, "good", null);
+  }
+  const alreadyBad = healthOf(row) === "bad" && row.health_bad_since;
+  const badSince = alreadyBad ? row.health_bad_since : new Date();
+  return await updateListingHealth(row.id, "bad", badSince);
+}
+
+// Lazy red auto-delete: red listings older than 24h become
+// 'removed'. Red listings inside the 24h window stay visible (the
+// public list still returns them with health 'bad') so buyers see
+// the red flag before the listing disappears.
+async function expireRedListings() {
+  if (!USE_MEMORY_STORE) {
+    await dbPool.query(
+      "UPDATE market_listings SET status = 'removed' WHERE health = 'bad'" +
+        " AND health_bad_since < NOW() - INTERVAL '24 hours'" +
+        " AND status IN ('active','sold')"
+    );
+    return;
+  }
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  for (const row of mem.listings.values()) {
+    if (
+      healthOf(row) === "bad" &&
+      row.health_bad_since &&
+      Date.parse(row.health_bad_since) < cutoff &&
+      (row.status === "active" || row.status === "sold")
+    ) {
+      row.status = "removed";
+    }
+  }
+}
+
+// Admin-list stale re-check: listings whose health was last checked
+// over 1h ago (or never) get one fresh Mail.tm login each, updating
+// health/health_checked_at/health_bad_since as in the check
+// endpoint. Never runs on the public shop list fetch.
+async function recheckStaleListings() {
+  const staleMs = 60 * 60 * 1000;
+  const now = Date.now();
+  let rows;
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "SELECT * FROM market_listings WHERE status IN ('active','sold') ORDER BY created_at DESC"
+    );
+    rows = r.rows;
+  } else {
+    rows = [...mem.listings.values()].filter(
+      (x) => x.status === "active" || x.status === "sold"
+    );
+  }
+  for (const row of rows) {
+    const checkedAt = row.health_checked_at ? Date.parse(toIso(row.health_checked_at)) : NaN;
+    if (!Number.isNaN(checkedAt) && now - checkedAt < staleMs) continue;
+    try {
+      // v1.3 ADDITION D: deterministic order per listing — keyword
+      // scan FIRST, login check second. If a saved disable notice
+      // matches, the listing goes red (keeping the original
+      // bad_since) and the Mail.tm login is skipped for this pass.
+      // Otherwise the existing login check runs as before. A manual
+      // 'good' therefore stands until a new matching message is
+      // saved or the next stale re-check runs — and that re-check
+      // re-scans the OLD saved messages too, so an old disable
+      // notice still on file re-flags the listing then.
+      const badSubject = await findDisableMessageSubject(row.email, 20);
+      if (badSubject !== null) {
+        const alreadyBad = healthOf(row) === "bad" && row.health_bad_since;
+        const badSince = alreadyBad ? row.health_bad_since : new Date();
+        await updateListingHealth(row.id, "bad", badSince, String(badSubject).slice(0, 120));
+        continue;
+      }
+      await checkListingHealth(row);
+    } catch (err) {
+      // A failed check must never break the admin list fetch; the
+      // next fetch retries.
+      console.error("movmail-proxy: stale health re-check failed:", err.message);
+    }
+  }
+}
+
+async function createListing(address, password, price, title, sellerGmail, logo, token, ipProfile) {
+  const logoValue = cleanListingLogo(logo);
+  const tokenValue = cleanListingToken(token);
+  const profile = ipProfile || { ip: "", country: "", city: "", flag: "" };
+  // The Mail.tm login already succeeded before this call (else the
+  // handler returned 400), so a new listing starts healthy.
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "INSERT INTO market_listings (email, password, price, title, logo, token, seller_gmail, health, health_checked_at, health_bad_since, ip, country, city, flag)" +
+        " VALUES ($1,$2,$3,$4,$5,$6,$7,'good',NOW(),NULL,$8,$9,$10,$11) RETURNING *",
+      [
+        address,
+        password,
+        price,
+        title || "",
+        logoValue,
+        tokenValue,
+        sellerGmail,
+        profile.ip || "",
+        profile.country || "",
+        profile.city || "",
+        profile.flag || "",
+      ]
     );
     return r.rows[0];
   }
@@ -1057,8 +1446,18 @@ async function createListing(address, password, price, title, sellerGmail) {
     password,
     price,
     title: title || "",
+    logo: logoValue,
+    token: tokenValue,
     seller_gmail: sellerGmail,
     status: "active",
+    health: "good",
+    health_checked_at: new Date().toISOString(),
+    health_bad_since: null,
+    health_reason: "",
+    ip: profile.ip || "",
+    country: profile.country || "",
+    city: profile.city || "",
+    flag: profile.flag || "",
     created_at: new Date().toISOString(),
   };
   mem.listings.set(row.id, row);
@@ -1076,6 +1475,7 @@ async function getListing(id) {
 }
 
 async function listActiveListings() {
+  await expireRedListings();
   if (!USE_MEMORY_STORE) {
     const r = await dbPool.query(
       "SELECT * FROM market_listings WHERE status = 'active' ORDER BY created_at DESC"
@@ -1089,11 +1489,19 @@ async function listActiveListings() {
 }
 
 async function listAllListings() {
+  await expireRedListings();
+  await recheckStaleListings();
   if (!USE_MEMORY_STORE) {
-    const r = await dbPool.query("SELECT * FROM market_listings ORDER BY created_at DESC");
+    // 'removed' listings (manual remove, or red auto-delete after
+    // 24h) are gone from the admin list too — the remove endpoint
+    // still returns the removed row itself as confirmation.
+    const r = await dbPool.query(
+      "SELECT * FROM market_listings WHERE status <> 'removed' ORDER BY created_at DESC"
+    );
     return r.rows.map(listingAdminFromRow);
   }
   return [...mem.listings.values()]
+    .filter((x) => x.status !== "removed")
     .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
     .map(listingAdminFromRow);
 }
@@ -1112,12 +1520,12 @@ async function removeListing(id) {
   return row;
 }
 
-async function createOrder(listing, buyerGmail, method, imageDataUrl) {
+async function createOrder(listing, buyerGmail, method, imageDataUrl, amountPaid) {
   if (!USE_MEMORY_STORE) {
     const r = await dbPool.query(
-      "INSERT INTO market_orders (listing_id, buyer_gmail, price, method, image_data_url)" +
-        " VALUES ($1,$2,$3,$4,$5) RETURNING *",
-      [listing.id, buyerGmail, listing.price, method, imageDataUrl || ""]
+      "INSERT INTO market_orders (listing_id, buyer_gmail, price, amount_paid, method, image_data_url)" +
+        " VALUES ($1,$2,$3,$4,$5,$6) RETURNING *",
+      [listing.id, buyerGmail, listing.price, amountPaid, method, imageDataUrl || ""]
     );
     return r.rows[0];
   }
@@ -1126,6 +1534,7 @@ async function createOrder(listing, buyerGmail, method, imageDataUrl) {
     listing_id: listing.id,
     buyer_gmail: buyerGmail,
     price: Number(listing.price),
+    amount_paid: amountPaid,
     method,
     image_data_url: imageDataUrl || "",
     status: "pending",
@@ -1703,13 +2112,18 @@ async function handleAdminReceiptDecide(req, res, id, action) {
 const MARKET_IMAGE_MAX_CHARS = 5 * 1024 * 1024; // ~5MB data URL, same as receipts
 
 async function handleMarketListingsCreate(req, res) {
-  const body = await readJsonBody(req, res, 64 * 1024);
+  // 6MB body (same as orders): a listing logo is a data URI and would
+  // never fit the old 64KB cap.
+  const body = await readJsonBody(req, res, 6 * 1024 * 1024);
   if (!body) return;
   const address = String(body.address || "").trim().toLowerCase();
   const password = String(body.password || "");
   const price = Number(body.price);
   const title = body.title ? String(body.title) : "";
   const sellerGmail = String(body.sellerGmail || "").trim().toLowerCase();
+  const logoDataUrl = typeof body.logoDataUrl === "string" ? body.logoDataUrl : "";
+  const token = cleanListingToken(body.token);
+  const ipProfile = cleanIpProfile(body);
   if (!address || address.indexOf("@") === -1 || !password) {
     sendJson(res, 400, { ok: false, error: "address and password required" });
     return;
@@ -1722,16 +2136,20 @@ async function handleMarketListingsCreate(req, res) {
     sendJson(res, 400, { ok: false, error: "sellerGmail required" });
     return;
   }
+  if (logoDataUrl.length > MARKET_IMAGE_MAX_CHARS) {
+    sendJson(res, 413, { ok: false, error: "listing logo too large (max ~5MB)" });
+    return;
+  }
   // Verify the seller controls the mailbox before listing it.
   const login = await mailTmLogin(address, password);
   if (!login.ok) {
     sendJson(res, 400, { ok: false, error: login.error });
     return;
   }
-  const row = await createListing(address, password, price, title, sellerGmail);
+  const row = await createListing(address, password, price, title, sellerGmail, logoDataUrl, token, ipProfile);
   sendJson(res, 200, {
     ok: true,
-    listing: { id: row.id, maskedEmail: maskEmail(row.email), price: Number(row.price), title: row.title || "" },
+    listing: listingPublicFromRow(row),
   });
 }
 
@@ -1746,6 +2164,7 @@ async function handleMarketOrdersCreate(req, res) {
   const gmail = String(body.gmail || "").trim().toLowerCase();
   const method = String(body.method || "").trim().toLowerCase();
   const imageDataUrl = typeof body.imageDataUrl === "string" ? body.imageDataUrl : "";
+  const amountPaid = Number(body.amountPaid);
   if (!Number.isInteger(listingId)) {
     sendJson(res, 400, { ok: false, error: "listingId required" });
     return;
@@ -1766,14 +2185,26 @@ async function handleMarketOrdersCreate(req, res) {
     sendJson(res, 413, { ok: false, error: "receipt image too large (max ~5MB)" });
     return;
   }
+  // v1.3: the amount the buyer actually paid is required and must be
+  // a positive number.
+  if (!Number.isFinite(amountPaid) || amountPaid <= 0) {
+    sendJson(res, 400, { ok: false, error: "amountPaid must be a number greater than 0" });
+    return;
+  }
   const listing = await getListing(listingId);
   if (!listing || listing.status !== "active") {
     sendJson(res, 400, { ok: false, error: "listing not available" });
     return;
   }
+  // v1.3: red (health 'bad') listings cannot be bought. Legacy rows
+  // with NULL health behave as good (healthOf defaults to 'good').
+  if (healthOf(listing) === "bad") {
+    sendJson(res, 400, { ok: false, error: "listing unavailable (health check failed)" });
+    return;
+  }
   // Price comes from the listing server-side; a client-sent price is
   // never trusted.
-  const order = await createOrder(listing, gmail, method, imageDataUrl);
+  const order = await createOrder(listing, gmail, method, imageDataUrl, amountPaid);
   sendJson(res, 200, { ok: true, orderId: order.id, status: "pending" });
 }
 
@@ -1812,7 +2243,19 @@ async function handleMarketRestore(req, res) {
     sendJson(res, 400, { ok: false, error: login.error });
     return;
   }
-  sendJson(res, 200, { ok: true, token: login.token, accountId: login.id, address: listing.email });
+  sendJson(res, 200, {
+    ok: true,
+    token: login.token,
+    accountId: login.id,
+    address: listing.email,
+    // v1.3: the bought mailbox's logo + IP profile travel with it so
+    // the frontend can adopt them permanently on Restore.
+    logo: listing.logo || "",
+    ip: listing.ip || "",
+    country: listing.country || "",
+    city: listing.city || "",
+    flag: listing.flag || "",
+  });
 }
 
 async function handleAdminMarketListingsList(req, res) {
@@ -1820,13 +2263,18 @@ async function handleAdminMarketListingsList(req, res) {
 }
 
 async function handleAdminMarketListingsCreate(req, res) {
-  const body = await readJsonBody(req, res, 64 * 1024);
+  // 6MB body (same as seller create): a listing logo is a data URI and
+  // would never fit the old 64KB cap.
+  const body = await readJsonBody(req, res, 6 * 1024 * 1024);
   if (!body) return;
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
   const price = Number(body.price);
   const title = body.title ? String(body.title) : "";
   const sellerGmail = String(body.sellerGmail || "").trim().toLowerCase() || "admin";
+  const logoDataUrl = typeof body.logoDataUrl === "string" ? body.logoDataUrl : "";
+  const token = cleanListingToken(body.token);
+  const ipProfile = cleanIpProfile(body);
   if (!email || email.indexOf("@") === -1 || !password) {
     sendJson(res, 400, { ok: false, error: "email and password required" });
     return;
@@ -1835,12 +2283,16 @@ async function handleAdminMarketListingsCreate(req, res) {
     sendJson(res, 400, { ok: false, error: "price must be a number greater than 0" });
     return;
   }
+  if (logoDataUrl.length > MARKET_IMAGE_MAX_CHARS) {
+    sendJson(res, 413, { ok: false, error: "listing logo too large (max ~5MB)" });
+    return;
+  }
   const login = await mailTmLogin(email, password);
   if (!login.ok) {
     sendJson(res, 400, { ok: false, error: login.error });
     return;
   }
-  const row = await createListing(email, password, price, title, sellerGmail);
+  const row = await createListing(email, password, price, title, sellerGmail, logoDataUrl, token, ipProfile);
   sendJson(res, 200, { ok: true, listing: listingAdminFromRow(row) });
 }
 
@@ -1851,6 +2303,55 @@ async function handleAdminMarketListingRemove(req, res, id) {
     return;
   }
   sendJson(res, 200, { ok: true, listing: listingAdminFromRow(row) });
+}
+
+// v1.3: re-run the Mail.tm login for one listing and apply the
+// result (good on success, bad on wrong credentials, unchanged on
+// upstream outage). Returns the updated listing (admin shape).
+async function handleAdminMarketListingCheck(req, res, id) {
+  const listing = await getListing(id);
+  if (!listing) {
+    sendJson(res, 404, { ok: false, error: "listing not found" });
+    return;
+  }
+  const updated = await checkListingHealth(listing);
+  sendJson(res, 200, { ok: true, listing: listingAdminFromRow(updated) });
+}
+
+// v1.3: manual health override. Setting 'bad' starts the 24h red
+// clock (keeps the original bad_since when already bad); setting
+// 'good' clears it.
+async function handleAdminMarketListingHealth(req, res, id) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  const health = String(body.health || "").trim().toLowerCase();
+  if (health !== "good" && health !== "bad") {
+    sendJson(res, 400, { ok: false, error: 'health must be "good" or "bad"' });
+    return;
+  }
+  const listing = await getListing(id);
+  if (!listing) {
+    sendJson(res, 404, { ok: false, error: "listing not found" });
+    return;
+  }
+  let badSince = null;
+  if (health === "bad") {
+    badSince =
+      healthOf(listing) === "bad" && listing.health_bad_since
+        ? listing.health_bad_since
+        : new Date();
+  }
+  // v1.3 D: a manual toggle to 'bad' records its marker as the
+  // reason; a toggle to 'good' clears the reason (see
+  // updateListingHealth). A manual 'good' stands until a new
+  // matching message is saved or the next stale re-check runs.
+  const updated = await updateListingHealth(
+    listing.id,
+    health,
+    badSince,
+    health === "bad" ? "Manual: marked bad by admin" : null
+  );
+  sendJson(res, 200, { ok: true, listing: listingAdminFromRow(updated) });
 }
 
 async function handleAdminMarketOrdersList(req, res) {
@@ -1901,6 +2402,10 @@ async function handleApi(req, res, url) {
       if (req.method === "POST" && p === "/api/admin/market/listings") return handleAdminMarketListingsCreate(req, res);
       const mMktList = /^\/api\/admin\/market\/listings\/(\d+)\/remove$/.exec(p);
       if (req.method === "POST" && mMktList) return handleAdminMarketListingRemove(req, res, mMktList[1]);
+      const mMktCheck = /^\/api\/admin\/market\/listings\/(\d+)\/check$/.exec(p);
+      if (req.method === "POST" && mMktCheck) return handleAdminMarketListingCheck(req, res, mMktCheck[1]);
+      const mMktHealth = /^\/api\/admin\/market\/listings\/(\d+)\/health$/.exec(p);
+      if (req.method === "POST" && mMktHealth) return handleAdminMarketListingHealth(req, res, mMktHealth[1]);
       if (req.method === "GET" && p === "/api/admin/market/orders") return handleAdminMarketOrdersList(req, res);
       const mMktOrd = /^\/api\/admin\/market\/orders\/(\d+)\/(approve|reject)$/.exec(p);
       if (req.method === "POST" && mMktOrd) return handleAdminMarketOrderDecide(req, res, mMktOrd[1], mMktOrd[2]);
@@ -2014,7 +2519,14 @@ const server = http.createServer((req, res) => {
 
   // Accounts / admin API (served locally, not proxied)
   if (url.pathname.startsWith("/api/")) {
-    handleApi(req, res, url);
+    // Hardening (2026-11-26): handleApi returns handler promises without
+    // awaiting them, so an async DB error inside a handler would reject
+    // unhandled and crash the whole proxy process. Catch it here and
+    // answer 500 instead of dying.
+    handleApi(req, res, url).catch((err) => {
+      console.error("movmail-proxy: api failed:", err && err.message ? err.message : err);
+      try { if (!res.headersSent) sendJson(res, 500, { error: "internal error" }); } catch (_) {}
+    });
     return;
   }
 
