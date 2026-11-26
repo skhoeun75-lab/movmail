@@ -878,7 +878,7 @@ function listingPill(st) {
 }
 function renderListings() {
   $('listingsList').innerHTML = listingsCache.map(function (l) {
-    var removeBtn = l.status === 'active'
+    var removeBtn = (l.status === 'active' || l.status === 'sold')
       ? '<button class="btn btn-danger" type="button" data-listing-remove="' + esc(l.id) + '">' + esc(t('remove')) + '</button>'
       : '';
     return '<div class="listing-row status-' + esc(l.status) + '" data-listing-id="' + esc(l.id) + '">'
