@@ -358,7 +358,7 @@
 
       /* ---------- Reader modal ---------- */
       .overlay{
-        position:fixed;inset:0;background:rgba(8,14,11,.62);z-index:60;
+        position:fixed;inset:0;background:rgba(8,14,11,.62);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:60;
         display:none;align-items:flex-end;justify-content:center;
       }
       .overlay.open{display:flex}
@@ -454,7 +454,7 @@
 
       /* ---------- Mini modal (save / edit prompts) ---------- */
       .mini-overlay{
-        position:fixed;inset:0;background:rgba(8,14,11,.55);z-index:75;
+        position:fixed;inset:0;background:rgba(8,14,11,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:75;
         display:none;align-items:center;justify-content:center;padding:20px;
       }
       .mini-overlay.open{display:flex}
@@ -484,6 +484,7 @@
         border-radius:16px;box-shadow:var(--shadow-lg);
         display:none;flex-direction:column;overflow:hidden;
         max-height:82vh;
+        backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
       }
       .float-panel.open{display:flex}
       /* Compact window on phones: never taller than 62% of the screen,
@@ -567,7 +568,7 @@
          lift the Upgrade button above it so the two never overlap,
          even on a 360px screen. */
       body.pill-open .upgrade-fab{bottom:calc(78px + env(safe-area-inset-bottom,0px))}
-      .upgrade-overlay{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.35);display:none}
+      .upgrade-overlay{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.35);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);display:none}
       .upgrade-overlay.open{display:block}
       .upgrade-popup{
         position:fixed;z-index:81;right:14px;bottom:calc(16px + env(safe-area-inset-bottom,0px));
@@ -618,6 +619,7 @@
         max-height:232px;overflow-y:auto;background:var(--surface);color:var(--ink);
         border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-lg);
         display:none;padding:4px;
+        backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
       }
       .country-dropdown.open{display:block}
       .country-option{
@@ -678,6 +680,7 @@
         position:fixed;z-index:70;top:64px;right:14px;width:320px;max-width:92vw;max-height:82vh;
         background:var(--surface);color:var(--ink);border:1px solid var(--border);
         border-radius:16px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;overflow:hidden;
+        backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
       }
       .profile-panel.open{display:flex}
       .profile-head{display:flex;gap:12px;align-items:center;padding:16px;border-bottom:1px solid var(--border);background:var(--surface-2)}
@@ -710,6 +713,7 @@
         position:fixed;z-index:70;top:64px;right:14px;width:320px;max-width:92vw;max-height:82vh;
         background:var(--surface);color:var(--ink);border:1px solid var(--border);
         border-radius:16px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;overflow:hidden;
+        backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
       }
       .bell-panel.open{display:flex}
       .bell-section{margin-bottom:4px}
@@ -748,6 +752,50 @@
       .success-modal{text-align:center}
       .success-check{width:64px;height:64px;border-radius:50%;background:#1e9e6a;color:#fff;font-size:34px;font-weight:800;display:flex;align-items:center;justify-content:center;margin:6px auto 14px}
       .success-modal p{margin:0 0 16px;color:var(--muted);font-size:14.5px}
+
+      /* ---------- Quota countdown line (small, calm — never a big toast) ---------- */
+      .quota-line{display:none;margin-top:12px;font-size:13.5px;color:var(--muted);text-align:center}
+      .quota-line.show{display:block}
+      .quota-line b{color:var(--ink)}
+      /* ---------- 3D avatar picker ---------- */
+      .avatar-pick{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+      .avatar-opt{position:relative;width:64px;height:64px;border-radius:50%;border:2px solid var(--border);background:var(--surface-2);padding:0;overflow:hidden;cursor:pointer;min-height:64px;flex:none}
+      .avatar-opt img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
+      .avatar-opt.selected{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+      .avatar-fallback{width:100%;height:100%;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px}
+      .avatar-btn img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
+      .avatar-btn{overflow:hidden}
+      .profile-avatar-big{overflow:hidden}
+      .profile-avatar-big img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
+      /* ---------- Redeem refresh code ---------- */
+      .redeem-box{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--surface-2)}
+      .redeem-box>label{display:block;font-size:13.5px;font-weight:700;margin-bottom:6px}
+      .redeem-input-row{display:flex;gap:8px}
+      .redeem-input-row input{flex:1;min-width:0;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font:inherit;font-size:15px;background:var(--surface);color:var(--ink);text-transform:uppercase}
+      .redeem-status{margin-top:8px;font-size:13.5px;font-weight:600}
+      .redeem-status.err{color:var(--red)}
+      .redeem-disabled-row b{color:var(--red)}
+      /* ---------- Payment (KHQR / USDT) ---------- */
+      .pay-methods{display:flex;gap:8px}
+      .pay-method-btn{flex:1;justify-content:center}
+      .pay-card{border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;background:var(--surface-2)}
+      .pay-card img{max-width:200px;width:100%;border-radius:8px;background:#fff}
+      .pay-card-name{font-weight:800;font-size:17px;margin-top:10px;letter-spacing:.5px}
+      .pay-card-price{font-size:26px;font-weight:800;color:var(--accent-ink);margin:4px 0}
+      .pay-card-note{font-size:13.5px;color:var(--muted);margin-top:6px}
+      .pay-addr{font-size:12.5px;word-break:break-all;margin:8px 0;overflow-wrap:anywhere}
+      .pay-plan-line{font-size:14.5px}
+      .pay-price-top{color:var(--accent-ink);font-size:17px}
+      .pay-receipt>label{display:block;font-size:13.5px;font-weight:700;margin-bottom:6px}
+      .pay-receipt input[type="file"]{width:100%;margin-bottom:10px;font-size:14px}
+      .pay-sent{border:1px solid var(--accent);background:var(--accent-soft);border-radius:12px;padding:14px}
+      .pay-sent-title{font-weight:800;color:var(--accent-ink);font-size:15.5px}
+      .pay-sent p{font-size:13.5px;color:var(--muted);margin:8px 0 0}
+      /* ---------- Blocked account ---------- */
+      .blocked-lock{width:72px;height:72px;margin:4px auto 10px;display:block}
+      /* ---------- Instructions live at the very bottom (footer) ---------- */
+      .footer-help{text-align:left;max-width:1020px;margin:0 auto 26px}
+      .footer-help section.block{margin-top:30px}
 
       /* ---------- Mobile layout: no horizontal overflow on phones ---------- */
       html,body{overflow-x:clip}
@@ -826,7 +874,7 @@
         </div>
         <div class="profile-slot" id="profileSlot">
           <button type="button" class="bell-btn" id="bellBtn" data-i18n-aria="bellTitle" aria-label="Notifications"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="bell-badge" id="bellBadge">10</span></button>
-          <button type="button" class="avatar-btn" id="avatarBtn" hidden aria-label="Profile"><span id="avatarInitials">?</span></button>
+          <button type="button" class="avatar-btn" id="avatarBtn" hidden aria-label="Profile"><img id="avatarImg" alt="" hidden /><span id="avatarInitials">?</span></button>
           <button type="button" class="btn pill profile-signup-btn" id="headerSignupBtn"><span data-i18n="signUpBtn">ចុះឈ្មោះ</span></button>
         </div>
       </div>
@@ -886,6 +934,8 @@
             <span data-i18n="delete">លុប</span>
           </button>
         </div>
+
+        <div class="quota-line" id="quotaLine" role="status" hidden><span data-i18n="quotaResetLine">កូតាថ្ងៃនេះអស់ហើយ — នឹងចាប់ផ្តើមថ្មីក្នុង</span> <b class="mono" id="quotaCountdown">--:--:--</b></div>
 
         <div class="qr-panel" id="qrPanel">
           <div class="qr-holder" id="qrHolder"></div>
@@ -953,6 +1003,10 @@
         </div>
       </div>
 
+    </main>
+
+    <footer>
+      <div class="footer-help" id="footerHelp">
       <!-- ===== How to use ===== -->
       <section class="block" id="how">
         <h2 data-i18n="howTitle">របៀបប្រើប្រាស់</h2>
@@ -1042,9 +1096,7 @@
           <div class="faq-body"><p data-i18n-html="faqA5">អ៊ីមែលចាស់ និងសារទាំងអស់របស់វានឹងត្រូវបោះបង់ ហើយអ្នកមិនអាចត្រឡប់ទៅមើលវិញបានទេ។ ដូច្នេះសូមប្រាកដថាអ្នកបានយកលេខកូដ ឬព័ត៌មានដែលត្រូវការរួចរាល់ មុននឹងប្តូរ។</p></div>
         </details>
       </section>
-    </main>
-
-    <footer>
+      </div>
       <p><b>MovMail.com</b> — <span data-i18n="footerP1">អ៊ីមែលបណ្តោះអាសន្នសម្រាប់ការចុះឈ្មោះសាកល្បង និងការពារឯកជនភាព</span></p>
       <p data-i18n="footerP2">ប្រអប់សារដំណើរការដោយ Mail.tm API · សារត្រូវបានលុបដោយស្វ័យប្រវត្តិបន្ទាប់ពីផុតកំណត់</p>
     </footer>
@@ -1115,7 +1167,7 @@
           <span class="spacer"></span>
           <button class="panel-close" id="upgradeClose" aria-label="Close">✕</button>
         </div>
-        <div class="upgrade-body">
+        <div class="upgrade-body" id="upgradePlansBody">
           <button type="button" class="plan-option selected" data-plan="free">
             <span class="plan-head"><span data-i18n="planFree">Free</span><span class="plan-price">$0</span></span>
             <span class="plan-feats">
@@ -1148,6 +1200,38 @@
               <span class="plan-feat" data-i18n="featAllMonthly">គ្រប់យ៉ាងនៅក្នុង Pro ប្រចាំខែ</span>
             </span>
           </button>
+        </div>
+        <div class="upgrade-body" id="paymentView" hidden>
+          <button type="button" class="btn-sm" id="payBackBtn">← <span data-i18n="backBtn">ត្រឡប់</span></button>
+          <div class="pay-plan-line"><span data-i18n="payPlanLabel">កញ្ចប់</span>: <b id="payPlanName">—</b> · <b id="payPlanPrice" class="pay-price-top">$2.99</b></div>
+          <div class="pay-methods">
+            <button type="button" class="btn pay-method-btn" id="payKhqrBtn">🇰🇭 KHQR</button>
+            <button type="button" class="btn pay-method-btn" id="payUsdtBtn">QR USDT</button>
+          </div>
+          <div class="pay-card" id="payKhqrCard" hidden>
+            <img src="khqr.png" alt="KHQR" id="payKhqrImg" onerror="this.style.display='none'" />
+            <div class="pay-card-name">YEM SOKHOEUN</div>
+            <div class="pay-card-price" id="payKhqrPrice">$2.99</div>
+            <div class="pay-card-note" data-i18n="payKhqrNote">ស្កេន KHQR នេះដើម្បីទូទាត់តាមតម្លៃកញ្ចប់ខាងលើ</div>
+          </div>
+          <div class="pay-card" id="payUsdtCard" hidden>
+            <img src="usdt-qr.png" alt="USDT QR" id="payUsdtImg" onerror="this.style.display='none'" />
+            <div class="pay-card-price" id="payUsdtPrice">$2.99</div>
+            <div class="pay-addr mono" id="payUsdtAddr">TPHu2Z45PZ9xUB7AzqMehWKv72HysE9Vzd</div>
+            <button type="button" class="btn-sm primary" id="payCopyAddrBtn" data-i18n="payCopyAddress">ចម្លងអាសយដ្ឋាន</button>
+            <div class="pay-card-note">TRC20 only · Min &gt;0.01 USDT</div>
+            <div class="pay-card-note" data-i18n="payEnterAmount">សូមបញ្ចូលចំនួនទឹកប្រាក់ដោយខ្លួនឯង — តាមតម្លៃកញ្ចប់ខាងលើ</div>
+          </div>
+          <div class="pay-receipt" id="payReceiptBox" hidden>
+            <label for="payReceiptInput" data-i18n="payUploadReceipt">បង្ហោះរូបថតវិក្កយបត្រទូទាត់</label>
+            <input type="file" id="payReceiptInput" accept="image/*" />
+            <button type="button" class="btn primary" id="paySendBtn" data-i18n="paySend">ផ្ញើទៅ Admin</button>
+            <div class="redeem-status" id="payStatus" hidden></div>
+          </div>
+          <div class="pay-sent" id="paySentBox" hidden>
+            <div class="pay-sent-title">✓ <span data-i18n="paySent">បានផ្ញើ — សូមរង់ចាំក្នុងរយៈពេល 24 ម៉ោង</span></div>
+            <p data-i18n="paySentNote">Admin ជាធម្មតាអនុម័តក្នុងរយៈពេល 4–5 នាទី, យឺតបំផុត 1 ម៉ោង។ សំណើនេះនឹងផុតកំណត់បន្ទាប់ពី 24 ម៉ោងបើមិនបានអនុម័ត។</p>
+          </div>
         </div>
       </div>
     </div>
@@ -1208,6 +1292,8 @@
           <input type="password" id="authPassword" maxlength="80" autocomplete="new-password" />
           <label for="authPassword2" data-i18n="confirmPasswordLabel">បញ្ជាក់ពាក្យសម្ងាត់</label>
           <input type="password" id="authPassword2" maxlength="80" autocomplete="new-password" />
+          <label data-i18n="chooseAvatar">ជ្រើសរើសរូបភាព</label>
+          <div class="avatar-pick" id="authAvatarPick" role="radiogroup" aria-label="Avatar"></div>
         </div>
         <div id="authSigninFields" hidden>
           <label for="authEmailIn" data-i18n="emailLabel">អ៊ីមែល</label>
@@ -1234,10 +1320,22 @@
       </div>
     </div>
 
+    <!-- ===== Redeem success ===== -->
+    <div class="mini-overlay" id="redeemSuccessOverlay" role="dialog" aria-modal="true">
+      <div class="mini-modal success-modal">
+        <div class="success-check" aria-hidden="true">✓</div>
+        <h3 data-i18n="redeemSuccessTitle">ជោគជ័យ — បានទទួលអំណោយហើយ</h3>
+        <p id="redeemSuccessText"></p>
+        <div class="mini-actions" style="justify-content:center">
+          <button class="btn primary" id="redeemSuccessClose" data-i18n="okBtn">យល់ព្រម</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ===== Profile panel (small, top-right) ===== -->
     <div class="profile-panel" id="profilePanel" role="dialog" aria-modal="false" aria-label="Profile">
       <div class="profile-head">
-        <span class="profile-avatar-big" id="profileAvatarBig">?</span>
+        <span class="profile-avatar-big" id="profileAvatarBig"><img id="profileAvatarImg" alt="" hidden /><span id="profileAvatarInitials">?</span></span>
         <div style="min-width:0">
           <div class="profile-name" id="profileName">—</div>
           <div class="profile-id mono" id="profileId">—</div>
@@ -1249,6 +1347,24 @@
         <div class="profile-row"><span data-i18n="emailLabel">អ៊ីមែល</span><b id="profileEmail">—</b></div>
         <div class="profile-row"><span data-i18n="registeredLabel">ចុះឈ្មោះនៅ</span><b id="profileDate">—</b></div>
         <div class="profile-row"><span data-i18n="planLabel">គម្រោង</span><b id="profilePlan">Free</b></div>
+        <div class="profile-row"><span data-i18n="ipLabel">IP</span><b id="profileIp">—</b></div>
+        <div class="profile-row"><span data-i18n="quotaToday">កូតាថ្ងៃនេះ</span><b id="profileQuotaText">—</b></div>
+        <div class="profile-row" id="profileRedeemedRow" hidden><span data-i18n="redeemedExtra">បន្ថែមពីកូដ</span><b id="profileRedeemedAmount">+0</b></div>
+        <div class="profile-row" id="profileResetRow" hidden><span data-i18n="quotaResetsIn">ចាប់ផ្តើមថ្មីក្នុង</span><b class="mono" id="profileResetCountdown">--:--:--</b></div>
+        <div class="profile-row" id="profilePaymentRow" hidden><span data-i18n="paymentStatusLabel">ការទូទាត់</span><b id="profilePaymentStatus">—</b></div>
+        <div class="profile-row redeem-disabled-row" id="redeemDisabledRow" hidden><span data-i18n="redeemCodeDisabled">កូដត្រូវបានបិទ</span><b id="redeemDisabledCode">—</b></div>
+        <div class="redeem-box">
+          <label for="redeemCodeInput" data-i18n="redeemTitle">Redeem Refresh Code</label>
+          <div class="redeem-input-row">
+            <input type="text" id="redeemCodeInput" maxlength="8" placeholder="XXXXXXXX" autocomplete="off" />
+            <button type="button" class="btn-sm primary" id="redeemScanBtn" data-i18n="redeemScan">Scan</button>
+          </div>
+          <div class="redeem-status" id="redeemStatus" hidden></div>
+        </div>
+        <div>
+          <div class="profile-row" style="margin-bottom:6px"><span data-i18n="chooseAvatar">រូបភាព</span></div>
+          <div class="avatar-pick" id="profileAvatarPick" role="radiogroup" aria-label="Avatar"></div>
+        </div>
         <button type="button" class="btn primary" id="profileUpgradeBtn"><span aria-hidden="true">★</span> <span data-i18n="upgradeBtn">Upgrade</span></button>
         <div class="profile-row"><span data-i18n="languageRow">ភាសា</span><span class="seg" id="profileLangSeg"><button type="button" data-lang="km">ខ្មែរ</button><button type="button" data-lang="en">EN</button></span></div>
         <div class="profile-row"><span data-i18n="themeRow">រចនាប័ទ្ម</span><span class="seg" id="profileThemeSeg"><button type="button" data-theme="light" data-i18n="themeDay">ថ្ងៃ</button><button type="button" data-theme="dark" data-i18n="themeNight">យប់</button><button type="button" data-theme="auto" data-i18n="themeAuto">ស្វ័យប្រវត្តិ</button></span></div>
@@ -1269,6 +1385,8 @@
         <div class="bell-section">
           <div class="profile-row"><span data-i18n="quotaToday">កូតាថ្ងៃនេះ</span><b id="bellQuotaText">—</b></div>
           <div class="quota-bar"><div class="quota-fill" id="bellQuotaFill" style="width:0%"></div></div>
+          <div class="profile-row" id="bellRedeemedRow" hidden><span data-i18n="redeemedExtra">បន្ថែមពីកូដ</span><b id="bellRedeemedAmount">+0</b></div>
+          <div class="profile-row" id="bellResetRow" hidden><span data-i18n="quotaResetsIn">ចាប់ផ្តើមថ្មីក្នុង</span><b class="mono" id="bellResetCountdown">--:--:--</b></div>
         </div>
         <div class="bell-section">
           <h4 data-i18n="notifSectionTitle">ការជូនដំណឹងថ្មីៗ</h4>
@@ -1281,6 +1399,18 @@
         <div class="bell-section prob-box">
           <div class="bell-section-title">⚠ <span data-i18n="problemsTitle">បញ្ហា</span></div>
           <div id="bellProblemsList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Blocked account (closed by admin) ===== -->
+    <div class="mini-overlay" id="blockedOverlay" role="alertdialog" aria-modal="true">
+      <div class="mini-modal" style="text-align:center">
+        <svg class="blocked-lock" viewBox="0 0 24 24" fill="none" stroke="#c0392b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1.4" fill="#c0392b" stroke="none"/></svg>
+        <h3 data-i18n="blockedTitle">គណនីនេះត្រូវបានបិទ</h3>
+        <p data-i18n="blockedText">គណនីរបស់អ្នកត្រូវបានបិទដោយ Admin ហើយមិនអាចប្រើ MovMail បានទៀតទេ។</p>
+        <div class="mini-actions" style="justify-content:center">
+          <button class="btn danger" id="blockedSignOutBtn" data-i18n="signOut">ចាកចេញ</button>
         </div>
       </div>
     </div>
@@ -1323,6 +1453,556 @@
         /* Free countries in the country picker: only these 5 are
            selectable on the Free plan. The other 43 are locked. */
         var FREE_COUNTRIES = ["Cambodia", "Singapore", "Thailand", "Vietnam", "United States"];
+
+        /* ================= Per-account data (namespaced by Gmail) =================
+           Every piece of user data — saved mailboxes, saved addresses,
+           daily use, notifications, problems, redeemed uses, pending
+           payment — lives in ONE bundle per Gmail:
+             movmail-data-<sha256(lowercase gmail)>
+           The key is a SHA-256 hex digest. Storage accessors below are
+           synchronous, so the digest is computed with an equivalent
+           synchronous SHA-256 implementation (byte-identical output to
+           crypto.subtle SHA-256; sign-in also verifies it against
+           crypto.subtle when available). Without a signed-in account
+           the "anon" bucket is used; sign-out clears it, so the next
+           person at the device sees a clean empty state (0 everything).
+           Legacy global keys (movmail-mailboxes etc.) are moved once
+           into the signed-in account's bundle by migrateLegacyData(). */
+        var activeAcctEmail = "";
+        var activeAcctSuffix = "";
+        function utf8Str(s){ try { return unescape(encodeURIComponent(s)); } catch(e){ return s; } }
+        function sha256HexSync(ascii){
+          function rr(v, a){ return (v >>> a) | (v << (32 - a)); }
+          var maxWord = Math.pow(2, 32), result = "";
+          var words = [], asciiBitLength = ascii.length * 8;
+          var hash = sha256HexSync.h = sha256HexSync.h || [], k = sha256HexSync.k = sha256HexSync.k || [];
+          var primeCounter = k.length, isComposite = {};
+          for (var candidate = 2; primeCounter < 64; candidate++){
+            if (!isComposite[candidate]){
+              for (var i = 0; i < 313; i += candidate) isComposite[i] = candidate;
+              hash[primeCounter] = (Math.pow(candidate, .5) * maxWord) | 0;
+              k[primeCounter++] = (Math.pow(candidate, 1 / 3) * maxWord) | 0;
+            }
+          }
+          ascii += "\x80";
+          while (ascii.length % 64 - 56) ascii += "\x00";
+          for (var i = 0; i < ascii.length; i++){
+            var j = ascii.charCodeAt(i);
+            if (j >> 8) return "";
+            words[i >> 2] |= j << ((3 - i) % 4) * 8;
+          }
+          words[words.length] = ((asciiBitLength / maxWord) | 0);
+          words[words.length] = (asciiBitLength);
+          for (var j = 0; j < words.length;){
+            var w = words.slice(j, j += 16), oldHash = hash;
+            hash = hash.slice(0, 8);
+            for (var i = 0; i < 64; i++){
+              var w15 = w[i - 15], w2 = w[i - 2], a = hash[0], e = hash[4];
+              var temp1 = hash[7]
+                + (rr(e, 6) ^ rr(e, 11) ^ rr(e, 25))
+                + ((e & hash[5]) ^ ((~e) & hash[6]))
+                + k[i]
+                + (w[i] = (i < 16) ? w[i] : (w[i - 16] + (rr(w15, 7) ^ rr(w15, 18) ^ (w15 >>> 3)) + w[i - 7] + (rr(w2, 17) ^ rr(w2, 19) ^ (w2 >>> 10))) | 0);
+              var temp2 = (rr(a, 2) ^ rr(a, 13) ^ rr(a, 22)) + ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
+              hash = [(temp1 + temp2) | 0].concat(hash);
+              hash[4] = (hash[4] + temp1) | 0;
+            }
+            for (var i = 0; i < 8; i++){ hash[i] = (hash[i] + oldHash[i]) | 0; }
+          }
+          for (var i = 0; i < 8; i++){
+            for (var j = 3; j + 1; j--){
+              var b = (hash[i] >> (j * 8)) & 255;
+              result += ((b < 16) ? 0 : "") + b.toString(16);
+            }
+          }
+          return result;
+        }
+        function acctSuffix(){
+          if (activeAcctSuffix) return activeAcctSuffix;
+          if (!activeAcctEmail) return "anon";
+          var h = sha256HexSync(utf8Str(activeAcctEmail));
+          return h || "anon";
+        }
+        function acctDataKey(){ return "movmail-data-" + acctSuffix(); }
+        function defaultAcctData(){
+          return {
+            mailboxes: [], addresses: [],
+            dailyUse: { date: localDateKey(), count: 0, total: 0 },
+            notifications: [], problems: [],
+            redeemedPerDay: 0, redeemedCodes: [], pendingPayment: null
+          };
+        }
+        /* Tamper guard: quota values that cannot be real (negative, or
+           far above any possible limit) are clamped and reported to
+           the admin API as a security event. The check runs on every
+           bundle read and reports at most once per type per session. */
+        var _secReported = {};
+        function validateAcctData(d){
+          if (!d || typeof d !== "object") return;
+          /* NOTE: the effective limit is computed from THIS bundle's
+             own (already validated) redeemed value — never via
+             getRedeemedPerDay()/acctData(), which would recurse. */
+          if (typeof d.redeemedPerDay !== "number" || isNaN(d.redeemedPerDay) || d.redeemedPerDay < 0 || d.redeemedPerDay > 1000){
+            if (!_secReported.redeem_tamper){
+              _secReported.redeem_tamper = true;
+              reportSecurityEvent("redeem_tamper", "redeemedPerDay=" + d.redeemedPerDay);
+            }
+            d.redeemedPerDay = Math.max(0, Math.min(1000, d.redeemedPerDay | 0));
+          }
+          var _plan = getCurrentPlan();
+          var _base = DAILY_LIMITS[_plan] || 10;
+          var eff = (_plan === "pro-yearly") ? Infinity : _base + (d.redeemedPerDay || 0);
+          var u = d.dailyUse;
+          if (u && typeof u === "object"){
+            var bad = (typeof u.count !== "number" || isNaN(u.count) || u.count < 0 ||
+              u.count > 100000 || (isFinite(eff) && u.count > eff + 1000));
+            if (bad){
+              if (!_secReported.quota_tamper){
+                _secReported.quota_tamper = true;
+                reportSecurityEvent("quota_tamper", "dailyUse.count=" + u.count);
+              }
+              u.count = Math.max(0, Math.min(isFinite(eff) ? eff : 0, u.count | 0));
+            }
+            if (typeof u.total !== "number" || isNaN(u.total) || u.total < 0) u.total = Math.max(0, u.count | 0);
+          }
+          if (!Array.isArray(d.mailboxes)) d.mailboxes = [];
+          if (!Array.isArray(d.addresses)) d.addresses = [];
+          if (!Array.isArray(d.notifications)) d.notifications = [];
+          if (!Array.isArray(d.problems)) d.problems = [];
+          if (!Array.isArray(d.redeemedCodes)) d.redeemedCodes = [];
+        }
+        function acctData(){
+          var d = defaultAcctData();
+          try {
+            var raw = localStorage.getItem(acctDataKey());
+            if (raw){
+              var o = JSON.parse(raw);
+              if (o && typeof o === "object"){
+                for (var k in d){ if (o[k] !== undefined) d[k] = o[k]; }
+              }
+            }
+          } catch(e) {}
+          validateAcctData(d);
+          return d;
+        }
+        function saveAcctData(d){ try { localStorage.setItem(acctDataKey(), JSON.stringify(d)); } catch(e) {} }
+        /* One-time migration: move the device's old global data into
+           the currently signed-in account's bundle, then delete the
+           global keys so the data is not visible to other accounts. */
+        function migrateLegacyData(){
+          if (!activeAcctEmail) return;
+          var d = acctData();
+          var empty = !d.mailboxes.length && !d.addresses.length &&
+            !(d.dailyUse && d.dailyUse.total) && !d.notifications.length &&
+            !d.problems.length && !d.redeemedPerDay;
+          if (!empty) return;
+          var moved = false;
+          function take(key, apply){
+            try {
+              var raw = localStorage.getItem(key);
+              if (!raw) return;
+              var v = JSON.parse(raw);
+              if (apply(v)) moved = true;
+            } catch(e) {}
+          }
+          take("movmail-mailboxes", function(v){ if (Array.isArray(v) && v.length){ d.mailboxes = v; return true; } return false; });
+          take("movmail-addresses", function(v){ if (Array.isArray(v) && v.length){ d.addresses = v; return true; } return false; });
+          take("movmail-daily-use", function(v){ if (v && typeof v === "object" && (v.total || v.count)){ d.dailyUse = v; return true; } return false; });
+          take("movmail-notifications", function(v){ if (Array.isArray(v) && v.length){ d.notifications = v; return true; } return false; });
+          take("movmail-problems", function(v){ if (Array.isArray(v) && v.length){ d.problems = v; return true; } return false; });
+          if (moved){
+            saveAcctData(d);
+            ["movmail-mailboxes", "movmail-addresses", "movmail-daily-use", "movmail-notifications", "movmail-problems"].forEach(function(k){
+              try { localStorage.removeItem(k); } catch(e) {}
+            });
+          }
+        }
+        function getRedeemedPerDay(){
+          var d = acctData();
+          return (d && typeof d.redeemedPerDay === "number") ? d.redeemedPerDay : 0;
+        }
+        function effectiveDailyLimit(plan){
+          var p = plan || getCurrentPlan();
+          if (p === "pro-yearly") return Infinity;
+          return dailyLimitFor(p) + getRedeemedPerDay();
+        }
+        /* ---------- proxy admin API (failover across both proxies) ----------
+           The /api/* endpoints live on the Node proxy, not on Mail.tm,
+           so only the two proxy bases are tried (never api.mail.tm).
+           A 429/5xx/network failure falls through to the next base. */
+        function apiAdmin(path, opts){
+          opts = opts || {};
+          function doFetch(base){
+            return fetch(base + path, {
+              method: opts.method || "GET",
+              headers: { "Accept": "application/json", "Content-Type": "application/json" },
+              body: opts.body ? JSON.stringify(opts.body) : undefined
+            }).then(function(res){
+              return res.json().catch(function(){ return null; }).then(function(data){
+                if (!res.ok){ var e = new Error("HTTP " + res.status); e.status = res.status; e.data = data; throw e; }
+                return data;
+              });
+            });
+          }
+          var bases = [PROXY, PROXY2], attempt = 0;
+          function tryNext(lastErr){
+            if (attempt >= bases.length) throw lastErr;
+            var base = bases[attempt++];
+            return doFetch(base).catch(function(err){
+              if ((!err || !err.status || err.status === 429 || err.status >= 500) && attempt < bases.length) return tryNext(err);
+              throw err;
+            });
+          }
+          return tryNext(null);
+        }
+        function reportSecurityEvent(type, detail){
+          if (_secReported["sent:" + type]) return;
+          _secReported["sent:" + type] = true;
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          apiAdmin("/api/security/event", { method: "POST", body: { gmail: p ? p.email : "", type: type, detail: String(detail || "") } }).catch(function(){});
+        }
+        function accountSyncPayload(){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p) return null;
+          var conn = "unknown";
+          try { if (navigator.connection && navigator.connection.effectiveType) conn = navigator.connection.effectiveType; } catch(e) {}
+          return {
+            gmail: p.email,
+            name: ((p.firstName || "") + " " + (p.lastName || "")).trim(),
+            country: (currentIp && currentIp.country) || selectedCountry || "",
+            ip: (currentIp && currentIp.ip) || "",
+            device: (navigator.userAgent || ""),
+            connection: conn
+          };
+        }
+        function applyServerAccount(data){
+          if (!data || typeof data !== "object") return;
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p) return;
+          var changed = false;
+          if (data.plan && (data.plan === "pro-monthly" || data.plan === "pro-yearly" || data.plan === "free") && p.plan !== data.plan){
+            p.plan = data.plan; changed = true;
+          }
+          if (typeof data.redeemedPerDay === "number" || typeof data.redeemed === "number"){
+            var r = (typeof data.redeemedPerDay === "number") ? data.redeemedPerDay : data.redeemed;
+            var d = acctData();
+            if (d.redeemedPerDay !== r){ d.redeemedPerDay = r; saveAcctData(d); }
+          }
+          if (data.paymentStatus === "approved" && (data.plan === "pro-monthly" || data.plan === "pro-yearly")){
+            p.plan = data.plan; changed = true;
+            var d2 = acctData();
+            if (d2.pendingPayment){ d2.pendingPayment = null; saveAcctData(d2); }
+          }
+          if (changed){ saveProfile(p); saveAccount(p); }
+          if (data.blocked) setBlocked(true);
+          updateBellBadge(); updateGenerateState(); updateQuotaLine();
+          if ($("profilePanel") && $("profilePanel").classList.contains("open")) renderProfileDynamic();
+        }
+        function syncAccountToServer(){
+          var payload = accountSyncPayload();
+          if (!payload) return Promise.resolve(null);
+          return apiAdmin("/api/accounts/upsert", { method: "POST", body: payload }).then(function(data){
+            applyServerAccount(data);
+            return data;
+          }).catch(function(){ return null; });
+        }
+        function refreshAccountFromServer(){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p) return Promise.resolve(null);
+          return apiAdmin("/api/accounts/me?gmail=" + encodeURIComponent(p.email)).then(function(data){
+            applyServerAccount(data);
+            return data;
+          }).catch(function(){ return null; });
+        }
+        /* ---------- blocked account ---------- */
+        /* True once the server's blocked check has answered (a network
+           failure counts as answered: "not blocked"). createAccount
+           waits for this before creating a mailbox for a signed-in
+           account, so a closed account never gets a fresh mailbox. */
+        var blockedKnown = false;
+        function setBlocked(on){
+          state.blocked = !!on;
+          var ov = $("blockedOverlay");
+          if (ov){
+            if (on) openAnimated(ov);
+            else closeAnimated(ov, null);
+          }
+          updateGenerateState();
+        }
+        function checkBlocked(){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p) return Promise.resolve(false);
+          return apiAdmin("/api/blocked?gmail=" + encodeURIComponent(p.email)).then(function(data){
+            blockedKnown = true;
+            var blocked = !!(data && (data.blocked === true || data.blocked === "true"));
+            setBlocked(blocked);
+            return blocked;
+          }).catch(function(){ blockedKnown = true; return false; });
+        }
+        /* ---------- midnight countdown (HH:MM:SS, ticks every second) ---------- */
+        function msUntilMidnight(){
+          var n = new Date(), m = new Date(n);
+          m.setHours(24, 0, 0, 0);
+          return m - n;
+        }
+        function fmtHMS(ms){
+          if (ms < 0) ms = 0;
+          var s = Math.floor(ms / 1000);
+          function p2(x){ return (x < 10 ? "0" : "") + x; }
+          return p2(Math.floor(s / 3600)) + ":" + p2(Math.floor(s % 3600 / 60)) + ":" + p2(s % 60);
+        }
+        /* The countdown is shown ONLY when the daily limit is used
+           up: in the bell panel, in the profile, and as one small
+           calm line under the mailbox card. Never a big toast. */
+        function updateQuotaLine(){
+          var limited = dailyLimitReached();
+          var line = $("quotaLine");
+          if (line){
+            line.hidden = !limited;
+            line.classList.toggle("show", limited);
+          }
+          var txt = fmtHMS(msUntilMidnight());
+          var q = $("quotaCountdown"); if (q) q.textContent = txt;
+          var b = $("bellResetCountdown"); if (b) b.textContent = txt;
+          var pr = $("profileResetCountdown"); if (pr) pr.textContent = txt;
+          var br = $("bellResetRow"); if (br) br.hidden = !limited;
+          var prr = $("profileResetRow"); if (prr) prr.hidden = !limited;
+        }
+        /* ---------- account switching (sign-in / sign-out) ---------- */
+        function switchAccount(email){
+          activeAcctEmail = email ? String(email).toLowerCase() : "";
+          activeAcctSuffix = "";
+          /* Verify the sync SHA-256 key against crypto.subtle when it
+             is available (same digest; the sync value stays in use). */
+          if (activeAcctEmail && window.crypto && crypto.subtle && crypto.subtle.digest && window.TextEncoder){
+            try {
+              crypto.subtle.digest("SHA-256", new TextEncoder().encode(activeAcctEmail)).then(function(buf){
+                var h = Array.prototype.map.call(new Uint8Array(buf), function(x){ return ("0" + x.toString(16)).slice(-2); }).join("");
+                if (h === sha256HexSync(utf8Str(activeAcctEmail))) activeAcctSuffix = h;
+              }).catch(function(){});
+            } catch(e) {}
+          }
+          if (activeAcctEmail) migrateLegacyData();
+          /* Clear the live temp-mail session: sign-out (or a new
+             sign-in) must never show the previous account's live
+             mailbox, inbox or IP profile. Saved data stays in that
+             account's bundle and comes back on its next sign-in. */
+          stopPolling();
+          if (state.createTimer){ clearTimeout(state.createTimer); state.createTimer = null; }
+          state.address = ""; state.password = ""; state.token = ""; state.accountId = "";
+          state.messages = []; state.failed = false; state.retrying = false;
+          state.retryCount = 0; state.creating = false;
+          savedState.messages = []; savedState.loaded = false; savedState.lastFetch = 0;
+          currentIp = null; heroDismissed = {};
+          addrText.textContent = "—";
+          addrText.classList.remove("loading");
+          statusText.textContent = "";
+          countdownText.textContent = "";
+          hideError();
+          if (!email){
+            /* Signed out: the anonymous bucket is wiped too, so the
+               page shows a clean empty state (0 everything). */
+            try { saveAcctData(defaultAcctData()); } catch(e) {}
+          }
+          renderMessages(); renderMailboxes(); updateBellBadge();
+          updateGenerateState(); updateIpLine(); updateQuotaLine();
+        }
+        /* Switch account but keep the live temp mailbox that was
+           generated while signed out (e.g. behind the sign-up gate),
+           so sign-up/sign-in never throws away the email on screen. */
+        function switchAccountKeepSession(email){
+          var keep = {
+            address: state.address, password: state.password, token: state.token,
+            accountId: state.accountId, createdAt: state.createdAt,
+            messages: state.messages, ip: currentIp
+          };
+          switchAccount(email);
+          if (keep.address && keep.token){
+            state.address = keep.address; state.password = keep.password;
+            state.token = keep.token; state.accountId = keep.accountId;
+            state.createdAt = keep.createdAt; state.messages = keep.messages || [];
+            if (keep.ip) currentIp = keep.ip;
+            addrText.textContent = state.address;
+            addrText.classList.remove("loading");
+            statusText.textContent = t("statusWaiting");
+            hideError();
+            setBusy(false);
+            buildQr();
+            startPolling();
+            rememberAddress();
+            fetchSavedMessages();
+            renderMessages();
+            updateIpLine();
+          } else {
+            createAccount();
+          }
+        }
+        /* ---------- 3D avatars (2 male, 2 female) ---------- */
+        var AVATARS = [
+          { id: "m1", file: "avatar-m1.png", labelKey: "avatarMale1" },
+          { id: "m2", file: "avatar-m2.png", labelKey: "avatarMale2" },
+          { id: "f1", file: "avatar-f1.png", labelKey: "avatarFemale1" },
+          { id: "f2", file: "avatar-f2.png", labelKey: "avatarFemale2" }
+        ];
+        var pendingAvatar = "";
+        function buildAvatarPicker(containerId, selectedId, onPick){
+          var c = $(containerId);
+          if (!c) return;
+          c.innerHTML = "";
+          AVATARS.forEach(function(av){
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "avatar-opt" + (av.id === selectedId ? " selected" : "");
+            b.setAttribute("role", "radio");
+            b.setAttribute("aria-checked", av.id === selectedId ? "true" : "false");
+            b.title = t(av.labelKey);
+            var img = document.createElement("img");
+            img.src = av.file;
+            img.alt = t(av.labelKey);
+            var fb = document.createElement("span");
+            fb.className = "avatar-fallback";
+            fb.style.display = "none";
+            fb.textContent = av.id.toUpperCase();
+            img.onerror = function(){ img.style.display = "none"; fb.style.display = "flex"; };
+            b.appendChild(img);
+            b.appendChild(fb);
+            b.addEventListener("click", function(){
+              onPick(av.id);
+              buildAvatarPicker(containerId, av.id, onPick);
+            });
+            c.appendChild(b);
+          });
+        }
+        /* ---------- redeem refresh code ---------- */
+        function markCodeDisabled(code){
+          var d = acctData();
+          d.redeemedCodes = d.redeemedCodes || [];
+          var found = false;
+          d.redeemedCodes.forEach(function(c){ if (c.code === code){ c.status = "disabled"; found = true; } });
+          if (!found) d.redeemedCodes.push({ code: code, amount: 0, status: "disabled", redeemedAt: new Date().toISOString() });
+          saveAcctData(d);
+        }
+        function renderRedeemUI(){
+          var d = acctData();
+          var r = d.redeemedPerDay || 0;
+          var br = $("bellRedeemedRow"); if (br) br.hidden = r <= 0;
+          var ba = $("bellRedeemedAmount"); if (ba) ba.textContent = "+" + r;
+          renderProfileDynamic();
+        }
+        function doRedeem(){
+          var input = $("redeemCodeInput"), status = $("redeemStatus");
+          var code = (input ? input.value : "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+          function showErr(key){
+            if (status){ status.textContent = t(key); status.className = "redeem-status err"; status.hidden = false; }
+          }
+          if (!code){ showErr("redeemNeedCode"); return; }
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p){ showErr("redeemNeedSignin"); return; }
+          if (status) status.hidden = true;
+          apiAdmin("/api/redeem", { method: "POST", body: { gmail: p.email, code: code } }).then(function(data){
+            if (data && data.ok){
+              var amount = (typeof data.amountPerDay === "number") ? data.amountPerDay : (typeof data.amount === "number" ? data.amount : 0);
+              var d = acctData();
+              d.redeemedPerDay = (d.redeemedPerDay || 0) + amount;
+              d.redeemedCodes = d.redeemedCodes || [];
+              d.redeemedCodes.push({ code: code, amount: amount, status: "active", redeemedAt: new Date().toISOString() });
+              saveAcctData(d);
+              if (input) input.value = "";
+              updateBellBadge(); updateGenerateState(); renderRedeemUI();
+              if ($("bellPanel") && $("bellPanel").classList.contains("open")) renderBellPanel();
+              var st = $("redeemSuccessText");
+              if (st) st.textContent = t("redeemSuccessText", { n: amount });
+              openAnimated($("redeemSuccessOverlay"));
+            } else {
+              var err = (data && (data.error || data.reason)) || "invalid";
+              if (err === "disabled"){ markCodeDisabled(code); showErr("redeemDisabled"); }
+              else if (err === "used" || err === "already_used" || err === "already_redeemed") showErr("redeemUsed");
+              else if (err === "expired") showErr("redeemExpired");
+              else showErr("redeemInvalid");
+              renderRedeemUI();
+            }
+          }).catch(function(){ showErr("redeemFailed"); });
+        }
+        /* ---------- profile dynamic rows (quota / IP / payment / redeem) ---------- */
+        function renderProfileDynamic(){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p) return;
+          var plan = getCurrentPlan();
+          var u = loadDailyUse();
+          var limit = effectiveDailyLimit(plan);
+          var qt = $("profileQuotaText");
+          if (qt){
+            qt.textContent = (plan === "pro-yearly")
+              ? t("quotaUsed", { used: u.count, limit: "∞" })
+              : t("quotaUsed", { used: Math.min(u.count, limit), limit: String(limit) }) + " · " + t("quotaRemaining", { n: dailyRemaining() });
+          }
+          var rr = $("profileRedeemedRow");
+          if (rr){
+            var r = getRedeemedPerDay();
+            rr.hidden = r <= 0;
+            var ra = $("profileRedeemedAmount");
+            if (ra) ra.textContent = "+" + r;
+          }
+          var ip = $("profileIp");
+          if (ip) ip.textContent = currentIp ? ipText(currentIp) : "—";
+          var d = acctData();
+          /* A pending payment older than 24h has expired. */
+          if (d.pendingPayment && d.pendingPayment.sentAt && (Date.now() - new Date(d.pendingPayment.sentAt).getTime() > 24 * 3600 * 1000)){
+            d.pendingPayment = null;
+            saveAcctData(d);
+          }
+          var prow = $("profilePaymentRow");
+          if (prow){
+            prow.hidden = !d.pendingPayment;
+            var ps = $("profilePaymentStatus");
+            if (ps) ps.textContent = d.pendingPayment
+              ? t("payPending") + " · " + (d.pendingPayment.plan === "pro-yearly" ? "$11.99" : "$2.99")
+              : "—";
+          }
+          var dr = $("redeemDisabledRow");
+          if (dr){
+            var dis = (d.redeemedCodes || []).filter(function(c){ return c.status === "disabled"; });
+            dr.hidden = !dis.length;
+            var dc = $("redeemDisabledCode");
+            if (dc) dc.textContent = dis.map(function(c){ return c.code; }).join(", ");
+          }
+          updateQuotaLine();
+        }
+        /* ---------- payment (KHQR / USDT receipt to admin) ---------- */
+        var PLAN_PRICES = { "pro-monthly": "$2.99", "pro-yearly": "$11.99" };
+        var USDT_ADDRESS = "TPHu2Z45PZ9xUB7AzqMehWKv72HysE9Vzd";
+        var payPlan = null, payMethod = null;
+        function openPayment(plan){
+          payPlan = plan; payMethod = null;
+          var name = $("payPlanName"), price = $("payPlanPrice");
+          if (name) name.textContent = (plan === "pro-yearly") ? t("planProYearly") : t("planProMonthly");
+          if (price) price.textContent = PLAN_PRICES[plan] || "";
+          ["payKhqrPrice", "payUsdtPrice"].forEach(function(id){
+            var el = $(id);
+            if (el) el.textContent = PLAN_PRICES[plan] || "";
+          });
+          $("payKhqrCard").hidden = true;
+          $("payUsdtCard").hidden = true;
+          $("payReceiptBox").hidden = true;
+          $("paySentBox").hidden = true;
+          var st = $("payStatus"); if (st) st.hidden = true;
+          var ri = $("payReceiptInput"); if (ri) ri.value = "";
+          $("upgradePlansBody").hidden = true;
+          $("paymentView").hidden = false;
+        }
+        function closePayment(){
+          payPlan = null; payMethod = null;
+          $("paymentView").hidden = true;
+          $("upgradePlansBody").hidden = false;
+        }
+
 
         /* ---------- Language (EN / ខ្មែរ, one language at a time) ---------- */
 var I18N = {
@@ -1567,6 +2247,46 @@ var I18N = {
     "featAdminSupport": "ជំនួយពី Admin",
     "featPriority": "អាទិភាព",
     "featAllMonthly": "គ្រប់យ៉ាងនៅក្នុង Pro ប្រចាំខែ",
+    "quotaResetLine": "កូតាថ្ងៃនេះអស់ហើយ — នឹងចាប់ផ្តើមថ្មីក្នុង",
+    "quotaResetsIn": "ចាប់ផ្តើមថ្មីក្នុង",
+    "quotaReachedShort": "ដល់កំណត់ថ្ងៃនេះហើយ",
+    "maxAccounts": "ឧបករណ៍នេះមានគណនី 3 រួចហើយ — មិនអាចបង្កើតគណនីថ្មីបានទេ។ សូមចូលប្រើគណនីដែលមានស្រាប់។",
+    "chooseAvatar": "ជ្រើសរើសរូបភាព",
+    "avatarMale1": "ប្រុស 1",
+    "avatarMale2": "ប្រុស 2",
+    "avatarFemale1": "ស្រី 1",
+    "avatarFemale2": "ស្រី 2",
+    "avatarChanged": "បានប្តូររូបភាពហើយ",
+    "redeemTitle": "Redeem Refresh Code",
+    "redeemScan": "Scan",
+    "redeemSuccessTitle": "ជោគជ័យ — បានទទួលអំណោយហើយ",
+    "redeemSuccessText": "អ្នកបានទទួល +{n} ដងក្នុងមួយថ្ងៃបន្ថែម!",
+    "redeemInvalid": "កូដមិនត្រឹមត្រូវ។ សូមពិនិត្យម្តងទៀត។",
+    "redeemUsed": "កូដនេះត្រូវបានប្រើរួចហើយ។",
+    "redeemExpired": "កូដនេះផុតកំណត់ហើយ។",
+    "redeemDisabled": "កូដនេះត្រូវបានបិទដោយ Admin ហើយមិនអាចប្រើបានទេ។",
+    "redeemCodeDisabled": "កូដត្រូវបានបិទ",
+    "redeemExtra": "បន្ថែមពីកូដ",
+    "redeemNeedCode": "សូមបញ្ចូលកូដជាមុន។",
+    "redeemNeedSignin": "សូមចូលប្រើជាមុន។",
+    "redeemFailed": "មិនអាចពិនិត្យកូដបានទេ។ សូមព្យាយាមម្តងទៀត។",
+    "payPlanLabel": "កញ្ចប់",
+    "payKhqrNote": "ស្កេន KHQR នេះដើម្បីទូទាត់តាមតម្លៃកញ្ចប់ខាងលើ",
+    "payCopyAddress": "ចម្លងអាសយដ្ឋាន",
+    "payEnterAmount": "សូមបញ្ចូលចំនួនទឹកប្រាក់ដោយខ្លួនឯង — តាមតម្លៃកញ្ចប់ខាងលើ",
+    "payUploadReceipt": "បង្ហោះរូបថតវិក្កយបត្រទូទាត់",
+    "paySend": "ផ្ញើទៅ Admin",
+    "paySent": "បានផ្ញើ — សូមរង់ចាំក្នុងរយៈពេល 24 ម៉ោង",
+    "paySentNote": "Admin ជាធម្មតាអនុម័តក្នុងរយៈពេល 4–5 នាទី, យឺតបំផុត 1 ម៉ោង។ សំណើនេះនឹងផុតកំណត់បន្ទាប់ពី 24 ម៉ោងបើមិនបានអនុម័ត។",
+    "payChooseFile": "សូមជ្រើសរើសរូបថតវិក្កយបត្រជាមុន។",
+    "payNeedSignin": "សូមចូលប្រើគណនីជាមុនដើម្បីទូទាត់។",
+    "payFailed": "ផ្ញើវិក្កយបត្រមិនបានសម្រេច។ សូមព្យាយាមម្តងទៀត។",
+    "payPending": "កំពុងរង់ចាំ Admin អនុម័ត",
+    "paymentStatusLabel": "ការទូទាត់",
+    "backBtn": "ត្រឡប់",
+    "blockedTitle": "គណនីនេះត្រូវបានបិទ",
+    "blockedText": "គណនីរបស់អ្នកត្រូវបានបិទដោយ Admin ហើយមិនអាចប្រើ MovMail បានទៀតទេ។",
+    "accountClosed": "គណនីត្រូវបានបិទ — មិនអាចបង្កើតអ៊ីមែលបានទេ",
     "waitForCode": "⏱ កំពុងរង់ចាំកូដ… {n} វិ",
     "waitForConfirm": "⏱ កំពុងរង់ចាំការបញ្ជាក់… {n} វិ",
     "waitForAny": "⏱ កំពុងរង់ចាំ… {n} វិ",
@@ -1822,6 +2542,46 @@ var I18N = {
     "featAdminSupport": "Admin support",
     "featPriority": "Priority",
     "featAllMonthly": "Everything in Pro Monthly",
+    "quotaResetLine": "Today's quota is used up — resets in",
+    "quotaResetsIn": "Resets in",
+    "quotaReachedShort": "Daily limit reached",
+    "maxAccounts": "This device already has 3 accounts — no more accounts can be created. Please sign in with an existing account.",
+    "chooseAvatar": "Choose an avatar",
+    "avatarMale1": "Male 1",
+    "avatarMale2": "Male 2",
+    "avatarFemale1": "Female 1",
+    "avatarFemale2": "Female 2",
+    "avatarChanged": "Avatar updated",
+    "redeemTitle": "Redeem Refresh Code",
+    "redeemScan": "Scan",
+    "redeemSuccessTitle": "Success — gift received",
+    "redeemSuccessText": "You received +{n} extra uses per day!",
+    "redeemInvalid": "Invalid code. Please check it and try again.",
+    "redeemUsed": "This code has already been used.",
+    "redeemExpired": "This code has expired.",
+    "redeemDisabled": "This code was disabled by the admin and cannot be used.",
+    "redeemCodeDisabled": "Code disabled",
+    "redeemExtra": "Extra from code",
+    "redeemNeedCode": "Please enter a code first.",
+    "redeemNeedSignin": "Please sign in first.",
+    "redeemFailed": "Could not check the code. Please try again.",
+    "payPlanLabel": "Plan",
+    "payKhqrNote": "Scan this KHQR to pay the plan price above",
+    "payCopyAddress": "Copy address",
+    "payEnterAmount": "Enter the amount yourself — the plan price above",
+    "payUploadReceipt": "Upload your payment receipt screenshot",
+    "paySend": "Send to admin",
+    "paySent": "Sent — please wait, within 24 hours",
+    "paySentNote": "The admin usually approves in 4–5 minutes, up to 1 hour. The request expires after 24 hours if not approved.",
+    "payChooseFile": "Please choose a receipt screenshot first.",
+    "payNeedSignin": "Please sign in first to pay.",
+    "payFailed": "Could not send the receipt. Please try again.",
+    "payPending": "Waiting for admin approval",
+    "paymentStatusLabel": "Payment",
+    "backBtn": "Back",
+    "blockedTitle": "This account is closed",
+    "blockedText": "Your account was closed by the admin and can no longer use MovMail.",
+    "accountClosed": "Account closed — cannot create emails",
     "waitForCode": "⏱ Waiting for code… {n}s",
     "waitForConfirm": "⏱ Waiting for confirm… {n}s",
     "waitForAny": "⏱ Waiting… {n}s",
@@ -1894,6 +2654,8 @@ var I18N = {
           renderSavedMessages();
           renderMailboxes();
           updateBellBadge();
+          updateQuotaLine();
+          renderRedeemUI();
           if ($("bellPanel") && $("bellPanel").classList.contains("open")) renderBellPanel();
           updateIpLine();
           syncLangSeg();
@@ -1916,16 +2678,16 @@ var I18N = {
         var savedState = { messages: [], fetching: false, loaded: false, lastFetch: 0 };
         function knownAddresses(){
           var list = [];
-          try {
-            var raw = localStorage.getItem("movmail-addresses");
-            if (raw) list = JSON.parse(raw) || [];
-          } catch(e) {}
+          var d = acctData();
+          if (Array.isArray(d.addresses)) list = d.addresses.slice();
           if (state.address && list.indexOf(state.address) === -1) list.unshift(state.address);
           return list.slice(0, 10);
         }
         function rememberAddress(){
           if (!state.address) return;
-          try { localStorage.setItem("movmail-addresses", JSON.stringify(knownAddresses())); } catch(e) {}
+          var d = acctData();
+          d.addresses = knownAddresses();
+          saveAcctData(d);
         }
 
         var $ = function(id){ return document.getElementById(id); };
@@ -2090,17 +2852,37 @@ var I18N = {
         /* ---------- account lifecycle ---------- */
         function createAccount(){
           if (state.creating) return;
+          if (!blockedKnown && loadProfile()){
+            /* The blocked-account check is still in flight: do not
+               create a mailbox for a possibly-closed account. Retry
+               shortly; the check always resolves. */
+            if (state.createTimer) clearTimeout(state.createTimer);
+            state.createTimer = setTimeout(createAccount, 500);
+            return;
+          }
           /* Plan daily limit: block a new address once the day's
              quota is used up. Restores do not call createAccount,
              so they are never counted or blocked. */
-          if (dailyLimitReached()){
+          if (state.blocked){
             state.creating = false;
-            state.failed = true;
-            state.lastErrorCode = "limit";
-            addrText.textContent = t("addrFailed");
+            if (!state.address) addrText.textContent = "—";
+            setBlocked(true);
+            return;
+          }
+          if (dailyLimitReached()){
+            /* Quota used up: NO big black toast, NO "Failed to create
+               email" block. The small countdown line (bell + profile
+               + mailbox card) is the whole explanation, and Generate
+               / Change stay disabled until local midnight. */
+            state.creating = false;
+            state.failed = false;
+            state.retrying = false;
+            state.lastErrorCode = "";
+            hideError();
+            if (!state.address) addrText.textContent = "—";
             statusText.textContent = t(limitReachedKey());
             setBusy(false);
-            showToast(t(limitReachedKey()));
+            updateGenerateState();
             return;
           }
           if (state.createTimer){ clearTimeout(state.createTimer); state.createTimer = null; }
@@ -2526,14 +3308,13 @@ var I18N = {
         /* ---------- named saved mailboxes (localStorage) ---------- */
         var MAILBOXES_KEY = "movmail-mailboxes";
         function loadMailboxes(){
-          try {
-            var raw = localStorage.getItem(MAILBOXES_KEY);
-            var list = raw ? JSON.parse(raw) : [];
-            return Array.isArray(list) ? list : [];
-          } catch(e){ return []; }
+          var d = acctData();
+          return Array.isArray(d.mailboxes) ? d.mailboxes : [];
         }
         function saveMailboxes(list){
-          try { localStorage.setItem(MAILBOXES_KEY, JSON.stringify(list)); } catch(e) {}
+          var d = acctData();
+          d.mailboxes = list;
+          saveAcctData(d);
         }
         function findMailbox(address){
           var list = loadMailboxes();
@@ -2707,10 +3488,9 @@ var I18N = {
           var list = loadMailboxes().filter(function(m){ return m.address !== mb.address; });
           saveMailboxes(list);
           savedState.messages = savedState.messages.filter(function(m){ return m._accountAddress !== mb.address; });
-          try {
-            var addrs = JSON.parse(localStorage.getItem("movmail-addresses") || "[]") || [];
-            localStorage.setItem("movmail-addresses", JSON.stringify(addrs.filter(function(a){ return a !== mb.address; })));
-          } catch(e) {}
+          var _dd = acctData();
+          _dd.addresses = (_dd.addresses || []).filter(function(a){ return a !== mb.address; });
+          saveAcctData(_dd);
           renderMailboxes();
           renderSavedMessages();
           showToast(t("toastDeletedMailbox"));
@@ -3647,6 +4427,8 @@ var I18N = {
         function openUpgradePopup(){
           closeProfilePanel();
           closeBellPanel();
+          var pv = $("paymentView"); if (pv) pv.hidden = true;
+          var pb = $("upgradePlansBody"); if (pb) pb.hidden = false;
           openAnimated($("upgradeOverlay"));
         }
         function closeUpgradePopup(){ closeAnimated($("upgradeOverlay"), ".upgrade-popup", null); }
@@ -4010,17 +4792,17 @@ var I18N = {
         }
         function loadDailyUse(){
           var today = localDateKey();
-          var def = { date: today, count: 0, total: 0 };
-          try {
-            var raw = localStorage.getItem(DAILY_USE_KEY);
-            if (!raw) return def;
-            var o = JSON.parse(raw);
-            if (!o || typeof o !== "object") return def;
-            if (o.date !== today) return { date: today, count: 0, total: (o.total || 0) };
-            return { date: today, count: (o.count || 0), total: (o.total || 0) };
-          } catch(e){ return def; }
+          var d = acctData();
+          var o = d.dailyUse;
+          if (!o || typeof o !== "object") return { date: today, count: 0, total: 0 };
+          if (o.date !== today) return { date: today, count: 0, total: (o.total || 0) };
+          return { date: today, count: (o.count || 0), total: (o.total || 0) };
         }
-        function saveDailyUse(o){ try { localStorage.setItem(DAILY_USE_KEY, JSON.stringify(o)); } catch(e) {} }
+        function saveDailyUse(o){
+          var d = acctData();
+          d.dailyUse = o;
+          saveAcctData(d);
+        }
         function dailyLimitFor(plan){
           var l = DAILY_LIMITS[plan || getCurrentPlan()];
           return (typeof l === "number") ? l : 10;
@@ -4028,7 +4810,7 @@ var I18N = {
         function dailyRemaining(){
           if (getCurrentPlan() === "pro-yearly") return Infinity;
           var u = loadDailyUse();
-          return Math.max(0, dailyLimitFor() - u.count);
+          return Math.max(0, effectiveDailyLimit() - u.count);
         }
         function dailyLimitReached(){ return dailyRemaining() <= 0; }
         function limitReachedKey(){
@@ -4040,55 +4822,52 @@ var I18N = {
           saveDailyUse(u);
           updateBellBadge();
           updateGenerateState();
-          /* The moment the quota runs out, say so clearly — the
-             Generate button is disabled from here, so this toast is
-             the user's explanation of why. */
-          if (getCurrentPlan() !== "pro-yearly" && u.count >= dailyLimitFor()) showToast(t(limitReachedKey()));
+          /* When the quota runs out, updateGenerateState shows the
+             small countdown line instead of any toast. */
         }
         /* Generate / Change are disabled once the day's quota is
            used up. Called from setBusy and after every count. */
         function updateGenerateState(){
           var limited = dailyLimitReached();
-          $("generateBtn").disabled = limited;
-          $("changeBtn").disabled = limited;
+          $("generateBtn").disabled = limited || !!state.blocked;
+          $("changeBtn").disabled = limited || !!state.blocked;
+          updateQuotaLine();
         }
         function guardDailyLimit(){
-          if (dailyLimitReached()){ showToast(t(limitReachedKey())); return false; }
+          if (dailyLimitReached()){ updateGenerateState(); return false; }
           return true;
         }
         /* Notifications: newest first, capped at 30. Stored as i18n
            keys + vars so the list re-renders in the active language. */
         function loadNotifications(){
-          try {
-            var raw = localStorage.getItem(NOTIF_KEY);
-            var l = raw ? JSON.parse(raw) : [];
-            return Array.isArray(l) ? l : [];
-          } catch(e){ return []; }
+          var d = acctData();
+          return Array.isArray(d.notifications) ? d.notifications : [];
         }
         function addNotification(key, vars){
-          var list = loadNotifications();
+          var d = acctData();
+          var list = d.notifications || [];
           list.unshift({ t: new Date().toISOString(), key: key, vars: vars || {} });
           if (list.length > 30) list.length = 30;
-          try { localStorage.setItem(NOTIF_KEY, JSON.stringify(list)); } catch(e) {}
+          d.notifications = list;
+          saveAcctData(d);
         }
         /* Problems: capped at 20, throttled to one entry per cause
            per 60 seconds so the forever-retry loop cannot flood it. */
         function loadProblems(){
-          try {
-            var raw = localStorage.getItem(PROBLEMS_KEY);
-            var l = raw ? JSON.parse(raw) : [];
-            return Array.isArray(l) ? l : [];
-          } catch(e){ return []; }
+          var d = acctData();
+          return Array.isArray(d.problems) ? d.problems : [];
         }
         function recordProblem(causeKey){
-          var list = loadProblems();
+          var d = acctData();
+          var list = d.problems || [];
           var now = Date.now();
           for (var i = 0; i < list.length; i++){
             if (list[i].cause === causeKey && (now - new Date(list[i].t).getTime()) < 60000) return;
           }
           list.unshift({ t: new Date().toISOString(), cause: causeKey });
           if (list.length > 20) list.length = 20;
-          try { localStorage.setItem(PROBLEMS_KEY, JSON.stringify(list)); } catch(e) {}
+          d.problems = list;
+          saveAcctData(d);
         }
         /* Bell badge: remaining emails today (blue), red at 0,
            "∞" for the unlimited Yearly plan. */
@@ -4102,7 +4881,7 @@ var I18N = {
         }
         function renderBellPanel(){
           var plan = getCurrentPlan();
-          var limit = dailyLimitFor(plan);
+          var limit = effectiveDailyLimit(plan);
           var u = loadDailyUse();
           var used = (plan === "pro-yearly") ? u.count : Math.min(u.count, limit);
           var limitTxt = (plan === "pro-yearly") ? "∞" : String(limit);
@@ -4114,6 +4893,12 @@ var I18N = {
             fill.style.width = pct + "%";
             fill.classList.toggle("zero", plan !== "pro-yearly" && dailyRemaining() <= 0);
           }
+          var rd = getRedeemedPerDay();
+          var brw = $("bellRedeemedRow");
+          if (brw) brw.hidden = rd <= 0;
+          var ba = $("bellRedeemedAmount");
+          if (ba) ba.textContent = "+" + rd;
+          updateQuotaLine();
           var nl = $("bellNotifList");
           nl.innerHTML = "";
           var notifs = loadNotifications();
@@ -4183,6 +4968,8 @@ var I18N = {
           $("authSubtitle").textContent = authMode === "signin" ? t("authSigninSubtitle") : t("authSubtitle");
           $("authSubmitLabel").textContent = authMode === "signin" ? t("signInBtn") : t("createAccountBtn");
           $("authSwitchBtn").textContent = authMode === "signin" ? t("noAccount") : t("haveAccount");
+          pendingAvatar = "";
+          buildAvatarPicker("authAvatarPick", "", function(id){ pendingAvatar = id; });
           openAnimated($("authOverlay"));
           setTimeout(function(){
             var f = authMode === "signin" ? $("authEmailIn") : $("authFirstName");
@@ -4208,6 +4995,10 @@ var I18N = {
             if (hash === profile.passwordHash){
               saveProfile(profile);
               closeAuthModal();
+              switchAccountKeepSession(profile.email);
+              checkBlocked();
+              syncAccountToServer();
+              refreshAccountFromServer();
               updateAvatarUI();
               showToast(t("toastWelcomeBack"));
             } else {
@@ -4224,6 +5015,7 @@ var I18N = {
           var pw2 = $("authPassword2").value;
           if (!first || !last || !email || !pw || !pw2){ showAuthError(t("authErrAllFields")); return; }
           if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ showAuthError(t("authErrEmail")); return; }
+          if (!findAccount(email) && loadAccounts().length >= 3){ showAuthError(t("maxAccounts")); return; }
           if (pw.length < 6){ showAuthError(t("authErrPassShort")); return; }
           if (pw !== pw2){ showAuthError(t("authErrPassMatch")); return; }
           showAuthError("");
@@ -4238,10 +5030,14 @@ var I18N = {
                 firstName: first, lastName: last, email: email,
                 id: "MOV-" + randomStr(6).toUpperCase(),
                 createdAt: new Date().toISOString(),
-                salt: salt, passwordHash: hash
+                salt: salt, passwordHash: hash,
+                avatar: pendingAvatar ? ("avatar-" + pendingAvatar + ".png") : ""
               };
               saveProfile(profile);
               saveAccount(profile);
+              switchAccountKeepSession(email);
+              syncAccountToServer();
+              checkBlocked();
               addNotification("notifAccountCreated", {});
               setAuthBusy(false);
               closeAuthModal();
@@ -4262,13 +5058,38 @@ var I18N = {
         function updateAvatarUI(){
           var p = loadProfile();
           var avBtn = $("avatarBtn"), suBtn = $("headerSignupBtn");
+          var img = $("avatarImg"), ini = $("avatarInitials");
           if (p){
-            $("avatarInitials").textContent = profileInitials(p);
+            if (ini) ini.textContent = profileInitials(p);
+            if (img){
+              if (p.avatar){
+                img.src = p.avatar;
+                img.hidden = false;
+                img.onerror = function(){ img.hidden = true; if (ini) ini.style.display = ""; };
+                if (ini) ini.style.display = "none";
+              } else {
+                img.hidden = true;
+                if (ini) ini.style.display = "";
+              }
+            }
             avBtn.hidden = false;
             suBtn.hidden = true;
           } else {
             avBtn.hidden = true;
             suBtn.hidden = false;
+          }
+          var pimg = $("profileAvatarImg"), pini = $("profileAvatarInitials");
+          if (pimg && pini){
+            pini.textContent = p ? profileInitials(p) : "?";
+            if (p && p.avatar){
+              pimg.src = p.avatar;
+              pimg.hidden = false;
+              pimg.onerror = function(){ pimg.hidden = true; pini.style.display = ""; };
+              pini.style.display = "none";
+            } else {
+              pimg.hidden = true;
+              pini.style.display = "";
+            }
           }
         }
         function syncLangSeg(){
@@ -4281,12 +5102,23 @@ var I18N = {
         function openProfilePanel(){
           var p = loadProfile();
           if (!p){ openAuthModal("signup"); return; }
-          $("profileAvatarBig").textContent = profileInitials(p);
+          updateAvatarUI();
           $("profileName").textContent = (p.firstName + " " + p.lastName).trim();
           $("profileId").textContent = p.id || "—";
           $("profileEmail").textContent = p.email;
           $("profileDate").textContent = p.createdAt ? fullDate(p.createdAt) : "—";
-          $("profilePlan").textContent = "Free";
+          var _plan = getCurrentPlan();
+          $("profilePlan").textContent = _plan === "pro-monthly" ? t("planProMonthly") : _plan === "pro-yearly" ? t("planProYearly") : t("planFree");
+          buildAvatarPicker("profileAvatarPick", (p.avatar || "").replace(/^avatar-/, "").replace(/\.png$/, ""), function(id){
+            var pp = loadProfile();
+            if (!pp) return;
+            pp.avatar = id ? ("avatar-" + id + ".png") : "";
+            saveProfile(pp);
+            saveAccount(pp);
+            updateAvatarUI();
+            showToast(t("avatarChanged"));
+          });
+          renderProfileDynamic();
           syncLangSeg();
           syncThemeSeg();
           openAnimated($("profilePanel"));
@@ -4305,16 +5137,23 @@ var I18N = {
         });
         $("signOutBtn").addEventListener("click", function(){
           clearProfile();
+          setBlocked(false);
+          switchAccount(null);
           updateAvatarUI();
           closeProfilePanel();
           openAuthModal("signup");
         });
-        /* Pricing: display only — paid plans are not sold yet. */
+        /* Free selects in place; a paid plan opens the KHQR / USDT
+           payment flow (receipt goes to the admin for approval). */
         Array.prototype.forEach.call(document.querySelectorAll(".plan-option"), function(btn){
           btn.addEventListener("click", function(){
-            if (btn.getAttribute("data-plan") !== "free"){ showToast(t("comingSoon")); return; }
-            Array.prototype.forEach.call(document.querySelectorAll(".plan-option"), function(b){ b.classList.remove("selected"); });
-            btn.classList.add("selected");
+            var plan = btn.getAttribute("data-plan");
+            if (plan === "free"){
+              Array.prototype.forEach.call(document.querySelectorAll(".plan-option"), function(b){ b.classList.remove("selected"); });
+              btn.classList.add("selected");
+              return;
+            }
+            openPayment(plan);
           });
         });
         /* Language + theme rows inside the profile panel. */
@@ -4337,6 +5176,60 @@ var I18N = {
           var panel = $("bellPanel");
           if (panel && panel.classList.contains("open") && !e.target.closest("#bellPanel") && !e.target.closest("#bellBtn")) closeBellPanel();
         });
+
+        /* ---------- redeem + payment wiring ---------- */
+        $("redeemScanBtn").addEventListener("click", doRedeem);
+        $("redeemCodeInput").addEventListener("input", function(){
+          this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+        });
+        $("redeemCodeInput").addEventListener("keydown", function(e){ if (e.key === "Enter") doRedeem(); });
+        $("redeemSuccessClose").addEventListener("click", function(){ closeAnimated($("redeemSuccessOverlay"), ".mini-modal"); });
+        $("payBackBtn").addEventListener("click", closePayment);
+        $("payKhqrBtn").addEventListener("click", function(){
+          payMethod = "khqr";
+          $("payKhqrCard").hidden = false;
+          $("payUsdtCard").hidden = true;
+          $("payReceiptBox").hidden = false;
+        });
+        $("payUsdtBtn").addEventListener("click", function(){
+          payMethod = "usdt";
+          $("payUsdtCard").hidden = false;
+          $("payKhqrCard").hidden = true;
+          $("payReceiptBox").hidden = false;
+        });
+        $("payCopyAddrBtn").addEventListener("click", function(){ copyText(USDT_ADDRESS, t("toastCopiedCode")); });
+        $("paySendBtn").addEventListener("click", function(){
+          var p = loadProfile();
+          var st = $("payStatus");
+          function perr(key){ if (st){ st.textContent = t(key); st.className = "redeem-status err"; st.hidden = false; } }
+          if (!p){ perr("payNeedSignin"); openAuthModal("signin"); return; }
+          if (!payPlan || !payMethod){ perr("payFailed"); return; }
+          var file = $("payReceiptInput").files && $("payReceiptInput").files[0];
+          if (!file){ perr("payChooseFile"); return; }
+          var reader = new FileReader();
+          reader.onload = function(){
+            apiAdmin("/api/receipts", { method: "POST", body: { gmail: p.email, plan: payPlan, method: payMethod, imageDataUrl: reader.result } }).then(function(){
+              var d = acctData();
+              d.pendingPayment = { plan: payPlan, method: payMethod, sentAt: new Date().toISOString(), status: "pending" };
+              saveAcctData(d);
+              $("payReceiptBox").hidden = true;
+              $("paySentBox").hidden = false;
+              if (st) st.hidden = true;
+              renderProfileDynamic();
+            }).catch(function(){ perr("payFailed"); });
+          };
+          reader.onerror = function(){ perr("payFailed"); };
+          reader.readAsDataURL(file);
+        });
+        $("blockedSignOutBtn").addEventListener("click", function(){
+          clearProfile();
+          setBlocked(false);
+          switchAccount(null);
+          updateAvatarUI();
+          openAuthModal("signup");
+        });
+        /* The midnight countdown ticks every second. */
+        setInterval(updateQuotaLine, 1000);
 
         /* ---------- polling ---------- */
         function startPolling(){
@@ -4524,6 +5417,16 @@ var I18N = {
         $("langEn").addEventListener("click", function(){ setLang("en"); });
 
         /* ---------- go ---------- */
+        /* Per-account bucket: the signed-in Gmail owns its data; without
+           a sign-in the anonymous bucket is used (cleared on sign-out). */
+        var _bootProfile = loadProfile();
+        activeAcctEmail = _bootProfile ? String(_bootProfile.email).toLowerCase() : "";
+        if (_bootProfile){
+          migrateLegacyData();
+          checkBlocked();
+          syncAccountToServer();
+          refreshAccountFromServer();
+        }
         applyLang(lang);
         renderMailboxes();
         updateIpLine();
