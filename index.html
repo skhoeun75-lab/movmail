@@ -1026,17 +1026,12 @@
         <div class="actions">
           <button class="btn primary pill" id="generateBtn" data-i18n="generate">បង្កើតអ៊ីមែល</button>
           <span class="ip-wrap">
-            <button class="btn pill" id="generateIpBtn" data-i18n="generateIp">បង្កើត IP</button>
             <button class="btn pill" id="countryBtn" type="button" aria-haspopup="true" aria-expanded="false" data-i18n-aria="countryPickerLabel"><span id="countryBtnLabel">🇰🇭 Cambodia</span></button>
             <span class="country-dropdown" id="countryDropdown" role="listbox" aria-label="Country"></span>
           </span>
           <button class="btn pill" id="saveBtn" disabled>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10v4z"/></svg>
             <span data-i18n="saveEmail">រក្សាទុក</span>
-          </button>
-          <button class="btn pill" id="openFloatBtn" disabled>
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
-            <span data-i18n="openPanel">បើកផ្ទាំង</span>
           </button>
           <button class="btn primary" id="copyBtn" disabled>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>
@@ -1045,14 +1040,6 @@
           <button class="btn" id="qrBtn" disabled>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm13-2h3v3h-3v-3zm-5 0h3v3h-3v-3zm5 5h3v3h-3v-3zm-5 0h3v3h-3v-3z"/></svg>
             <span data-i18n="qr">QR Code</span>
-          </button>
-          <button class="btn" id="refreshBtn" disabled>
-            <svg viewBox="0 0 24 24" fill="currentColor" id="refreshIcon"><path d="M17.65 6.35A8 8 0 1 0 19.73 14h-2.08a6 6 0 1 1-1.41-6.65L13 11h7V4l-2.35 2.35z"/></svg>
-            <span data-i18n="refresh">ធ្វើឱ្យស្រស់</span>
-          </button>
-          <button class="btn" id="changeBtn" disabled>
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V1L7 6l5 5V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></svg>
-            <span data-i18n="change">ប្តូរអ៊ីមែលថ្មី</span>
           </button>
           <button class="btn danger" id="deleteBtn" disabled>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
@@ -1311,9 +1298,6 @@
     </button>
 
     <!-- ===== Upgrade FAB (bottom-right) + small plans popup ===== -->
-    <button class="upgrade-fab" id="upgradeFab" aria-label="Upgrade" data-i18n-aria="upgradeBtn">
-      <span aria-hidden="true">★</span> <span data-i18n="upgradeBtn">Upgrade</span>
-    </button>
     <div class="upgrade-overlay" id="upgradeOverlay" role="dialog" aria-modal="true" aria-label="Upgrade">
       <div class="upgrade-popup">
         <div class="upgrade-head">
@@ -3271,13 +3255,13 @@ var I18N = {
           }
         }
         function setBusy(busy){
-          // Only copy/QR/refresh/delete need a live mailbox. Generate,
-          // Change and Try again must stay clickable at all times so
-          // the user can always retry after a failure — except when
-          // the plan's daily quota is used up, when Generate and
-          // Change are disabled (restoring a saved mailbox still
-          // works, and the quota resets at local midnight).
-          ["copyBtn","qrBtn","refreshBtn","deleteBtn","inboxRefreshBtn","saveBtn","openFloatBtn"].forEach(function(id){
+          // Only copy/QR/delete need a live mailbox. Generate and
+          // Try again must stay clickable at all times so the user
+          // can always retry after a failure — except when the plan's
+          // daily quota is used up, when Generate is disabled
+          // (restoring a saved mailbox still works, and the quota
+          // resets at local midnight).
+          ["copyBtn","qrBtn","deleteBtn","inboxRefreshBtn","saveBtn"].forEach(function(id){
             $(id).disabled = busy || !state.token;
           });
           updateGenerateState();
@@ -5144,9 +5128,9 @@ var I18N = {
         overlay.addEventListener("click", function(e){ if (e.target === overlay) closeMessage(); });
         /* ---------- Upgrade popup (small, bottom-right) ----------
            The pricing cards moved out of the profile panel into this
-           popup, opened from the floating Upgrade button (bottom-right)
-           or the small Upgrade button inside the profile. Paid plans
-           stay display-only: "Coming soon", no payment/checkout. */
+           popup, opened from the small Upgrade button inside the
+           profile. Paid plans stay display-only: "Coming soon", no
+           payment/checkout. */
         function openUpgradePopup(){
           closeProfilePanel();
           closeBellPanel();
@@ -5155,7 +5139,6 @@ var I18N = {
           openAnimated($("upgradeOverlay"));
         }
         function closeUpgradePopup(){ closeAnimated($("upgradeOverlay"), ".upgrade-popup", null); }
-        $("upgradeFab").addEventListener("click", openUpgradePopup);
         $("profileUpgradeBtn").addEventListener("click", openUpgradePopup);
         $("upgradeClose").addEventListener("click", closeUpgradePopup);
         $("upgradeOverlay").addEventListener("click", function(e){ if (e.target === $("upgradeOverlay")) closeUpgradePopup(); });
@@ -5418,6 +5401,7 @@ var I18N = {
           try { localStorage.setItem(THEME_KEY, th); } catch(e) {}
           document.documentElement.dataset.theme = th;
           syncThemeColor();
+          syncManifest();
           try { document.documentElement.style.colorScheme = th === "dark" ? "dark" : th === "light" ? "light" : "light dark"; } catch(e) {}
           syncThemeSeg();
         }
@@ -5459,11 +5443,32 @@ var I18N = {
             m.setAttribute("content", c);
           } catch(e) {}
         }
+        /* v1.4-fix: keep the installed app's bottom nav bar on the theme.
+           Inside an installed PWA the system bars read the MANIFEST
+           theme_color, not the theme-color meta (crbug 40759522 /
+           40686953 / 40634649), so the static green manifest.json kept
+           the nav bar green after switching accent. One manifest file
+           per accent (identical except theme_color); point the
+           <link rel="manifest"> at the current accent's file.
+           A Blob manifest is NOT used on purpose: Chrome re-fetches
+           the installed manifest URL on its own schedule to mint a
+           new WebAPK, and a blob: URL dies with the page, so an
+           installed app could never pick the update up. */
+        var MANIFEST_BY_ACCENT = {green:"/manifest.json",ocean:"/manifest-ocean.json",sunset:"/manifest-sunset.json",royal:"/manifest-royal.json",rose:"/manifest-rose.json",midnight:"/manifest-midnight.json"};
+        function syncManifest(){
+          try {
+            var link = document.querySelector('link[rel="manifest"]');
+            if (!link) return;
+            var href = MANIFEST_BY_ACCENT[currentAccent()] || "/manifest.json";
+            if (link.getAttribute("href") !== href) link.setAttribute("href", href);
+          } catch(e) {}
+        }
         function applyAccent(name){
           var a = ACCENTS.indexOf(name) >= 0 ? name : "green";
           try { localStorage.setItem(ACCENT_KEY, a); } catch(e) {}
           document.documentElement.dataset.accent = a;
           syncThemeColor();
+          syncManifest();
           syncAccentPicker();
         }
         function syncAccentPicker(){
@@ -5600,12 +5605,11 @@ var I18N = {
           /* When the quota runs out, updateGenerateState shows the
              small countdown line instead of any toast. */
         }
-        /* Generate / Change are disabled once the day's quota is
+        /* Generate is disabled once the day's quota is
            used up. Called from setBusy and after every count. */
         function updateGenerateState(){
           var limited = dailyLimitReached();
           $("generateBtn").disabled = limited || !!state.blocked;
-          $("changeBtn").disabled = limited || !!state.blocked;
           updateQuotaLine();
         }
         function guardDailyLimit(){
@@ -6995,17 +6999,11 @@ var I18N = {
           if (e.key === "Escape") closeCountryDropdown();
         });
 
-        $("generateIpBtn").addEventListener("click", function(){
-          if (applyNewIp()) showToast(t("toastIpGenerated"));
-        });
         $("saveBtn").addEventListener("click", function(){
           if (!state.address) return;
           var saved = findMailbox(state.address);
           if (saved){ openEditModal(saved); return; }
           openSavePrompt(null);
-        });
-        $("openFloatBtn").addEventListener("click", function(){
-          if (state.address) openFloatPanel(currentMailboxObject());
         });
         $("copyBtn").addEventListener("click", function(){
           if (state.address) copyText(state.address, t("toastCopiedEmail"));
@@ -7015,7 +7013,7 @@ var I18N = {
           if (typeof QRCode === "undefined"){ showToast(t("toastQrUnavailable")); return; }
           p.classList.toggle("open");
         });
-        /* Manual Refresh — both buttons do the same full refresh.
+        /* Manual Refresh — the inbox-header button does a full refresh.
            Always starts from a clean slate (plan base interval, no
            failed/backed-off state), forces a live fetch NOW even if
            the poll failed or is backed off, re-logs in first if the
@@ -7053,15 +7051,7 @@ var I18N = {
           });
           setTimeout(function(){ if (iconEl) iconEl.classList.remove("spin"); }, 900);
         }
-        $("refreshBtn").addEventListener("click", function(){ manualRefresh($("refreshIcon")); });
         $("inboxRefreshBtn").addEventListener("click", function(){ manualRefresh($("inboxRefreshIcon")); });
-        $("changeBtn").addEventListener("click", function(){
-          if (!guardDailyLimit()) return;
-          maybeSaveBeforeGenerate(function(){
-            showToast(t("toastCreatingNew"));
-            createAccount();
-          });
-        });
         $("deleteBtn").addEventListener("click", deleteAndRecreate);
         $("retryBtn").addEventListener("click", createAccount);
 
@@ -7089,6 +7079,7 @@ var I18N = {
         updateBellBadge();
         applyTheme(currentTheme());
         syncThemeColor();
+        syncManifest();
         loadMarketListings(true);
         restoreCurrentSessionOrCreate();
         /* Sign-up gate: if no profile exists yet, show it on top of
