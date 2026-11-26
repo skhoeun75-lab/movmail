@@ -92,6 +92,8 @@
       <button class="tab active" type="button" data-tab="users" role="tab" data-i18n="users">អ្នកប្រើប្រាស់</button>
       <button class="tab" type="button" data-tab="codes" role="tab" data-i18n="codes">កូដ</button>
       <button class="tab" type="button" data-tab="receipts" role="tab" data-i18n="receipts">វិក្កយបត្រ</button>
+      <button class="tab" type="button" data-tab="listings" role="tab" data-i18n="listings">បញ្ជីលក់</button>
+      <button class="tab" type="button" data-tab="orders" role="tab" data-i18n="orders">ការបញ្ជាទិញ</button>
       <button class="tab" type="button" data-tab="settings" role="tab" data-i18n="settings">ការកំណត់</button>
     </nav>
 
@@ -190,6 +192,54 @@
         <p class="error" id="receiptsError" hidden></p>
         <div id="receiptsList" class="receipts-list"></div>
         <p class="muted empty-note" id="receiptsEmpty" hidden data-i18n="noReceipts">មិនមានវិក្កយបត្ររង់ចាំទេ</p>
+      </div>
+    </div>
+
+    <!-- MARKET LISTINGS -->
+    <div class="tab-panel" id="panel-listings" hidden>
+      <div class="card">
+        <h2 data-i18n="createListing">បង្កើតបញ្ជីលក់ដោយដៃ</h2>
+        <form id="listingForm" class="market-form" novalidate>
+          <label class="field">
+            <span data-i18n="listingEmail">អ៊ីមែលលក់</span>
+            <input id="listingEmail" type="email" autocomplete="off" data-i18n-ph="listingEmailPh" placeholder="example@euploading.com">
+          </label>
+          <label class="field">
+            <span data-i18n="listingPassword">ពាក្យសម្ងាត់អ៊ីមែល</span>
+            <input id="listingPass" type="password" autocomplete="off">
+          </label>
+          <label class="field">
+            <span data-i18n="listingPrice">តម្លៃ ($)</span>
+            <input id="listingPrice" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00">
+          </label>
+          <label class="field">
+            <span data-i18n="listingTitle">ចំណងជើង</span>
+            <input id="listingTitle" type="text" autocomplete="off" data-i18n-ph="listingTitlePh" placeholder="PUBG account">
+          </label>
+          <label class="field">
+            <span data-i18n="sellerGmail">Gmail អ្នកលក់</span>
+            <input id="listingSeller" type="email" autocomplete="off" value="admin">
+          </label>
+          <button id="createListingBtn" class="btn btn-primary" type="submit" data-i18n="createListingBtn">បង្កើតបញ្ជីលក់</button>
+        </form>
+        <p class="error" id="listingError" hidden></p>
+      </div>
+      <div class="card">
+        <h2 data-i18n="listingsList">បញ្ជីលក់ទាំងអស់</h2>
+        <p class="error" id="listingsError" hidden></p>
+        <div id="listingsList" class="market-list"></div>
+        <p class="muted empty-note" id="listingsEmpty" hidden data-i18n="noListings">មិនមានបញ្ជីលក់ទេ</p>
+      </div>
+    </div>
+
+    <!-- MARKET ORDERS -->
+    <div class="tab-panel" id="panel-orders" hidden>
+      <div class="card">
+        <h2 data-i18n="ordersTitle">ការបញ្ជាទិញពីហាង</h2>
+        <p class="muted" data-i18n="orderNote">ការអនុម័តការបញ្ជាទិញនឹងលក់អ៊ីមែលនោះឱ្យអ្នកទិញនោះតែម្នាក់គត់ ហើយដកវាចេញពីហាងសាធារណៈ។ សូមពិនិត្យវិក្កយបត្រដោយខ្លួនឯងថាពិតឬអត់។</p>
+        <p class="error" id="ordersError" hidden></p>
+        <div id="ordersList" class="receipts-list"></div>
+        <p class="muted empty-note" id="ordersEmpty" hidden data-i18n="noOrders">មិនមានការបញ្ជាទិញទេ</p>
       </div>
     </div>
 

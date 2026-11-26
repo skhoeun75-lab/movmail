@@ -300,6 +300,25 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
   max-width: calc(100vw - 32px); text-align: center;
 }
 
+/* ---------- Market (listings / orders) ---------- */
+.market-form { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.market-form .field { flex: 1 1 180px; margin-bottom: 0; }
+.market-form .btn { flex: 0 0 auto; }
+.market-list { display: grid; gap: 10px; }
+.listing-row {
+  display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap;
+  border: 1px solid var(--border); border-radius: 12px; padding: 12px;
+}
+.listing-row.status-sold { background: var(--grey-bg); }
+.listing-row.status-removed { background: var(--red-bg); border-color: var(--red-border); }
+.listing-info { flex: 1 1 220px; font-size: 14px; min-width: 0; }
+.listing-info .l-email { font-weight: 700; word-break: break-all; }
+.listing-info .l-line { color: var(--muted); font-size: 13px; word-break: break-word; }
+.listing-info .l-title { font-weight: 600; }
+.listing-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.order-row.status-approved { background: var(--green-bg); }
+.order-row.status-rejected { background: var(--red-bg); border-color: var(--red-border); }
+
 /* ---------- Mobile ---------- */
 @media (max-width: 640px) {
   .container { padding: 12px; }

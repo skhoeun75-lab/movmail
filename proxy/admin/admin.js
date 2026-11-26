@@ -85,6 +85,20 @@ const I18N = {
     savePassword: 'រក្សាទុកពាក្យសម្ងាត់', login: 'ចូលប្រើ', signOut: 'ចាកចេញ',
     totalUsers: 'អ្នកប្រើសរុប', activeToday: 'សកម្មថ្ងៃនេះ', pendingReceipts: 'វិក្កយបត្ររង់ចាំ', activeCodes: 'កូដសកម្ម',
     users: 'អ្នកប្រើប្រាស់', codes: 'កូដ', receipts: 'វិក្កយបត្រ', settings: 'ការកំណត់',
+    listings: 'បញ្ជីលក់', orders: 'ការបញ្ជាទិញ',
+    createListing: 'បង្កើតបញ្ជីលក់ដោយដៃ', createListingBtn: 'បង្កើតបញ្ជីលក់',
+    listingEmail: 'អ៊ីមែលលក់', listingEmailPh: 'example@euploading.com',
+    listingPassword: 'ពាក្យសម្ងាត់អ៊ីមែល', listingPrice: 'តម្លៃ ($)', listingTitle: 'ចំណងជើង',
+    listingTitlePh: 'ឧ. គណនី PUBG', sellerGmail: 'Gmail អ្នកលក់',
+    listingsList: 'បញ្ជីលក់ទាំងអស់', noListings: 'មិនមានបញ្ជីលក់ទេ',
+    ordersTitle: 'ការបញ្ជាទិញពីហាង', noOrders: 'មិនមានការបញ្ជាទិញទេ', buyer: 'អ្នកទិញ',
+    orderNote: 'ការអនុម័តការបញ្ជាទិញនឹងលក់អ៊ីមែលនោះឱ្យអ្នកទិញនោះតែម្នាក់គត់ ហើយដកវាចេញពីហាងសាធារណៈ។ សូមពិនិត្យវិក្កយបត្រដោយខ្លួនឯងថាពិតឬអត់។',
+    remove: 'ដកចេញ', confirmRemoveListing: 'តើអ្នកពិតជាចង់ដកបញ្ជីលក់នេះចេញមែនទេ?',
+    sold: 'បានលក់', removed: 'បានដកចេញ', pending: 'រង់ចាំ', approved: 'បានអនុម័ត', rejected: 'បានបដិសេធ',
+    errListingFields: 'សូមបំពេញអ៊ីមែល ពាក្យសម្ងាត់ តម្លៃ និងចំណងជើង។',
+    errListing: 'បរាជ័យក្នុងការបង្កើតបញ្ជីលក់។', errOrder: 'បរាជ័យក្នុងការដំណើរការការបញ្ជាទិញ។',
+    toastListingCreated: 'បានបង្កើតបញ្ជីលក់។', toastListingRemoved: 'បានដកបញ្ជីលក់ចេញ។',
+    toastOrderApproved: 'បានអនុម័ត — អ៊ីមែលត្រូវបានលក់ឱ្យអ្នកទិញនេះ។', toastOrderRejected: 'បានបដិសេធការបញ្ជាទិញ។',
     searchPlaceholder: 'ស្វែងរកតាមឈ្មោះ / Gmail / ប្រទេស…',
     filterAll: 'ទាំងអស់', filterNormal: 'ធម្មតា', filterRisk: 'មានហានិភ័យ', filterBlocked: 'បានបិទ',
     refresh: 'ធ្វើឱ្យថ្មី', country: 'ប្រទេស', city: 'ទីក្រុង', device: 'ឧបករណ៍', connection: 'ការតភ្ជាប់',
@@ -136,6 +150,20 @@ const I18N = {
     savePassword: 'Save password', login: 'Log in', signOut: 'Sign out',
     totalUsers: 'Total users', activeToday: 'Active today', pendingReceipts: 'Pending receipts', activeCodes: 'Active codes',
     users: 'Users', codes: 'Codes', receipts: 'Receipts', settings: 'Settings',
+    listings: 'Listings', orders: 'Orders',
+    createListing: 'Create a listing manually', createListingBtn: 'Create listing',
+    listingEmail: 'Email to sell', listingEmailPh: 'example@euploading.com',
+    listingPassword: 'Email password', listingPrice: 'Price ($)', listingTitle: 'Title',
+    listingTitlePh: 'e.g. PUBG account', sellerGmail: 'Seller Gmail',
+    listingsList: 'All listings', noListings: 'No listings yet',
+    ordersTitle: 'Shop orders', noOrders: 'No orders yet', buyer: 'Buyer',
+    orderNote: 'Approving an order sells that email to this buyer only and removes it from the public shop. Please judge yourself whether a receipt is genuine.',
+    remove: 'Remove', confirmRemoveListing: 'Are you sure you want to remove this listing?',
+    sold: 'Sold', removed: 'Removed', pending: 'Pending', approved: 'Approved', rejected: 'Rejected',
+    errListingFields: 'Please fill in the email, password, price and title.',
+    errListing: 'Failed to create the listing.', errOrder: 'Failed to process the order.',
+    toastListingCreated: 'Listing created.', toastListingRemoved: 'Listing removed.',
+    toastOrderApproved: 'Approved — the email has been sold to this buyer.', toastOrderRejected: 'Order rejected.',
     searchPlaceholder: 'Search by name / Gmail / country…',
     filterAll: 'All', filterNormal: 'Normal', filterRisk: 'At risk', filterBlocked: 'Blocked',
     refresh: 'Refresh', country: 'Country', city: 'City', device: 'Device', connection: 'Connection',
@@ -304,14 +332,18 @@ async function api(path, options) {
   });
   var text = await res.text(), data = null;
   try { data = text ? JSON.parse(text) : null; } catch (e) { /* non-JSON body */ }
-  if (!res.ok) throw new Error((data && (data.error || data.message)) || ('HTTP ' + res.status));
+  if (!res.ok) {
+    var err = new Error((data && (data.error || data.message)) || ('HTTP ' + res.status));
+    err.status = res.status; /* callers can branch on 404/405 (e.g. DELETE fallback) */
+    throw err;
+  }
   return data;
 }
 
 /* ============================================================================
    Dashboard data
    ============================================================================ */
-var usersCache = [], codesCache = [], receiptsCache = [];
+var usersCache = [], codesCache = [], receiptsCache = [], listingsCache = [], ordersCache = [];
 
 function normUser(u) {
   u = u || {};
@@ -338,7 +370,7 @@ function normUser(u) {
 }
 function userStatus(u) { return u.blocked ? 'blocked' : (u.risk ? 'risk' : 'normal'); }
 
-function loadAll() { loadUsers(); loadCodes(); loadReceipts(); }
+function loadAll() { loadUsers(); loadCodes(); loadReceipts(); loadListings(); loadOrders(); }
 
 async function loadUsers() {
   showError($('usersError'), '');
@@ -769,6 +801,214 @@ function onReceiptThumbClick(e) {
   show($('lightbox'), true);
 }
 
+/* ============================================================================
+   Market — public Email Account shop (Version 1.2).
+   API contract (all X-Admin-Token):
+     GET  /api/admin/market/listings            -> [{id, maskedEmail, sellerGmail, price, title, status, createdAt}]
+     POST /api/admin/market/listings            -> {ok:true, listing:{...}} or 400 (Mail.tm verification failed)
+     DELETE /api/admin/market/listings/:id      -> {ok:true} (status "removed")
+       — if the server only has POST .../:id/remove, the client falls back
+         to it on 404/405 (see removeListing).
+     GET  /api/admin/market/orders             -> [{id, listingId, maskedEmail, buyerGmail, price, method, imageDataUrl, status, createdAt}]
+     POST /api/admin/market/orders/:id/approve -> {ok:true} (listing becomes sold to that buyer)
+     POST /api/admin/market/orders/:id/reject  -> {ok:true} (listing stays active)
+   The listing PASSWORD is sent once on manual create and is never stored
+   in any cache and never rendered in the UI.
+   ============================================================================ */
+function normListing(l) {
+  l = l || {};
+  /* Real server shape: id, maskedEmail, sellerGmail, price, title,
+     status ('active'|'sold'|'removed'), createdAt. No password field
+     is ever returned. */
+  return {
+    id: l.id,
+    maskedEmail: l.maskedEmail || l.masked_email || l.email || '',
+    sellerGmail: l.sellerGmail || l.seller || l.seller_gmail || 'admin',
+    price: l.price,
+    title: l.title || '',
+    status: String(l.status || 'active').toLowerCase(),
+    createdAt: l.createdAt || l.created_at || ''
+  };
+}
+function normOrder(o) {
+  o = o || {};
+  /* Real server shape: id, listingId, maskedEmail, buyerGmail, price,
+     method ('KHQR'|'USDT'), imageDataUrl, status
+     ('pending'|'approved'|'rejected'), createdAt. */
+  return {
+    id: o.id,
+    listingId: o.listingId || o.listing_id || '',
+    maskedEmail: o.maskedEmail || o.masked_email || o.email || '',
+    buyerGmail: o.buyerGmail || o.buyer || o.buyer_gmail || o.gmail || '',
+    price: o.price,
+    method: o.method || '',
+    imageDataUrl: o.imageDataUrl || o.imageUrl || '',
+    status: String(o.status || 'pending').toLowerCase(),
+    createdAt: o.createdAt || o.created_at || ''
+  };
+}
+function fmtPrice(p) {
+  if (p == null || p === '') return '—';
+  var n = Number(p);
+  return isNaN(n) ? String(p) : '$' + (Number.isInteger(n) ? String(n) : n.toFixed(2));
+}
+async function loadListings() {
+  showError($('listingsError'), '');
+  try {
+    var data = await api('/api/admin/market/listings');
+    var list = Array.isArray(data) ? data : (data.listings || []);
+    listingsCache = list.map(normListing);
+    renderListings();
+  } catch (e) { showError($('listingsError'), t('errLoad')); }
+}
+async function loadOrders() {
+  showError($('ordersError'), '');
+  try {
+    var data = await api('/api/admin/market/orders');
+    var list = Array.isArray(data) ? data : (data.orders || []);
+    ordersCache = list.map(normOrder);
+    renderOrders();
+  } catch (e) { showError($('ordersError'), t('errLoad')); }
+}
+function listingPill(st) {
+  if (st === 'active') return '<span class="pill pill-green">' + esc(t('active')) + '</span>';
+  if (st === 'sold') return '<span class="pill pill-grey">' + esc(t('sold')) + '</span>';
+  if (st === 'removed') return '<span class="pill pill-red">' + esc(t('removed')) + '</span>';
+  return '<span class="pill pill-grey">' + esc(st) + '</span>';
+}
+function renderListings() {
+  $('listingsList').innerHTML = listingsCache.map(function (l) {
+    var removeBtn = l.status === 'active'
+      ? '<button class="btn btn-danger" type="button" data-listing-remove="' + esc(l.id) + '">' + esc(t('remove')) + '</button>'
+      : '';
+    return '<div class="listing-row status-' + esc(l.status) + '" data-listing-id="' + esc(l.id) + '">'
+      + '<div class="listing-info">'
+      + '<div class="l-email">' + esc(l.maskedEmail) + '</div>'
+      + '<div class="l-title">' + esc(l.title) + '</div>'
+      + '<div class="l-line">' + esc(fmtPrice(l.price)) + ' · ' + esc(t('sellerGmail')) + ': ' + esc(l.sellerGmail) + '</div>'
+      + '<div class="l-line">' + esc(t('created')) + ': ' + esc(fmtDate(l.createdAt)) + '</div>'
+      + '</div>'
+      + listingPill(l.status)
+      + '<div class="listing-actions">' + removeBtn + '</div>'
+      + '</div>';
+  }).join('');
+  show($('listingsEmpty'), listingsCache.length === 0);
+}
+function renderOrders() {
+  /* Newest first. */
+  var sorted = ordersCache.slice().sort(function (a, b) {
+    return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+  });
+  $('ordersList').innerHTML = sorted.map(function (o) {
+    var pill = o.status === 'pending'
+      ? '<span class="pill pill-amber">' + esc(t('pending')) + '</span>'
+      : (o.status === 'approved'
+        ? '<span class="pill pill-green">' + esc(t('approved')) + '</span>'
+        : '<span class="pill pill-red">' + esc(t('rejected')) + '</span>');
+    var img = o.imageDataUrl || '';
+    var actions = o.status === 'pending'
+      ? '<div class="receipt-actions">'
+        + '<button class="btn btn-primary" type="button" data-order-action="approve" data-id="' + esc(o.id) + '">' + esc(t('approve')) + '</button>'
+        + '<button class="btn btn-danger" type="button" data-order-action="reject" data-id="' + esc(o.id) + '">' + esc(t('reject')) + '</button>'
+        + '</div>'
+      : '';
+    /* Same row pattern as the receipts panel: thumbnail (tap = lightbox),
+       info, approve/reject. */
+    return '<div class="receipt-row order-row status-' + esc(o.status) + '" data-order-id="' + esc(o.id) + '">'
+      + (img
+        ? '<img class="receipt-thumb" src="' + esc(img) + '" alt="Receipt" data-full="' + esc(img) + '">'
+        : '<div class="receipt-thumb"></div>')
+      + '<div class="receipt-info">'
+      + '<div class="r-gmail">' + esc(o.maskedEmail) + '</div>'
+      + '<div class="r-line">' + esc(t('buyer')) + ': ' + esc(o.buyerGmail) + '</div>'
+      + '<div class="r-line">' + esc(fmtPrice(o.price)) + ' · ' + esc(t('method')) + ': ' + esc(o.method || '—') + '</div>'
+      + '<div class="r-line">' + esc(fmtDate(o.createdAt)) + '</div>'
+      + '</div>'
+      + pill
+      + actions
+      + '</div>';
+  }).join('');
+  show($('ordersEmpty'), sorted.length === 0);
+}
+async function onListingSubmit(e) {
+  e.preventDefault();
+  var email = $('listingEmail').value.trim();
+  var pass = $('listingPass').value;
+  var priceRaw = $('listingPrice').value.trim();
+  var price = Number(priceRaw);
+  var title = $('listingTitle').value.trim();
+  var seller = $('listingSeller').value.trim() || 'admin';
+  if (!email || !pass || !title || priceRaw === '' || isNaN(price) || price <= 0) {
+    return showError($('listingError'), t('errListingFields'));
+  }
+  showError($('listingError'), '');
+  var btn = $('createListingBtn');
+  btn.disabled = true;
+  try {
+    /* The password is sent once in this request body and is never kept:
+       the field is cleared below and no cache ever holds it. */
+    await api('/api/admin/market/listings', {
+      method: 'POST',
+      body: { email: email, password: pass, price: price, title: title, sellerGmail: seller }
+    });
+    $('listingEmail').value = '';
+    $('listingPass').value = '';
+    $('listingPrice').value = '';
+    $('listingTitle').value = '';
+    $('listingSeller').value = 'admin';
+    toast(t('toastListingCreated'));
+    loadListings();
+  } catch (err) {
+    /* Server error text surfaces here (e.g. 400 Mail.tm verification
+       failed) via api()'s thrown message. */
+    showError($('listingError'), err && err.message ? err.message : t('errListing'));
+  } finally { btn.disabled = false; }
+}
+async function removeListing(id) {
+  try {
+    await api('/api/admin/market/listings/' + encodeURIComponent(id), { method: 'DELETE' });
+  } catch (err) {
+    /* Proxy may expose POST .../:id/remove instead of DELETE — fall back
+       only on 404/405 (endpoint missing), not on other failures. */
+    if (err && (err.status === 404 || err.status === 405)) {
+      await api('/api/admin/market/listings/' + encodeURIComponent(id) + '/remove', { method: 'POST' });
+    } else { throw err; }
+  }
+}
+async function onListingsClick(e) {
+  var btn = e.target.closest('[data-listing-remove]');
+  if (!btn) return;
+  var id = btn.dataset.listingRemove;
+  if (!window.confirm(t('confirmRemoveListing'))) return;
+  btn.disabled = true;
+  try {
+    await removeListing(id);
+    toast(t('toastListingRemoved'));
+    loadListings();
+  } catch (err) {
+    showError($('listingsError'), err && err.message ? err.message : t('errLoad'));
+    btn.disabled = false;
+  }
+}
+async function onOrderActionClick(e) {
+  var btn = e.target.closest('[data-order-action]');
+  if (!btn) return;
+  var id = btn.dataset.id, action = btn.dataset.orderAction;
+  btn.disabled = true;
+  try {
+    await api('/api/admin/market/orders/' + encodeURIComponent(id) + '/' + action, { method: 'POST' });
+    toast(action === 'approve' ? t('toastOrderApproved') : t('toastOrderRejected'));
+    /* Approval sells the listing — refresh both panels. */
+    loadOrders();
+    loadListings();
+  } catch (err) {
+    var msg = (err && err.message) ? err.message : t('errOrder');
+    showError($('ordersError'), msg);
+    toast(msg);
+    btn.disabled = false;
+  }
+}
+
 /* ---------- Tabs / settings / misc ---------- */
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === name); });
@@ -776,6 +1016,8 @@ function switchTab(name) {
   if (name === 'users') loadUsers();
   if (name === 'codes') loadCodes();
   if (name === 'receipts') loadReceipts();
+  if (name === 'listings') loadListings();
+  if (name === 'orders') loadOrders();
 }
 function onSaveToken() {
   localStorage.setItem(LS_TOKEN, $('tokenInput').value.trim());
@@ -792,7 +1034,7 @@ function init() {
     localStorage.setItem(LS_LANG, LANG);
     applyI18n();
     renderExpirySeg();
-    if (isLoggedIn()) { renderUsers(); renderCodes(); renderReceipts(); updateStats(); renderRecipientList(); renderSendResults(lastSendResults); }
+    if (isLoggedIn()) { renderUsers(); renderCodes(); renderReceipts(); renderListings(); renderOrders(); updateStats(); renderRecipientList(); renderSendResults(lastSendResults); }
   });
   $('setupForm').addEventListener('submit', onSetupSubmit);
   $('loginForm').addEventListener('submit', onLoginSubmit);
@@ -833,6 +1075,12 @@ function init() {
   $('receiptsList').addEventListener('click', function (e) {
     if (e.target.closest('[data-receipt-action]')) onReceiptActionClick(e);
     else onReceiptThumbClick(e);
+  });
+  $('listingForm').addEventListener('submit', onListingSubmit);
+  $('listingsList').addEventListener('click', onListingsClick);
+  $('ordersList').addEventListener('click', function (e) {
+    if (e.target.closest('[data-order-action]')) onOrderActionClick(e);
+    else onReceiptThumbClick(e); /* same lightbox as receipts */
   });
   $('lightboxClose').addEventListener('click', function () { show($('lightbox'), false); });
   $('lightbox').addEventListener('click', function (e) { if (e.target === $('lightbox')) show($('lightbox'), false); });

@@ -270,6 +270,30 @@ async function handleSavedOne(req, res, url) {
   }
 }
 
+async function handleSavedDelete(req, res, url) {
+  const address = (url.searchParams.get("address") || "").trim().toLowerCase();
+  if (!address || address.indexOf("@") === -1) {
+    sendJson(res, 400, { error: "address query param required" });
+    return;
+  }
+  // No database configured yet: nothing was ever stored, so nothing
+  // to delete. Same no-DB behaviour as GET /saved (empty, not error).
+  if (!dbPool) {
+    sendJson(res, 200, { ok: true, deleted: 0 });
+    return;
+  }
+  try {
+    const r = await dbPool.query(
+      "DELETE FROM saved_messages WHERE account_address = $1",
+      [address]
+    );
+    sendJson(res, 200, { ok: true, deleted: r.rowCount || 0 });
+  } catch (err) {
+    console.error("movmail-proxy: DELETE /saved failed:", err.message);
+    sendJson(res, 500, { error: "database unavailable" });
+  }
+}
+
 /* ======================================================================
    Accounts / admin API (users, redeem codes, receipts, security)
    ----------------------------------------------------------------------
@@ -369,6 +393,30 @@ const CREATE_API_TABLES_SQL = [
     "  PRIMARY KEY (notification_id, gmail)",
     ")",
   ].join("\n"),
+  [
+    "CREATE TABLE IF NOT EXISTS market_listings (",
+    "  id SERIAL PRIMARY KEY,",
+    "  email TEXT NOT NULL,",
+    "  password TEXT NOT NULL,",
+    "  price NUMERIC NOT NULL,",
+    "  title TEXT DEFAULT '',",
+    "  seller_gmail TEXT NOT NULL,",
+    "  status TEXT NOT NULL DEFAULT 'active',",
+    "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+    ")",
+  ].join("\n"),
+  [
+    "CREATE TABLE IF NOT EXISTS market_orders (",
+    "  id SERIAL PRIMARY KEY,",
+    "  listing_id INT NOT NULL REFERENCES market_listings(id),",
+    "  buyer_gmail TEXT NOT NULL,",
+    "  price NUMERIC NOT NULL,",
+    "  method TEXT NOT NULL,",
+    "  image_data_url TEXT DEFAULT '',",
+    "  status TEXT NOT NULL DEFAULT 'pending',",
+    "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+    ")",
+  ].join("\n"),
 ];
 
 if (dbPool) {
@@ -393,6 +441,10 @@ const mem = {
   events: [], // security event rows
   notifications: [], // admin notification rows (gift codes sent to a bell)
   notificationReads: new Set(), // "notificationId|gmail" pairs that read a gift
+  listings: new Map(), // market listing id -> listing row
+  orders: [], // market order rows
+  listingSeq: 1,
+  orderSeq: 1,
   receiptSeq: 1,
   eventSeq: 1,
   notificationSeq: 1,
@@ -872,6 +924,336 @@ async function decideReceipt(id, approve) {
   return receiptFromRow(row);
 }
 
+/* ---------- Email Account shop (market) ----------
+   Public shop: Mov sells mailboxes he already used to create
+   accounts (e.g. game accounts). Listings show ONLY a masked email;
+   the full address is revealed to the buyer only after an admin
+   approves their payment, and the mailbox password is NEVER sent to
+   any browser except inside the Restore login flow (as a Mail.tm
+   token, never the password itself).
+
+   STORAGE: same Postgres as the rest of the admin API, with the
+   same test-only in-memory fallback (USE_MEMORY_STORE) when
+   DATABASE_URL is unset, so the endpoints stay testable headlessly
+   and never crash without a database. On Render DATABASE_URL is
+   always set, so Postgres is used there. */
+
+// Mask an email for public display: first char + "......." + last 2
+// chars of the local part, domain visible. Short local parts (< 4
+// chars) show only the first char before the dots. Never throws,
+// even for malformed input without "@".
+function maskEmail(email) {
+  const e = String(email || "");
+  const at = e.indexOf("@");
+  if (at === -1) return e ? e.charAt(0) + "......." : "";
+  const local = e.slice(0, at);
+  const domain = e.slice(at); // includes "@"
+  if (local.length < 4) return local.charAt(0) + "......." + domain;
+  return local.charAt(0) + "......." + local.slice(-2) + domain;
+}
+
+// Verify the caller controls a Mail.tm mailbox: POST /token to
+// Mail.tm directly (same UPSTREAM + fetch path the proxy forwards
+// POST /token through). Returns { ok:true, token, id } on success,
+// { ok:false, error } on wrong credentials / upstream failure.
+async function mailTmLogin(address, password) {
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 15000);
+    const r = await fetch(UPSTREAM + "/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ address, password }),
+      signal: ctl.signal,
+    });
+    clearTimeout(timer);
+    const text = await r.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch (_) {}
+    if (!r.ok) {
+      const msg =
+        (data && (data.message || data.detail || data.error)) ||
+        "Mail.tm login failed (HTTP " + r.status + ")";
+      return { ok: false, error: String(msg) };
+    }
+    return { ok: true, token: data && data.token, id: data && data.id };
+  } catch (err) {
+    return { ok: false, error: "Mail.tm unreachable: " + String((err && err.message) || err) };
+  }
+}
+
+// Row mappers. The password NEVER leaves the server in any of these
+// shapes; public shapes carry only the masked email.
+function listingPublicFromRow(r) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    maskedEmail: maskEmail(r.email),
+    price: Number(r.price),
+    title: r.title || "",
+    createdAt: toIso(r.created_at),
+    sold: false,
+  };
+}
+
+function listingAdminFromRow(r) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    maskedEmail: maskEmail(r.email),
+    sellerGmail: r.seller_gmail,
+    status: r.status,
+    price: Number(r.price),
+    title: r.title || "",
+    createdAt: toIso(r.created_at),
+  };
+}
+
+// Buyer-facing order shape. fullEmail is present ONLY on approved
+// orders; pending/rejected orders omit the key entirely.
+function orderBuyerFromRow(r, listingEmail) {
+  if (!r) return null;
+  const out = {
+    id: r.id,
+    listingId: r.listing_id,
+    status: r.status,
+    price: Number(r.price),
+    method: r.method,
+    createdAt: toIso(r.created_at),
+  };
+  if (r.status === "approved" && listingEmail) out.fullEmail = listingEmail;
+  return out;
+}
+
+function orderAdminFromRow(r, listingEmail) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    listingId: r.listing_id,
+    maskedEmail: maskEmail(listingEmail || ""),
+    buyerGmail: r.buyer_gmail,
+    price: Number(r.price),
+    method: r.method,
+    imageDataUrl: r.image_data_url || "",
+    status: r.status,
+    createdAt: toIso(r.created_at),
+  };
+}
+
+async function createListing(address, password, price, title, sellerGmail) {
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "INSERT INTO market_listings (email, password, price, title, seller_gmail)" +
+        " VALUES ($1,$2,$3,$4,$5) RETURNING *",
+      [address, password, price, title || "", sellerGmail]
+    );
+    return r.rows[0];
+  }
+  const row = {
+    id: mem.listingSeq++,
+    email: address,
+    password,
+    price,
+    title: title || "",
+    seller_gmail: sellerGmail,
+    status: "active",
+    created_at: new Date().toISOString(),
+  };
+  mem.listings.set(row.id, row);
+  return row;
+}
+
+async function getListing(id) {
+  const n = Number(id);
+  if (!Number.isInteger(n)) return null;
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query("SELECT * FROM market_listings WHERE id = $1 LIMIT 1", [n]);
+    return r.rows[0] || null;
+  }
+  return mem.listings.get(n) || null;
+}
+
+async function listActiveListings() {
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "SELECT * FROM market_listings WHERE status = 'active' ORDER BY created_at DESC"
+    );
+    return r.rows.map(listingPublicFromRow);
+  }
+  return [...mem.listings.values()]
+    .filter((x) => x.status === "active")
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+    .map(listingPublicFromRow);
+}
+
+async function listAllListings() {
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query("SELECT * FROM market_listings ORDER BY created_at DESC");
+    return r.rows.map(listingAdminFromRow);
+  }
+  return [...mem.listings.values()]
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+    .map(listingAdminFromRow);
+}
+
+async function removeListing(id) {
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "UPDATE market_listings SET status = 'removed' WHERE id = $1 RETURNING *",
+      [Number(id)]
+    );
+    return r.rows[0] || null;
+  }
+  const row = mem.listings.get(Number(id));
+  if (!row) return null;
+  row.status = "removed";
+  return row;
+}
+
+async function createOrder(listing, buyerGmail, method, imageDataUrl) {
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "INSERT INTO market_orders (listing_id, buyer_gmail, price, method, image_data_url)" +
+        " VALUES ($1,$2,$3,$4,$5) RETURNING *",
+      [listing.id, buyerGmail, listing.price, method, imageDataUrl || ""]
+    );
+    return r.rows[0];
+  }
+  const row = {
+    id: mem.orderSeq++,
+    listing_id: listing.id,
+    buyer_gmail: buyerGmail,
+    price: Number(listing.price),
+    method,
+    image_data_url: imageDataUrl || "",
+    status: "pending",
+    created_at: new Date().toISOString(),
+  };
+  mem.orders.push(row);
+  return row;
+}
+
+async function listBuyerOrders(gmail) {
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "SELECT o.*, l.email AS listing_email FROM market_orders o" +
+        " LEFT JOIN market_listings l ON l.id = o.listing_id" +
+        " WHERE o.buyer_gmail = $1 ORDER BY o.created_at DESC",
+      [gmail]
+    );
+    return r.rows.map((x) => orderBuyerFromRow(x, x.listing_email));
+  }
+  return mem.orders
+    .filter((x) => x.buyer_gmail === gmail)
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+    .map((x) => {
+      const listing = mem.listings.get(x.listing_id);
+      return orderBuyerFromRow(x, listing ? listing.email : null);
+    });
+}
+
+async function listAllOrders() {
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "SELECT o.*, l.email AS listing_email FROM market_orders o" +
+        " LEFT JOIN market_listings l ON l.id = o.listing_id" +
+        " ORDER BY o.created_at DESC"
+    );
+    return r.rows.map((x) => orderAdminFromRow(x, x.listing_email));
+  }
+  return [...mem.orders]
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+    .map((x) => {
+      const listing = mem.listings.get(x.listing_id);
+      return orderAdminFromRow(x, listing ? listing.email : null);
+    });
+}
+
+async function findApprovedOrder(listingId, gmail) {
+  const n = Number(listingId);
+  if (!Number.isInteger(n)) return null;
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "SELECT * FROM market_orders WHERE listing_id = $1 AND buyer_gmail = $2" +
+        " AND status = 'approved' LIMIT 1",
+      [n, gmail]
+    );
+    return r.rows[0] || null;
+  }
+  return (
+    mem.orders.find(
+      (x) => x.listing_id === n && x.buyer_gmail === gmail && x.status === "approved"
+    ) || null
+  );
+}
+
+// Approve/reject a market order. Only pending orders can be decided.
+// Approving flips the listing to "sold" — and only if it is still
+// active, so exactly ONE buyer can ever get an approved order per
+// listing. Returns the decided order row, null when the order does
+// not exist, or { error } when the decision is not allowed.
+async function decideMarketOrder(id, approve) {
+  const n = Number(id);
+  if (!Number.isInteger(n)) return null;
+  if (!USE_MEMORY_STORE) {
+    const client = await dbPool.connect();
+    try {
+      await client.query("BEGIN");
+      const r = await client.query("SELECT * FROM market_orders WHERE id = $1 FOR UPDATE", [n]);
+      const row = r.rows[0];
+      if (!row) {
+        await client.query("ROLLBACK");
+        return null;
+      }
+      if (row.status !== "pending") {
+        await client.query("ROLLBACK");
+        return { error: "order is " + row.status };
+      }
+      if (approve) {
+        const l = await client.query(
+          "SELECT * FROM market_listings WHERE id = $1 FOR UPDATE",
+          [row.listing_id]
+        );
+        const listing = l.rows[0];
+        if (!listing || listing.status !== "active") {
+          await client.query("ROLLBACK");
+          return { error: "listing already sold" };
+        }
+        await client.query("UPDATE market_orders SET status = 'approved' WHERE id = $1", [n]);
+        await client.query("UPDATE market_listings SET status = 'sold' WHERE id = $1", [
+          row.listing_id,
+        ]);
+      } else {
+        await client.query("UPDATE market_orders SET status = 'rejected' WHERE id = $1", [n]);
+      }
+      await client.query("COMMIT");
+      const done = await dbPool.query("SELECT * FROM market_orders WHERE id = $1", [n]);
+      return done.rows[0];
+    } catch (err) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (_) {}
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+  const row = mem.orders.find((x) => x.id === n);
+  if (!row) return null;
+  if (row.status !== "pending") return { error: "order is " + row.status };
+  if (approve) {
+    const listing = mem.listings.get(row.listing_id);
+    if (!listing || listing.status !== "active") return { error: "listing already sold" };
+    row.status = "approved";
+    listing.status = "sold";
+  } else {
+    row.status = "rejected";
+  }
+  return row;
+}
+
 async function logSecurityEvent(gmail, type, detail) {
   if (!USE_MEMORY_STORE) {
     await dbPool.query(
@@ -1316,6 +1698,178 @@ async function handleAdminReceiptDecide(req, res, id, action) {
   sendJson(res, 200, receipt);
 }
 
+/* ---------- Market handlers ---------- */
+
+const MARKET_IMAGE_MAX_CHARS = 5 * 1024 * 1024; // ~5MB data URL, same as receipts
+
+async function handleMarketListingsCreate(req, res) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  const address = String(body.address || "").trim().toLowerCase();
+  const password = String(body.password || "");
+  const price = Number(body.price);
+  const title = body.title ? String(body.title) : "";
+  const sellerGmail = String(body.sellerGmail || "").trim().toLowerCase();
+  if (!address || address.indexOf("@") === -1 || !password) {
+    sendJson(res, 400, { ok: false, error: "address and password required" });
+    return;
+  }
+  if (!Number.isFinite(price) || price <= 0) {
+    sendJson(res, 400, { ok: false, error: "price must be a number greater than 0" });
+    return;
+  }
+  if (!sellerGmail) {
+    sendJson(res, 400, { ok: false, error: "sellerGmail required" });
+    return;
+  }
+  // Verify the seller controls the mailbox before listing it.
+  const login = await mailTmLogin(address, password);
+  if (!login.ok) {
+    sendJson(res, 400, { ok: false, error: login.error });
+    return;
+  }
+  const row = await createListing(address, password, price, title, sellerGmail);
+  sendJson(res, 200, {
+    ok: true,
+    listing: { id: row.id, maskedEmail: maskEmail(row.email), price: Number(row.price), title: row.title || "" },
+  });
+}
+
+async function handleMarketListingsList(req, res) {
+  sendJson(res, 200, await listActiveListings());
+}
+
+async function handleMarketOrdersCreate(req, res) {
+  const body = await readJsonBody(req, res, 6 * 1024 * 1024);
+  if (!body) return;
+  const listingId = Number(body.listingId);
+  const gmail = String(body.gmail || "").trim().toLowerCase();
+  const method = String(body.method || "").trim().toLowerCase();
+  const imageDataUrl = typeof body.imageDataUrl === "string" ? body.imageDataUrl : "";
+  if (!Number.isInteger(listingId)) {
+    sendJson(res, 400, { ok: false, error: "listingId required" });
+    return;
+  }
+  if (!gmail || gmail.indexOf("@") === -1) {
+    sendJson(res, 400, { ok: false, error: "gmail required" });
+    return;
+  }
+  if (method !== "khqr" && method !== "usdt") {
+    sendJson(res, 400, { ok: false, error: 'method must be "khqr" or "usdt"' });
+    return;
+  }
+  if (!imageDataUrl) {
+    sendJson(res, 400, { ok: false, error: "imageDataUrl required" });
+    return;
+  }
+  if (imageDataUrl.length > MARKET_IMAGE_MAX_CHARS) {
+    sendJson(res, 413, { ok: false, error: "receipt image too large (max ~5MB)" });
+    return;
+  }
+  const listing = await getListing(listingId);
+  if (!listing || listing.status !== "active") {
+    sendJson(res, 400, { ok: false, error: "listing not available" });
+    return;
+  }
+  // Price comes from the listing server-side; a client-sent price is
+  // never trusted.
+  const order = await createOrder(listing, gmail, method, imageDataUrl);
+  sendJson(res, 200, { ok: true, orderId: order.id, status: "pending" });
+}
+
+async function handleMarketOrdersList(req, res, url) {
+  const gmail = (url.searchParams.get("gmail") || "").trim().toLowerCase();
+  if (!gmail) {
+    sendJson(res, 400, { ok: false, error: "gmail query param required" });
+    return;
+  }
+  sendJson(res, 200, await listBuyerOrders(gmail));
+}
+
+async function handleMarketRestore(req, res) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  const listingId = Number(body.listingId);
+  const gmail = String(body.gmail || "").trim().toLowerCase();
+  if (!Number.isInteger(listingId) || !gmail) {
+    sendJson(res, 400, { ok: false, error: "listingId and gmail required" });
+    return;
+  }
+  const order = await findApprovedOrder(listingId, gmail);
+  if (!order) {
+    sendJson(res, 403, { ok: false, error: "no approved order for this listing" });
+    return;
+  }
+  const listing = await getListing(listingId);
+  if (!listing) {
+    sendJson(res, 403, { ok: false, error: "no approved order for this listing" });
+    return;
+  }
+  // Log in with the stored credentials server-side; only the Mail.tm
+  // token (never the password) goes back to the browser.
+  const login = await mailTmLogin(listing.email, listing.password);
+  if (!login.ok) {
+    sendJson(res, 400, { ok: false, error: login.error });
+    return;
+  }
+  sendJson(res, 200, { ok: true, token: login.token, accountId: login.id, address: listing.email });
+}
+
+async function handleAdminMarketListingsList(req, res) {
+  sendJson(res, 200, await listAllListings());
+}
+
+async function handleAdminMarketListingsCreate(req, res) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  const email = String(body.email || "").trim().toLowerCase();
+  const password = String(body.password || "");
+  const price = Number(body.price);
+  const title = body.title ? String(body.title) : "";
+  const sellerGmail = String(body.sellerGmail || "").trim().toLowerCase() || "admin";
+  if (!email || email.indexOf("@") === -1 || !password) {
+    sendJson(res, 400, { ok: false, error: "email and password required" });
+    return;
+  }
+  if (!Number.isFinite(price) || price <= 0) {
+    sendJson(res, 400, { ok: false, error: "price must be a number greater than 0" });
+    return;
+  }
+  const login = await mailTmLogin(email, password);
+  if (!login.ok) {
+    sendJson(res, 400, { ok: false, error: login.error });
+    return;
+  }
+  const row = await createListing(email, password, price, title, sellerGmail);
+  sendJson(res, 200, { ok: true, listing: listingAdminFromRow(row) });
+}
+
+async function handleAdminMarketListingRemove(req, res, id) {
+  const row = await removeListing(id);
+  if (!row) {
+    sendJson(res, 404, { ok: false, error: "listing not found" });
+    return;
+  }
+  sendJson(res, 200, { ok: true, listing: listingAdminFromRow(row) });
+}
+
+async function handleAdminMarketOrdersList(req, res) {
+  sendJson(res, 200, await listAllOrders());
+}
+
+async function handleAdminMarketOrderDecide(req, res, id, action) {
+  const decided = await decideMarketOrder(Number(id), action === "approve");
+  if (!decided) {
+    sendJson(res, 404, { ok: false, error: "order not found" });
+    return;
+  }
+  if (decided.error) {
+    sendJson(res, 400, { ok: false, error: decided.error });
+    return;
+  }
+  sendJson(res, 200, { ok: true });
+}
+
 async function handleApi(req, res, url) {
   const p = url.pathname;
   try {
@@ -1327,6 +1881,11 @@ async function handleApi(req, res, url) {
     if (req.method === "POST" && p === "/api/security/event") return handleApiSecurityEvent(req, res);
     if (req.method === "GET" && p === "/api/notifications") return handleApiNotificationsList(req, res, url);
     if (req.method === "POST" && p === "/api/notifications/read") return handleApiNotificationsRead(req, res);
+    if (req.method === "POST" && p === "/api/market/listings") return handleMarketListingsCreate(req, res);
+    if (req.method === "GET" && p === "/api/market/listings") return handleMarketListingsList(req, res);
+    if (req.method === "POST" && p === "/api/market/orders") return handleMarketOrdersCreate(req, res);
+    if (req.method === "GET" && p === "/api/market/orders") return handleMarketOrdersList(req, res, url);
+    if (req.method === "POST" && p === "/api/market/restore") return handleMarketRestore(req, res);
     if (p.startsWith("/api/admin/")) {
       if (!requireAdmin(req, res)) return;
       if (req.method === "GET" && p === "/api/admin/users") return handleAdminUsers(req, res);
@@ -1338,6 +1897,13 @@ async function handleApi(req, res, url) {
       if (req.method === "POST" && p === "/api/admin/notify") return handleAdminNotify(req, res);
       if (req.method === "POST" && p === "/api/admin/codes/send") return handleAdminCodesSend(req, res);
       if (req.method === "GET" && p === "/api/admin/receipts") return handleAdminReceiptsList(req, res);
+      if (req.method === "GET" && p === "/api/admin/market/listings") return handleAdminMarketListingsList(req, res);
+      if (req.method === "POST" && p === "/api/admin/market/listings") return handleAdminMarketListingsCreate(req, res);
+      const mMktList = /^\/api\/admin\/market\/listings\/(\d+)\/remove$/.exec(p);
+      if (req.method === "POST" && mMktList) return handleAdminMarketListingRemove(req, res, mMktList[1]);
+      if (req.method === "GET" && p === "/api/admin/market/orders") return handleAdminMarketOrdersList(req, res);
+      const mMktOrd = /^\/api\/admin\/market\/orders\/(\d+)\/(approve|reject)$/.exec(p);
+      if (req.method === "POST" && mMktOrd) return handleAdminMarketOrderDecide(req, res, mMktOrd[1], mMktOrd[2]);
       const mRec = /^\/api\/admin\/receipts\/(\d+)\/(approve|reject)$/.exec(p);
       if (req.method === "POST" && mRec) return handleAdminReceiptDecide(req, res, mRec[1], mRec[2]);
     }
@@ -1435,6 +2001,10 @@ const server = http.createServer((req, res) => {
   // Saved messages (served locally from Postgres, not proxied)
   if (req.method === "GET" && url.pathname === "/saved") {
     handleSavedList(req, res, url);
+    return;
+  }
+  if (req.method === "DELETE" && url.pathname === "/saved") {
+    handleSavedDelete(req, res, url);
     return;
   }
   if (req.method === "GET" && /^\/saved\/[^/]+$/.test(url.pathname)) {

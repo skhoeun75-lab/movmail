@@ -911,6 +911,31 @@
         .reader-body .text-body{padding:14px 16px}
         .error-banner button{margin:8px 0 0}
       }
+      /* ---------- Email Account Shop (v1.2, public) ---------- */
+      .shop{margin-top:22px}
+      .shop-note{font-size:13.5px;color:var(--muted);margin:0 0 12px}
+      .shop-card{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:10px}
+      .shop-main{flex:1 1 160px;min-width:0}
+      .shop-title{font-weight:800;font-size:15.5px;line-height:1.3;overflow-wrap:anywhere}
+      .shop-masked{font-size:13.5px;color:var(--muted);word-break:break-all;overflow-wrap:anywhere}
+      .shop-full{font-size:13.5px;color:var(--accent-ink);font-weight:700;word-break:break-all;overflow-wrap:anywhere}
+      .shop-price{font-size:20px;font-weight:800;color:var(--accent-ink);white-space:nowrap}
+      .shop-actions{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+      .shop-status{font-size:12.5px;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);color:var(--muted)}
+      .shop-status.pending{color:#b45309;border-color:#f59e0b;background:#fef3c7}
+      .shop-status.approved{color:#047857;border-color:#10b981;background:#d1fae5}
+      .shop-spin{display:inline-block;width:18px;height:18px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:rot 1s linear infinite;vertical-align:middle}
+      .shop-loading{padding:14px 4px;color:var(--muted);font-size:14px}
+      .shop-masked-preview{font-size:13.5px;color:var(--muted);margin:0 0 12px;overflow-wrap:anywhere}
+      .my-orders{margin-bottom:14px}
+      .my-orders h3{font-size:14.5px;margin:0 0 8px}
+      .order-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13.5px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--surface)}
+      .order-row .mono{overflow-wrap:anywhere;word-break:break-all}
+      @media (max-width:480px){
+        .shop-card{padding:12px}
+        .shop-price{font-size:18px}
+        .shop-actions{width:100%}
+      }
     </style>
   </head>
   <body>
@@ -928,6 +953,7 @@
         <nav>
           <a href="#inbox" data-i18n="navInbox">ប្រអប់សារ</a>
           <a href="#mailboxesBox" data-i18n="navMailboxes">អ៊ីមែលរក្សាទុក</a>
+          <a href="#shopBox" data-i18n="navShop">លក់ Email Account</a>
           <a href="#inbox" data-i18n="navSaved">សាររក្សាទុក</a>
           <a href="#how" data-i18n="navHow">របៀបប្រើ</a>
           <a href="#faq" data-i18n="navFaq">សំណួរ</a>
@@ -1063,6 +1089,36 @@
               <h3 id="mailboxEmptyTitle">មិនទាន់មានអ៊ីមែលដែលបានរក្សាទុក</h3>
               <p id="mailboxEmptyText">ចុច «រក្សាទុក» នៅខាងលើ ដើម្បីរក្សាអ៊ីមែលនេះទុកប្រើម្តងទៀត — វានឹងមានឈ្មោះ និង Logo របស់វា។</p>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Email Account Shop (public — browse without sign-in) ===== -->
+      <div class="shop" id="shopBox">
+        <div class="inbox" style="box-shadow:var(--shadow)">
+          <div class="inbox-head">
+            <h2>
+              <svg viewBox="0 0 24 24"><path d="M7 18a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7.2 14.5h9.9a2 2 0 0 0 1.9-1.4L21 7H6l-.9-3.5H2v2h2.2l3.2 11.1a2 2 0 0 0 2 1.4z"/></svg>
+              <span data-i18n="shopTitle">ហាងលក់ Email Account</span>
+            </h2>
+            <span class="count-badge" id="shopCountBadge">0</span>
+            <span class="spacer"></span>
+            <button class="icon-btn" id="shopRefreshBtn" aria-label="Refresh shop" data-i18n-aria="refresh">
+              <svg viewBox="0 0 24 24" fill="currentColor" id="shopRefreshIcon"><path d="M17.65 6.35A8 8 0 1 0 19.73 14h-2.08a6 6 0 1 1-1.41-6.65L13 11h7V4l-2.35 2.35z"/></svg>
+            </button>
+          </div>
+          <div style="padding:16px 18px 18px">
+            <p class="shop-note" data-i18n="shopPublicNote">គ្រប់គ្នាអាចមើលបាន — មិនបាច់ចុះឈ្មោះក៏បាន។ អ៊ីមែលត្រូវបានបិទបាំងមុនពេលទិញ។</p>
+            <div class="my-orders" id="myOrdersBox" hidden>
+              <h3 data-i18n="myOrdersTitle">ការបញ្ជាទិញរបស់ខ្ញុំ</h3>
+              <div id="myOrdersList"></div>
+            </div>
+            <div id="shopList"></div>
+            <div class="empty-state" id="shopEmptyState" style="padding:28px 16px 30px">
+              <h3 data-i18n="shopEmpty">មិនទាន់មានអ៊ីមែលលក់ទេ</h3>
+              <p data-i18n="shopEmptyText">អ៊ីមែលដែលដាក់លក់នឹងបង្ហាញនៅទីនេះ។</p>
+            </div>
+            <div class="shop-loading" id="shopLoading" hidden data-i18n="shopLoading">កំពុងផ្ទុកហាង…</div>
           </div>
         </div>
       </div>
@@ -1371,7 +1427,8 @@
           <input type="password" id="authPasswordIn" maxlength="80" autocomplete="current-password" />
         </div>
         <div class="mini-actions">
-          <button class="btn primary" id="authSubmitBtn"><span id="authSubmitLabel" data-i18n="createAccountBtn">បង្កើតគណនី</span></button>
+          <button class="btn" id="authSkipBtn" data-i18n="skipForNow">រំលងសិន</button>
+            <button class="btn primary" id="authSubmitBtn"><span id="authSubmitLabel" data-i18n="createAccountBtn">បង្កើតគណនី</span></button>
         </div>
         <p class="auth-switch"><button type="button" class="link-btn" id="authSwitchBtn" data-i18n="haveAccount">មានគណនីរួចហើយ? ចូលប្រើ</button></p>
       </div>
@@ -1510,6 +1567,65 @@
       </div>
     </div>
 
+    <!-- ===== Sell mailbox (Email Shop) ===== -->
+    <div class="mini-overlay" id="sellOverlay" role="dialog" aria-modal="true">
+      <div class="mini-modal">
+        <h3 data-i18n="sellTitle">ដាក់លក់អ៊ីមែលនេះ</h3>
+        <p data-i18n="sellText">អ្នកទិញឃើញតែអ៊ីមែលដែលបិទបាំងប៉ុណ្ណោះ រហូតដល់ Admin អនុម័តការទូទាត់។</p>
+        <div class="shop-masked-preview"><span data-i18n="sellMaskedLabel">អ៊ីមែលដែលបង្ហាញ៖</span> <b class="mono" id="sellMaskedEmail">—</b></div>
+        <label for="sellPriceInput" data-i18n="sellPriceLabel">តម្លៃ ($)</label>
+        <input type="number" id="sellPriceInput" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" />
+        <label for="sellTitleInput" data-i18n="sellTitleLabel">ចំណងជើង / កំណត់ចំណាំ</label>
+        <input type="text" id="sellTitleInput" maxlength="80" />
+        <div class="redeem-status err" id="sellError" hidden></div>
+        <div class="mini-actions">
+          <button class="btn" id="sellCancelBtn" data-i18n="cancelBtn">បោះបង់</button>
+          <button class="btn primary" id="sellConfirmBtn" data-i18n="sellBtn">ដាក់លក់</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Buy listing — KHQR / USDT receipt to admin ===== -->
+    <div class="mini-overlay" id="marketPayOverlay" role="dialog" aria-modal="true">
+      <div class="mini-modal">
+        <h3 data-i18n="marketPayTitle">ទិញ Email Account</h3>
+        <div class="pay-plan-line"><span id="mktListingTitle">—</span> · <b id="mktPriceTop" class="pay-price-top">$0.00</b></div>
+        <div class="pay-methods">
+          <button type="button" class="btn pay-method-btn" id="mktKhqrBtn">🇰🇭 KHQR</button>
+          <button type="button" class="btn pay-method-btn" id="mktUsdtBtn">QR USDT</button>
+        </div>
+        <div class="pay-card" id="mktKhqrCard" hidden>
+          <img src="khqr.png" alt="KHQR" id="mktKhqrImg" onerror="this.style.display='none'" />
+          <div class="pay-card-name">YEM SOKHOEUN</div>
+          <div class="pay-card-price" id="mktKhqrPrice">$0.00</div>
+          <div class="pay-card-note" data-i18n="payKhqrNote">ស្កេន KHQR នេះដើម្បីទូទាត់តាមតម្លៃកញ្ចប់ខាងលើ</div>
+          <div class="pay-card-brand"><img src="logo.png" alt="MovMail" /><span>MovMail.com</span></div>
+        </div>
+        <div class="pay-card" id="mktUsdtCard" hidden>
+          <img src="usdt-qr.png" alt="USDT QR" onerror="this.style.display='none'" />
+          <div class="pay-card-price" id="mktUsdtPrice">$0.00</div>
+          <div class="pay-addr mono">TPHu2Z45PZ9xUB7AzqMehWKv72HysE9Vzd</div>
+          <button type="button" class="btn-sm primary" id="mktCopyAddrBtn" data-i18n="payCopyAddress">ចម្លងអាសយដ្ឋាន</button>
+          <div class="pay-card-note">TRC20 only · Min &gt;0.01 USDT</div>
+          <div class="pay-card-note" data-i18n="payEnterAmount">សូមបញ្ចូលចំនួនទឹកប្រាក់ដោយខ្លួនឯង — តាមតម្លៃកញ្ចប់ខាងលើ</div>
+          <div class="pay-card-brand"><img src="logo.png" alt="MovMail" /><span>MovMail.com</span></div>
+        </div>
+        <div class="pay-receipt" id="mktReceiptBox" hidden>
+          <label for="mktReceiptInput" data-i18n="payUploadReceipt">បង្ហោះរូបថតវិក្កយបត្រទូទាត់</label>
+          <input type="file" id="mktReceiptInput" accept="image/*" />
+          <button type="button" class="btn primary" id="mktSendBtn" data-i18n="paySend">ផ្ញើទៅ Admin</button>
+          <div class="redeem-status" id="mktStatus" hidden></div>
+        </div>
+        <div class="pay-sent" id="mktSentBox" hidden>
+          <div class="pay-sent-title">✓ <span data-i18n="marketReceiptSent">បានផ្ញើ — សូមរង់ចាំ Admin អនុម័ត</span></div>
+          <p data-i18n="paySentNote">Admin ជាធម្មតាអនុម័តក្នុងរយៈពេល 4–5 នាទី, យឺតបំផុត 1 ម៉ោង។ សំណើនេះនឹងផុតកំណត់បន្ទាប់ពី 24 ម៉ោងបើមិនបានអនុម័ត។</p>
+        </div>
+        <div class="mini-actions">
+          <button class="btn" id="mktCloseBtn" data-i18n="cancelBtn">បោះបង់</button>
+        </div>
+      </div>
+    </div>
+
     <div class="toast" id="toast" role="status"></div>
 
     <script>
@@ -1642,7 +1758,7 @@
             dailyUse: { date: localDateKey(), count: 0, total: 0 },
             notifications: [], problems: [],
             giftNotifications: [], seenGiftIds: [],
-            redeemedPerDay: 0, redeemedCodes: [], pendingPayment: null
+            redeemedPerDay: 0, redeemedCodes: [], pendingPayment: null, currentMailbox: null, marketOrders: []
           };
         }
         /* Tamper guard: quota values that cannot be real (negative, or
@@ -1685,6 +1801,8 @@
           if (!Array.isArray(d.giftNotifications)) d.giftNotifications = [];
           if (!Array.isArray(d.seenGiftIds)) d.seenGiftIds = [];
           if (!Array.isArray(d.redeemedCodes)) d.redeemedCodes = [];
+          if (!Array.isArray(d.marketOrders)) d.marketOrders = [];
+          if (d.currentMailbox !== null && typeof d.currentMailbox !== "object") d.currentMailbox = null;
         }
         function acctData(){
           var d = defaultAcctData();
@@ -1953,7 +2071,8 @@
             buildQr();
             startPolling();
             rememberAddress();
-            fetchSavedMessages();
+            fetchSavedMessages(true);
+            saveCurrentSession();
             renderMessages();
             updateIpLine();
           } else {
@@ -2491,6 +2610,38 @@ var I18N = {
     "featSpeedFree": "ល្បឿនមធ្យម — រៀងរាល់ 10 វិនាទី",
     "featSpeedMonthly": "ល្បឿនលឿន — រៀងរាល់ 5 វិនាទី",
     "featSpeedYearly": "ល្បឿនដូចរន្ទះ — រៀងរាល់ 2 វិនាទី",
+    "navShop": "លក់ Email Account",
+    "shopTitle": "ហាងលក់ Email Account",
+    "shopPublicNote": "គ្រប់គ្នាអាចមើលបាន — មិនបាច់ចុះឈ្មោះក៏បាន។ អ៊ីមែលត្រូវបានបិទបាំងមុនពេលទិញ។",
+    "shopLoading": "កំពុងផ្ទុកហាង…",
+    "shopEmpty": "មិនទាន់មានអ៊ីមែលលក់ទេ",
+    "shopEmptyText": "អ៊ីមែលដែលដាក់លក់នឹងបង្ហាញនៅទីនេះ។",
+    "shopLoadFailed": "ផ្ទុកហាងមិនបានសម្រេច។",
+    "sellBtn": "ដាក់លក់",
+    "sellTitle": "ដាក់លក់អ៊ីមែលនេះ",
+    "sellText": "អ្នកទិញឃើញតែអ៊ីមែលដែលបិទបាំងប៉ុណ្ណោះ រហូតដល់ Admin អនុម័តការទូទាត់។",
+    "sellMaskedLabel": "អ៊ីមែលដែលបង្ហាញ៖",
+    "sellPriceLabel": "តម្លៃ ($)",
+    "sellTitleLabel": "ចំណងជើង / កំណត់ចំណាំ",
+    "sellNeedPrice": "សូមបញ្ចូលតម្លៃធំជាង $0។",
+    "sellNeedSignin": "សូមចូលប្រើជាមុនដើម្បីដាក់លក់។",
+    "sellFailed": "ដាក់លក់មិនបានសម្រេច។ សូមព្យាយាមម្តងទៀត។",
+    "sellVerifyFailed": "ផ្ទៀងផ្ទាត់ម្ចាស់អ៊ីមែលមិនបានសម្រេច។",
+    "sellSuccess": "បានដាក់លក់ហើយ",
+    "buyBtn": "ទិញ",
+    "buyNeedSignin": "សូមចូលប្រើជាមុនដើម្បីទិញ។",
+    "marketPayTitle": "ទិញ Email Account",
+    "marketReceiptSent": "បានផ្ញើ — សូមរង់ចាំ Admin អនុម័ត",
+    "marketNeedReceipt": "សូមជ្រើសរើសរូបថតវិក្កយបត្រជាមុន។",
+    "marketSendFailed": "ផ្ញើវិក្កយបត្រមិនបានសម្រេច។ សូមព្យាយាមម្តងទៀត។",
+    "marketOrderPending": "កំពុងរង់ចាំ Admin អនុម័ត",
+    "marketOrderApproved": "បានអនុម័ត",
+    "myOrdersTitle": "ការបញ្ជាទិញរបស់ខ្ញុំ",
+    "restoreBoughtBtn": "យកមកប្រើ",
+    "restoreBoughtSuccess": "បានយកអ៊ីមែលដែលទិញមកប្រើហើយ",
+    "restoreBoughtFailed": "យកអ៊ីមែលមកប្រើវិញមិនបានសម្រេច",
+    "marketRevealing": "កំពុងបង្ហាញអ៊ីមែល…",
+    "shopSold": "លក់រួច",
     "heroDismiss": "បិទ"
   },
   "en": {
@@ -2809,6 +2960,38 @@ var I18N = {
     "featSpeedFree": "Moderate speed — every 10 seconds",
     "featSpeedMonthly": "Fast speed — every 5 seconds",
     "featSpeedYearly": "Lightning speed — every 2 seconds",
+    "navShop": "Email Shop",
+    "shopTitle": "Email Account Shop",
+    "shopPublicNote": "Public — everyone can browse without signing in. Emails stay masked until purchase.",
+    "shopLoading": "Loading shop…",
+    "shopEmpty": "No emails for sale yet",
+    "shopEmptyText": "Emails listed for sale will appear here.",
+    "shopLoadFailed": "Could not load the shop.",
+    "sellBtn": "Sell",
+    "sellTitle": "List this email for sale",
+    "sellText": "Buyers only see the masked email until the admin approves their payment.",
+    "sellMaskedLabel": "Shown as:",
+    "sellPriceLabel": "Price ($)",
+    "sellTitleLabel": "Title / note",
+    "sellNeedPrice": "Please enter a price greater than $0.",
+    "sellNeedSignin": "Please sign in first to list an email.",
+    "sellFailed": "Could not list this email. Please try again.",
+    "sellVerifyFailed": "Could not verify you own this email.",
+    "sellSuccess": "Listed for sale",
+    "buyBtn": "Buy",
+    "buyNeedSignin": "Please sign in first to buy.",
+    "marketPayTitle": "Buy Email Account",
+    "marketReceiptSent": "Sent — waiting for admin approval",
+    "marketNeedReceipt": "Please choose a receipt photo first.",
+    "marketSendFailed": "Could not send the receipt. Please try again.",
+    "marketOrderPending": "Waiting for admin approval",
+    "marketOrderApproved": "Approved",
+    "myOrdersTitle": "My orders",
+    "restoreBoughtBtn": "Restore",
+    "restoreBoughtSuccess": "Bought email restored",
+    "restoreBoughtFailed": "Could not restore this email",
+    "marketRevealing": "Revealing email…",
+    "shopSold": "Sold",
     "heroDismiss": "Dismiss"
   }
 };
@@ -3157,10 +3340,12 @@ var I18N = {
             statusText.textContent = t("statusWaiting");
             setBusy(false);
             buildQr();
+            switchInboxTo(state.address);
             fetchMessages(true);
             startPolling();
             rememberAddress();
-            fetchSavedMessages();
+            fetchSavedMessages(true);
+            saveCurrentSession();
             /* A new address was created: count it against the daily
                quota and log it in the bell. */
             recordEmailCreated();
@@ -3202,6 +3387,11 @@ var I18N = {
 
         function deleteAndRecreate(){
           var oldToken = state.token, oldId = state.accountId;
+          /* v1.2: delete the CURRENT address's saved rows too
+             (best-effort, never blocks the UI or the recreate flow),
+             mirroring deleteMailbox(). */
+          var oldAddr = state.address;
+          if (oldAddr) api("/saved?address=" + encodeURIComponent(oldAddr), { method: "DELETE" }).catch(function(){});
           if (oldToken && oldId){
             var keep = state.token; state.token = oldToken;
             api("/accounts/" + oldId, { method:"DELETE" }).catch(function(){});
@@ -3551,6 +3741,7 @@ var I18N = {
           for (var i = 0; i < list.length; i++){
             if (list[i].address === state.address){
               list[i].name = name;
+              if (state.accountId) list[i].accountId = state.accountId;
               if (!list[i].tier) list[i].tier = "free";
               if (currentIp) list[i].ip = currentIp.ip, list[i].country = currentIp.country, list[i].city = currentIp.city, list[i].flag = currentIp.flag;
               saveMailboxes(list);
@@ -3565,6 +3756,7 @@ var I18N = {
             address: state.address,
             password: state.password,
             token: state.token,
+            accountId: state.accountId || "",
             ip: currentIp ? currentIp.ip : "",
             country: currentIp ? currentIp.country : "",
             city: currentIp ? currentIp.city : "",
@@ -3665,6 +3857,7 @@ var I18N = {
             smBtn(t("restoreBtn"), "primary", function(){ restoreMailbox(mb); });
             smBtn(t("openBtn"), "", function(){ openFloatPanel(mb); });
             smBtn(t("editBtn"), "", function(){ openEditModal(mb); });
+            smBtn(t("sellBtn"), "", function(){ openSellModal(mb); });
             smBtn(t("deleteMailbox"), "danger", function(){ showDeleteConfirm(row, mb); });
             row.appendChild(actions);
             var del = document.createElement("div");
@@ -3702,18 +3895,49 @@ var I18N = {
           return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
         }
         function deleteMailbox(mb){
-          /* Permanent delete: the mailbox AND its saved messages for
-             that address (localStorage only — the server database is
-             untouched). No trash, no undo. */
+          /* Permanent delete: the mailbox AND its saved messages.
+             v1.2: the server rows go too (best-effort DELETE
+             /saved?address= — never blocks the UI), and the Mail.tm
+             account is deleted when its id is known (current mailbox,
+             or a saved row that carries accountId — rows saved before
+             v1.2 carry none, so those accounts stay on Mail.tm and
+             only their saved rows are removed; no new proxy endpoint
+             is invented for that). */
+          var wasCurrent = mb.address === state.address;
+          var acctId = mb.accountId || (wasCurrent ? state.accountId : "");
+          var tok = wasCurrent ? state.token : (mb.token || "");
           var list = loadMailboxes().filter(function(m){ return m.address !== mb.address; });
           saveMailboxes(list);
           savedState.messages = savedState.messages.filter(function(m){ return m._accountAddress !== mb.address; });
           var _dd = acctData();
           _dd.addresses = (_dd.addresses || []).filter(function(a){ return a !== mb.address; });
           saveAcctData(_dd);
+          api("/saved?address=" + encodeURIComponent(mb.address), { method: "DELETE" }).catch(function(){});
+          if (acctId && tok){
+            var _keepTok = state.token; state.token = tok;
+            api("/accounts/" + acctId, { method: "DELETE" }).catch(function(){});
+            state.token = _keepTok;
+          }
           renderMailboxes();
           renderSavedMessages();
           showToast(t("toastDeletedMailbox"));
+          if (wasCurrent){
+            /* The deleted mailbox was the one on screen: it disappears
+               now (only a delete does that), and a fresh address is
+               generated, exactly like the main Delete button. */
+            clearCurrentSession();
+            stopPolling();
+            state.address = ""; state.password = ""; state.token = ""; state.accountId = "";
+            state.messages = []; state.failed = false; state.retrying = false; state.retryCount = 0;
+            savedState.messages = []; savedState.loaded = false; savedState.lastFetch = 0;
+            addrText.textContent = "—";
+            addrText.classList.remove("loading");
+            statusText.textContent = "";
+            hideError();
+            updateIpLine();
+            renderMessages();
+            createAccount();
+          }
         }
         /* ---------- shared re-login (dead-token recovery) ----------
            POST /token with the current address + password; if that
@@ -3736,8 +3960,9 @@ var I18N = {
             state.token = token;
             if (accountId) state.accountId = accountId;
             var list = loadMailboxes(), changed = false;
-            list.forEach(function(m){ if (m.address === addr){ m.token = token; changed = true; } });
+            list.forEach(function(m){ if (m.address === addr){ m.token = token; if (accountId) m.accountId = accountId; changed = true; } });
             if (changed) saveMailboxes(list);
+            if (addr === state.address) saveCurrentSession();
             return {ok:true, token: token, accountId: accountId || ""};
           }
           function tokenOnly(){
@@ -3794,10 +4019,12 @@ var I18N = {
             setBusy(false);
             buildQr();
             stopPolling();
+            switchInboxTo(mb.address);
             fetchMessages(true);
             startPolling();
             rememberAddress();
-            fetchSavedMessages();
+            fetchSavedMessages(true);
+            saveCurrentSession();
             renderMailboxes();
             showToast(t("toastRestored"));
             addNotification("notifRestored", {addr: mb.address});
@@ -4413,6 +4640,9 @@ var I18N = {
           });
           savedState.messages.forEach(function(s){
             if (!s || !s.id) return;
+            /* v1.2: the inbox belongs to the CURRENT mailbox only —
+               a saved row for any other address never renders here. */
+            if (state.address && s._accountAddress && s._accountAddress !== state.address) return;
             var live = byId[s.id];
             if (live){
               live._saved = true;
@@ -4601,30 +4831,19 @@ var I18N = {
         /* Returns a promise resolving true when a fetch ran, false
            when throttled / already running / no addresses. Existing
            callers ignore the return value. */
-        function fetchSavedMessages(){
+        function fetchSavedMessages(force){
           if (savedState.fetching) return savedFetchPromise || Promise.resolve(false);
-          if (Date.now() - savedState.lastFetch < 15000) return Promise.resolve(false);
-          var addrs = knownAddresses();
-          if (!addrs.length) return Promise.resolve(false);
+          if (!force && Date.now() - savedState.lastFetch < 15000) return Promise.resolve(false);
+          /* v1.2: query ONLY the current address. The old code fetched
+             every address in knownAddresses() and merged them, so the
+             inbox showed other mailboxes' messages. */
+          var addr = state.address;
+          if (!addr) return Promise.resolve(false);
           savedState.fetching = true;
           savedState.lastFetch = Date.now();
-          var jobs = addrs.map(function(a){
-            return api("/saved?address=" + encodeURIComponent(a)).catch(function(){ return []; });
-          });
-          savedFetchPromise = Promise.all(jobs).then(function(results){
-            var byId = {};
-            results.forEach(function(rows){
-              (Array.isArray(rows) ? rows : []).forEach(function(row){
-                if (row && row.id) byId[row.id] = row;
-              });
-            });
-            var rows = Object.keys(byId).map(function(k){ return byId[k]; });
-            rows.sort(function(a, b){
-              var ta = new Date(a.received_at || a.created_at || 0).getTime() || 0;
-              var tb = new Date(b.received_at || b.created_at || 0).getTime() || 0;
-              return tb - ta;
-            });
-            savedState.messages = rows.map(savedToMessage);
+          savedFetchPromise = api("/saved?address=" + encodeURIComponent(addr)).catch(function(){ return []; }).then(function(rows){
+            var list = Array.isArray(rows) ? rows : [];
+            savedState.messages = list.map(savedToMessage);
             savedState.loaded = true;
             savedState.fetching = false;
             renderSavedMessages();
@@ -5560,6 +5779,7 @@ var I18N = {
               refreshAccountFromServer();
               updateAvatarUI();
               showToast(t("toastWelcomeBack"));
+              resumePendingMarketBuy();
             } else {
               showAuthError(t("authErrWrongPass"));
             }
@@ -5611,7 +5831,9 @@ var I18N = {
         });
         $("authSwitchBtn").addEventListener("click", function(){ openAuthModal(authMode === "signin" ? "signup" : "signin"); });
         $("authSuccessClose").addEventListener("click", function(){ closeAnimated($("authSuccessOverlay"), ".mini-modal"); });
+        $("authSuccessClose").addEventListener("click", function(){ resumePendingMarketBuy(); });
         $("headerSignupBtn").addEventListener("click", function(){ openAuthModal("signup"); });
+        $("authSkipBtn").addEventListener("click", function(){ closeAuthModal(); });
 
         /* ---------- profile panel ---------- */
         function updateAvatarUI(){
@@ -5790,6 +6012,499 @@ var I18N = {
         });
         /* The midnight countdown ticks every second. */
         setInterval(updateQuotaLine, 1000);
+
+        /* ---------- v1.2: per-mailbox inbox + current-session persistence ----------
+           The generated email must survive a refresh and disappear ONLY
+           when the user deletes it. Boot used to call createAccount()
+           unconditionally, so a refresh always made a NEW address and
+           the old one was lost (unless it had been saved by name).
+           The current session (address/password/token/accountId/IP) is
+           now stored in the per-Gmail bundle as currentMailbox and
+           restored on load with a token check + reauth fallback. */
+        function switchInboxTo(addr){
+          /* Switching mailbox = switching inbox: drop the previous
+             address's messages from the view at once (its server rows
+             are NOT deleted — only hidden until that mailbox is current
+             again). A brand-new address therefore starts empty. */
+          savedState.messages = [];
+          savedState.loaded = false;
+          savedState.lastFetch = 0;
+          state.messages = [];
+          renderMessages();
+        }
+        function saveCurrentSession(){
+          if (!state.address || !state.token) return;
+          try {
+            var d = acctData();
+            d.currentMailbox = {
+              address: state.address, password: state.password, token: state.token,
+              accountId: state.accountId || "", createdAt: state.createdAt || "",
+              ip: currentIp ? currentIp.ip : "", country: currentIp ? currentIp.country : "",
+              city: currentIp ? currentIp.city : "", flag: currentIp ? currentIp.flag : "",
+              proxy: (typeof currentProxyPref !== "undefined" ? currentProxyPref : "auto") || "auto"
+            };
+            saveAcctData(d);
+          } catch(e) {}
+        }
+        function clearCurrentSession(){
+          try { var d = acctData(); d.currentMailbox = null; saveAcctData(d); } catch(e) {}
+        }
+        function adoptRestoredCurrent(mb){
+          state.address = mb.address;
+          state.password = mb.password;
+          state.token = mb.token || state.token;
+          state.accountId = mb.accountId || state.accountId || "";
+          state.messages = [];
+          state.failed = false; state.retrying = false; state.retryCount = 0;
+          state.createdAt = mb.createdAt || new Date().toISOString();
+          if (mb.ip) currentIp = { ip: mb.ip, country: mb.country, city: mb.city, flag: mb.flag };
+          hideError();
+          addrText.textContent = state.address;
+          addrText.classList.remove("loading");
+          statusText.textContent = t("statusWaiting");
+          updateIpLine();
+          setBusy(false);
+          buildQr();
+          switchInboxTo(state.address);
+          fetchMessages(true);
+          startPolling();
+          rememberAddress();
+          fetchSavedMessages(true);
+          saveCurrentSession();
+        }
+        function restoreCurrentSessionOrCreate(){
+          var cur = null;
+          try { cur = acctData().currentMailbox || null; } catch(e) {}
+          /* A bought shop mailbox has a token but no password (the
+             server holds it), so a token-only session restores too —
+             it just cannot re-login once the token dies. */
+          if (!cur || !cur.address || (!cur.password && !cur.token)){ createAccount(); return; }
+          /* Same blocked-account guard as createAccount: do not restore
+             a mailbox for a possibly-closed account. */
+          if (!blockedKnown && loadProfile()){
+            if (state.createTimer) clearTimeout(state.createTimer);
+            state.createTimer = setTimeout(restoreCurrentSessionOrCreate, 500);
+            return;
+          }
+          if (state.blocked){ createAccount(); return; }
+          var mb = {
+            address: cur.address, password: cur.password, token: cur.token || "",
+            accountId: cur.accountId || "", createdAt: cur.createdAt || "",
+            ip: cur.ip || "", country: cur.country || "", city: cur.city || "",
+            flag: cur.flag || "", proxy: cur.proxy || "auto"
+          };
+          state.address = mb.address;
+          state.password = mb.password;
+          state.token = mb.token;
+          addrText.textContent = mb.address;
+          addrText.classList.add("loading");
+          statusText.textContent = t("statusConnecting");
+          api("/messages?page=1").then(function(){
+            adoptRestoredCurrent(mb);
+          }).catch(function(err){
+            if (!err || !err.status || err.status === 401 || err.status === 404){
+              /* Dead token — re-log in with the SAME address/password
+                 (shared helper), then adopt; only if that fails too
+                 does the session fall back to a fresh address. */
+              reauthMailbox().then(function(res){
+                if (res && res.ok){ mb.token = res.token; adoptRestoredCurrent(mb); }
+                else { clearCurrentSession(); createAccount(); }
+              });
+            } else {
+              /* 429 / network: keep the saved token and let the normal
+                 poll reconnect — the address itself is still ours. */
+              adoptRestoredCurrent(mb);
+            }
+          });
+        }
+
+        /* ---------- v1.2: Email Account Shop (public marketplace) ----------
+           Contract (proxy, built in parallel — use exactly this):
+             GET  /api/market/listings                     -> [{id, maskedEmail, price, title, createdAt, sold}]
+             POST /api/market/listings {address, password, price, title, sellerGmail}
+             POST /api/market/orders {listingId, gmail, method, imageDataUrl} -> {ok, orderId, status:"pending"}
+             GET  /api/market/orders?gmail=<buyerGmail>    -> [{id, listingId, status, price, method, createdAt, fullEmail?}]
+                  (fullEmail present ONLY when status is "approved")
+             POST /api/market/restore {listingId, gmail}  -> {ok, token, accountId, address}
+           All market calls go through apiAdmin (proxy bases only, never
+           api.mail.tm). The shop is PUBLIC: listings load with no
+           sign-in; only Buy / Sell need a signed-in Gmail. Listing
+           passwords come only from the saved-mailbox rows the frontend
+           already holds — never from chat, never logged. Prices are
+           typed by the seller; no default price is ever invented. */
+        var marketListings = [];
+        var marketOrders = [];
+        var marketRevealTimers = {};
+        var marketRevealed = {};
+        var marketPayListing = null;
+        var marketPayMethod = null;
+        var marketSellMailbox = null;
+        var marketPendingBuy = null;
+        var marketOrderTimer = null;
+        function maskMarketEmail(email){
+          /* Mirror of the server maskEmail rule exactly, including
+             malformed input with no "@": first char + ".......".
+             bwkpufe96t@euploading.com -> b.......6t@euploading.com
+             ab@x.com -> a.......@x.com ; "" stays "". */
+          var str = String(email || "");
+          var at = str.indexOf("@");
+          if (at === -1) return str ? str.charAt(0) + "......." : "";
+          var local = str.slice(0, at);
+          var domain = str.slice(at); // includes "@"
+          if (local.length < 4) return local.charAt(0) + "......." + domain;
+          return local.charAt(0) + "......." + local.slice(-2) + domain;
+        }
+        function formatMarketPrice(p){
+          var n = Number(p);
+          if (!isFinite(n) || n <= 0) return "—";
+          return "$" + n.toFixed(2);
+        }
+        function marketOrderFor(listingId){
+          for (var i = 0; i < marketOrders.length; i++){
+            if (marketOrders[i] && String(marketOrders[i].listingId) === String(listingId)) return marketOrders[i];
+          }
+          return null;
+        }
+        function loadMarketListings(quiet){
+          var ld = $("shopLoading");
+          if (ld) ld.hidden = false;
+          return apiAdmin("/api/market/listings").then(function(data){
+            var arr = Array.isArray(data) ? data : (data && Array.isArray(data.listings) ? data.listings : []);
+            marketListings = arr;
+            if (ld) ld.hidden = true;
+            renderMarketListings();
+            return arr;
+          }).catch(function(){
+            if (ld) ld.hidden = true;
+            if (!quiet) showToast(t("shopLoadFailed"));
+            return marketListings;
+          });
+        }
+        function loadMarketOrders(){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p || !p.email){ marketOrders = []; renderMyOrders(); return Promise.resolve([]); }
+          return apiAdmin("/api/market/orders?gmail=" + encodeURIComponent(p.email)).then(function(data){
+            var arr = Array.isArray(data) ? data : (data && Array.isArray(data.orders) ? data.orders : []);
+            marketOrders = arr;
+            renderMarketListings();
+            return arr;
+          }).catch(function(){ return marketOrders; });
+        }
+        function startMarketOrderPolling(){
+          /* Same 30s cadence as the gift-notification poll. Only polls
+             while an order is still pending — never hammers. */
+          if (marketOrderTimer) return;
+          marketOrderTimer = setInterval(function(){
+            var pending = false;
+            marketOrders.forEach(function(o){ if (o && o.status === "pending") pending = true; });
+            if (pending) loadMarketOrders();
+          }, 30000);
+        }
+        function renderMyOrders(){
+          var box = $("myOrdersBox"), listEl = $("myOrdersList");
+          if (!box || !listEl) return;
+          listEl.innerHTML = "";
+          if (!marketOrders.length){ box.hidden = true; return; }
+          box.hidden = false;
+          marketOrders.forEach(function(o){
+            var row = document.createElement("div");
+            row.className = "order-row";
+            var listing = null;
+            marketListings.forEach(function(l){ if (l && String(l.id) === String(o.listingId)) listing = l; });
+            var label = document.createElement("span");
+            label.className = "mono";
+            label.textContent = (listing && (listing.title || listing.maskedEmail)) || String(o.listingId || "");
+            var price = document.createElement("b");
+            price.textContent = formatMarketPrice(o.price != null ? o.price : (listing && listing.price));
+            var st = document.createElement("span");
+            st.className = "shop-status " + (o.status === "approved" ? "approved" : "pending");
+            st.textContent = o.status === "approved" ? t("marketOrderApproved") : t("marketOrderPending");
+            row.appendChild(label); row.appendChild(price); row.appendChild(st);
+            if (o.status === "approved" && o.fullEmail){
+              /* v1.2 fix: My Orders must NOT depend on marketListings.
+                 GET /api/market/listings returns active-only, so an
+                 approved (sold) listing is gone after any reload or
+                 shop refresh — yet the order itself carries fullEmail
+                 and restore only needs the listing id. Show the full
+                 email + a Restore button straight from the order, no
+                 spinner (the 5s spinner lives only on the in-session
+                 shop card). */
+              var full = document.createElement("div");
+              full.className = "shop-full mono";
+              full.textContent = o.fullEmail;
+              row.appendChild(full);
+              var rb = document.createElement("button");
+              rb.type = "button";
+              rb.className = "btn-sm primary";
+              rb.textContent = t("restoreBoughtBtn");
+              rb.addEventListener("click", function(){ restoreBoughtMailbox({ id: o.listingId }, o); });
+              row.appendChild(rb);
+            }
+            listEl.appendChild(row);
+          });
+        }
+        function renderMarketListings(){
+          var listEl = $("shopList"), empty = $("shopEmptyState"), badge = $("shopCountBadge");
+          if (!listEl) return;
+          /* Sold listings never render: the server excludes them, and
+             this filter is a second guard if one ever slips through. */
+          var shown = marketListings.filter(function(l){ return l && !l.sold; });
+          if (badge) badge.textContent = String(shown.length);
+          listEl.innerHTML = "";
+          if (empty) empty.style.display = shown.length ? "none" : "block";
+          shown.forEach(function(l){
+            var card = document.createElement("div");
+            card.className = "shop-card";
+            var main = document.createElement("div");
+            main.className = "shop-main";
+            var ttl = document.createElement("div");
+            ttl.className = "shop-title";
+            ttl.textContent = l.title || l.maskedEmail || "";
+            var masked = document.createElement("div");
+            masked.className = "shop-masked mono";
+            masked.textContent = l.maskedEmail || maskMarketEmail(l.maskedEmail || "");
+            main.appendChild(ttl);
+            main.appendChild(masked);
+            var order = marketOrderFor(l.id);
+            if (order && order.status === "approved" && order.fullEmail){
+              if (marketRevealed[l.id]){
+                var full = document.createElement("div");
+                full.className = "shop-full mono";
+                full.textContent = order.fullEmail;
+                main.appendChild(full);
+              } else {
+                /* ~5s spinner, then the full email + Restore appear. */
+                var spin = document.createElement("div");
+                spin.className = "shop-masked";
+                var sp = document.createElement("span");
+                sp.className = "shop-spin";
+                spin.appendChild(sp);
+                var st2 = document.createElement("span");
+                st2.textContent = " " + t("marketRevealing");
+                spin.appendChild(st2);
+                main.appendChild(spin);
+                if (!marketRevealTimers[l.id]){
+                  marketRevealTimers[l.id] = setTimeout(function(){
+                    marketRevealed[l.id] = true;
+                    renderMarketListings();
+                  }, 5000);
+                }
+              }
+            }
+            card.appendChild(main);
+            var price = document.createElement("div");
+            price.className = "shop-price";
+            price.textContent = formatMarketPrice(l.price);
+            card.appendChild(price);
+            var acts = document.createElement("div");
+            acts.className = "shop-actions";
+            if (order && order.status === "approved" && order.fullEmail && marketRevealed[l.id]){
+              var rb2 = document.createElement("button");
+              rb2.type = "button";
+              rb2.className = "btn-sm primary";
+              rb2.textContent = t("restoreBoughtBtn");
+              rb2.addEventListener("click", function(){ restoreBoughtMailbox(l, order); });
+              acts.appendChild(rb2);
+            } else if (order && order.status === "pending"){
+              var pend = document.createElement("span");
+              pend.className = "shop-status pending";
+              pend.textContent = t("marketOrderPending");
+              acts.appendChild(pend);
+            } else {
+              var buy = document.createElement("button");
+              buy.type = "button";
+              buy.className = "btn-sm primary";
+              buy.textContent = t("buyBtn");
+              buy.addEventListener("click", function(){ openMarketPay(l); });
+              acts.appendChild(buy);
+            }
+            card.appendChild(acts);
+            listEl.appendChild(card);
+          });
+          renderMyOrders();
+        }
+        /* ---------- Sell: list a saved mailbox ---------- */
+        function openSellModal(mb){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p || !p.email){ showToast(t("sellNeedSignin")); openAuthModal("signin"); return; }
+          if (!mb || !mb.address || !mb.password){ showToast(t("sellFailed")); return; }
+          marketSellMailbox = mb;
+          $("sellMaskedEmail").textContent = maskMarketEmail(mb.address);
+          $("sellPriceInput").value = "";
+          $("sellTitleInput").value = mb.name || "";
+          var err = $("sellError"); if (err) err.hidden = true;
+          openAnimated($("sellOverlay"));
+          setTimeout(function(){ $("sellPriceInput").focus(); }, 50);
+        }
+        function closeSellModal(){ closeAnimated($("sellOverlay"), ".mini-modal"); }
+        $("sellCancelBtn").addEventListener("click", closeSellModal);
+        $("sellConfirmBtn").addEventListener("click", function(){
+          var mb = marketSellMailbox;
+          if (!mb) return;
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p || !p.email){ showToast(t("sellNeedSignin")); closeSellModal(); openAuthModal("signin"); return; }
+          var price = parseFloat($("sellPriceInput").value);
+          if (!isFinite(price) || price <= 0){
+            var e1 = $("sellError");
+            e1.textContent = t("sellNeedPrice"); e1.hidden = false;
+            $("sellPriceInput").focus();
+            return;
+          }
+          var title = $("sellTitleInput").value.trim() || mb.name || "";
+          var btn = $("sellConfirmBtn");
+          btn.disabled = true;
+          apiAdmin("/api/market/listings", { method: "POST", body: {
+            address: mb.address, password: mb.password,
+            price: price, title: title, sellerGmail: p.email
+          } }).then(function(){
+            btn.disabled = false;
+            closeSellModal();
+            showToast(t("sellSuccess"));
+            loadMarketListings();
+          }).catch(function(err){
+            btn.disabled = false;
+            var e2 = $("sellError");
+            e2.textContent = (err && err.status === 400) ? t("sellVerifyFailed") : t("sellFailed");
+            e2.hidden = false;
+          });
+        });
+        /* ---------- Buy: KHQR / USDT payment card + receipt ---------- */
+        function openMarketPay(listing){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p || !p.email){
+            /* Buying needs sign-in: remember the listing, open the
+               sign-up/sign-in flow, and return to the shop afterwards
+               (resumePendingMarketBuy runs on sign-in / sign-up close). */
+            marketPendingBuy = listing.id;
+            showToast(t("buyNeedSignin"));
+            openAuthModal("signin");
+            return;
+          }
+          marketPayListing = listing;
+          marketPayMethod = null;
+          $("mktListingTitle").textContent = listing.title || listing.maskedEmail || "";
+          var priceTxt = formatMarketPrice(listing.price);
+          $("mktPriceTop").textContent = priceTxt;
+          $("mktKhqrPrice").textContent = priceTxt;
+          $("mktUsdtPrice").textContent = priceTxt;
+          $("mktKhqrCard").hidden = true;
+          $("mktUsdtCard").hidden = true;
+          $("mktReceiptBox").hidden = true;
+          $("mktSentBox").hidden = true;
+          var st = $("mktStatus"); if (st) st.hidden = true;
+          var ri = $("mktReceiptInput"); if (ri) ri.value = "";
+          openAnimated($("marketPayOverlay"));
+        }
+        function closeMarketPay(){ closeAnimated($("marketPayOverlay"), ".mini-modal"); }
+        function resumePendingMarketBuy(){
+          if (!marketPendingBuy) return;
+          var id = marketPendingBuy;
+          marketPendingBuy = null;
+          var found = null;
+          marketListings.forEach(function(l){ if (l && String(l.id) === String(id)) found = l; });
+          if (found){
+            openMarketPay(found);
+            try { var el = $("shopBox"); if (el) el.scrollIntoView(); } catch(e) {}
+          }
+        }
+        $("mktCloseBtn").addEventListener("click", closeMarketPay);
+        $("mktKhqrBtn").addEventListener("click", function(){
+          marketPayMethod = "khqr";
+          $("mktKhqrCard").hidden = false;
+          $("mktUsdtCard").hidden = true;
+          $("mktReceiptBox").hidden = false;
+        });
+        $("mktUsdtBtn").addEventListener("click", function(){
+          marketPayMethod = "usdt";
+          $("mktUsdtCard").hidden = false;
+          $("mktKhqrCard").hidden = true;
+          $("mktReceiptBox").hidden = false;
+        });
+        $("mktCopyAddrBtn").addEventListener("click", function(){ copyText(USDT_ADDRESS, t("toastCopiedCode")); });
+        $("mktSendBtn").addEventListener("click", function(){
+          var l = marketPayListing;
+          var st = $("mktStatus");
+          function mktErr(key){ if (st){ st.textContent = t(key); st.className = "redeem-status err"; st.hidden = false; } }
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!l || !p){ mktErr("buyNeedSignin"); openAuthModal("signin"); return; }
+          if (!marketPayMethod){ mktErr("marketSendFailed"); return; }
+          var file = $("mktReceiptInput").files && $("mktReceiptInput").files[0];
+          if (!file){ mktErr("marketNeedReceipt"); return; }
+          var reader = new FileReader();
+          reader.onload = function(){
+            apiAdmin("/api/market/orders", { method: "POST", body: {
+              listingId: l.id, gmail: p.email, method: marketPayMethod, imageDataUrl: reader.result
+            } }).then(function(res){
+              $("mktReceiptBox").hidden = true;
+              $("mktSentBox").hidden = false;
+              if (st) st.hidden = true;
+              showToast(t("marketReceiptSent"));
+              marketOrders.push({
+                id: (res && res.orderId) || ("tmp-" + Date.now()), listingId: l.id,
+                status: "pending", price: l.price, method: marketPayMethod,
+                createdAt: new Date().toISOString()
+              });
+              /* Show the pending order at once from the local copy —
+                 do NOT re-fetch here: the server list may not include
+                 the just-created order yet and would wipe it from view.
+                 The 30s pending-order poll reconciles with the server. */
+              renderMarketListings();
+            }).catch(function(){ mktErr("marketSendFailed"); });
+          };
+          reader.onerror = function(){ mktErr("marketSendFailed"); };
+          reader.readAsDataURL(file);
+        });
+        /* ---------- Restore a bought mailbox to the top of the page ---------- */
+        function adoptBoughtMailbox(listing, token, accountId, address){
+          stopPolling();
+          state.address = address;
+          state.password = "";
+          state.token = token;
+          state.accountId = accountId || "";
+          state.messages = [];
+          state.failed = false; state.retrying = false; state.retryCount = 0;
+          state.createdAt = new Date().toISOString();
+          if (!currentIp) currentIp = generateIpProfile();
+          hideError();
+          addrText.textContent = address;
+          addrText.classList.remove("loading");
+          statusText.textContent = t("statusWaiting");
+          updateIpLine();
+          setBusy(false);
+          buildQr();
+          switchInboxTo(address);
+          fetchMessages(true);
+          startPolling();
+          rememberAddress();
+          fetchSavedMessages(true);
+          saveCurrentSession();
+          renderMailboxes();
+          showToast(t("restoreBoughtSuccess"));
+          try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch(e) { window.scrollTo(0, 0); }
+        }
+        function restoreBoughtMailbox(listing, order){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p || !p.email){ showToast(t("buyNeedSignin")); openAuthModal("signin"); return; }
+          apiAdmin("/api/market/restore", { method: "POST", body: { listingId: listing.id, gmail: p.email } }).then(function(res){
+            if (!res || !res.token || !res.address){ showToast(t("restoreBoughtFailed")); return; }
+            adoptBoughtMailbox(listing, res.token, res.accountId || "", res.address);
+          }).catch(function(){ showToast(t("restoreBoughtFailed")); });
+        }
+        $("shopRefreshBtn").addEventListener("click", function(){
+          var ic = $("shopRefreshIcon");
+          if (ic) ic.classList.add("spin");
+          loadMarketListings();
+          loadMarketOrders();
+          setTimeout(function(){ if (ic) ic.classList.remove("spin"); }, 900);
+        });
+        startMarketOrderPolling();
+        loadMarketOrders();
 
         /* ---------- polling ---------- */
         function startPolling(){
@@ -6039,7 +6754,8 @@ var I18N = {
         updateAvatarUI();
         updateBellBadge();
         applyTheme(currentTheme());
-        createAccount();
+        loadMarketListings(true);
+        restoreCurrentSessionOrCreate();
         /* Sign-up gate: if no profile exists yet, show it on top of
            the page — the temp email still generates behind it. */
         if (!loadProfile()){
