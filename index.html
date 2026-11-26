@@ -307,6 +307,7 @@
       .refresh-indicator .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;animation:heroPulse 1.6s ease-in-out infinite}
       .refresh-indicator.warn .dot{background:#d97706;animation:none}
       .refresh-indicator.err .dot{background:#dc2626;animation:none}
+      .refresh-indicator.idle .dot{background:#9ca3af;animation:none}
       @keyframes heroPulse{0%,100%{opacity:1}50%{opacity:.3}}
       .otp-hero{
         display:none;margin:14px 20px 0;padding:16px 18px 14px;border-radius:16px;
@@ -1532,10 +1533,12 @@
            domain list. The live list is always preferred when it
            loads. */
         var FALLBACK_DOMAINS = [{ "domain": "euploading.com", "isActive": true }];
-        /* Poll backoff: on a Mail.tm rate-limit (429/503) the poll
-           interval doubles up to 4x the plan base until a poll
-           succeeds, then it returns to the plan base. Never hammer
-           the API. */
+        /* Poll: a quiet plan-interval timer that fetches silently.
+           On failure nothing visible changes — no backoff spiral,
+           no alarm — the next tick simply retries at the plan base
+           interval. A dead token is re-logged-in once per failure
+           episode (see reauthMailbox); other failures just wait
+           for the next tick. Never hammer the API. */
         var POLL_MAX_SECONDS = 20;
         /* Poll speed by plan (Batch 3): Free polls every 10s
            (moderate, never too slow), Monthly every 5s, Yearly
@@ -2261,10 +2264,12 @@ var I18N = {
     "toastCreatingNew": "កំពុងបង្កើតអ៊ីមែលថ្មី…",
     "toastDeleted": "បានលុបអ៊ីមែលចាស់ — កំពុងបង្កើតថ្មី…",
     "toastNewMsg": "មានសារថ្មីចូលមកដល់!",
+    "toastRefreshed": "✓ បានធ្វើឱ្យស្រស់ហើយ — សារថ្មី {n}",
+    "toastNoNew": "មិនមានសារថ្មីទេ",
+    "toastRefreshFailed": "ធ្វើឱ្យស្រស់មិនបានសម្រេច — សូមព្យាយាមម្តងទៀត",
     "errorConnect": "មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេអ៊ីមែលបានទេ។ ({code}) កំពុងព្យាយាមភ្ជាប់ឡើងវិញដោយស្វ័យប្រវត្តិ…",
     "errorDefault": "មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេអ៊ីមែលបានទេ។",
     "retrying": "ម៉ាស៊ីនមេរវល់ — កំពុងព្យាយាមម្តងទៀត (លើកទី {n})…",
-    "reconnecting": "កំពុងភ្ជាប់ឡើងវិញដោយស្វ័យប្រវត្តិ…",
     "relJustNow": "មុននេះបន្តិច",
     "relMinutes": "{n} នាទីមុន",
     "relHours": "{n} ម៉ោងមុន",
@@ -2577,10 +2582,12 @@ var I18N = {
     "toastCreatingNew": "Creating a new email…",
     "toastDeleted": "Old email deleted — creating a new one…",
     "toastNewMsg": "A new message arrived!",
+    "toastRefreshed": "✓ Refreshed — {n} new",
+    "toastNoNew": "No new messages",
+    "toastRefreshFailed": "Refresh failed — please try again",
     "errorConnect": "Cannot connect to the email server. ({code}) Reconnecting automatically…",
     "errorDefault": "Cannot connect to the email server.",
     "retrying": "Server is busy — retrying (attempt {n})…",
-    "reconnecting": "Reconnecting automatically…",
     "relJustNow": "Just now",
     "relMinutes": "{n} minutes ago",
     "relHours": "{n} hours ago",
@@ -2880,7 +2887,8 @@ var I18N = {
           messages: [], timer: null, countdown: 10, pollInterval: 10,
           creating: false, checking: false, retryCount: 0,
           failed: false, retrying: false, lastErrorCode: "",
-          createTimer: null, pollFailed: false, pollRateLimited: false
+          createTimer: null, pollEverOk: false, reauthing: null,
+          refreshQueued: false
         };
 
         /* Saved messages live in the server database, not in Mail.tm,
@@ -3707,6 +3715,55 @@ var I18N = {
           renderSavedMessages();
           showToast(t("toastDeletedMailbox"));
         }
+        /* ---------- shared re-login (dead-token recovery) ----------
+           POST /token with the current address + password; if that
+           fails, re-create the account (POST /accounts) with the
+           same address + password and then take a fresh token, with
+           one last token-only try. On success the new token is kept
+           in state AND persisted to the matching saved-mailbox row
+           (an unsaved mailbox keeps the token in memory only).
+           Resolves {ok:true, token, accountId} or {ok:false}.
+           Guarded so only one re-login runs at a time — concurrent
+           callers share the in-flight attempt. Used by the poll
+           loop (fetchMessages) and by restoreMailbox(). */
+        function reauthMailbox(){
+          if (state.reauthing) return state.reauthing;
+          if (!state.address || !state.password) return Promise.resolve({ok:false});
+          var addr = state.address, pw = state.password;
+          function takeToken(tok, accountId){
+            var token = tok && tok.token;
+            if (!token) return {ok:false};
+            state.token = token;
+            if (accountId) state.accountId = accountId;
+            var list = loadMailboxes(), changed = false;
+            list.forEach(function(m){ if (m.address === addr){ m.token = token; changed = true; } });
+            if (changed) saveMailboxes(list);
+            return {ok:true, token: token, accountId: accountId || ""};
+          }
+          function tokenOnly(){
+            return api("/token", { method: "POST", body: { address: addr, password: pw } }).then(function(tok){
+              return takeToken(tok, (tok && tok.id) || "");
+            });
+          }
+          state.reauthing = api("/token", { method: "POST", body: { address: addr, password: pw } }).then(function(tok){
+            return takeToken(tok, (tok && tok.id) || "");
+          }).catch(function(){
+            /* Token login failed — re-create the account with the
+               same address/password, then take a fresh token. If
+               re-create fails (e.g. the address is still taken
+               because the account exists), one last token-only try. */
+            return api("/accounts", { method: "POST", body: { address: addr, password: pw } }).then(function(acc){
+              return api("/token", { method: "POST", body: { address: addr, password: pw } }).then(function(tok){
+                return takeToken(tok, (acc && acc.id) || (tok && tok.id) || "");
+              });
+            }).catch(function(){ return tokenOnly(); });
+          }).catch(function(){ return {ok:false}; }).then(function(res){
+            state.reauthing = null;
+            return res && res.ok ? res : {ok:false};
+          });
+          return state.reauthing;
+        }
+
         function restoreMailbox(mb){
           if (!mb || !mb.address || !mb.password) return;
           /* Re-read the freshest copy from storage first — the row's
@@ -3761,27 +3818,17 @@ var I18N = {
             adopt(mb.token, "");
           }).catch(function(err){
             if (!err || !err.status || err.status === 401 || err.status === 404){
-              /* Account expired on Mail.tm — re-create it with the SAME
-                 address and password, then take the new token. */
-              function takeToken(tok, accountId){
-                mb.token = tok.token;
-                var list = loadMailboxes();
-                list.forEach(function(m){ if (m.address === mb.address) m.token = tok.token; });
-                saveMailboxes(list);
-                adopt(tok.token, accountId || "");
-              }
-              api("/accounts", { method: "POST", body: { address: mb.address, password: mb.password } }).then(function(acc){
-                return api("/token", { method: "POST", body: { address: mb.address, password: mb.password } }).then(function(tok){
-                  takeToken(tok, (acc && acc.id) || tok.id || "");
-                });
-              }).catch(function(){
-                /* Re-create failed (e.g. the address is still taken
-                   because the account exists) — just get a fresh
-                   token with the saved password instead. */
-                return api("/token", { method: "POST", body: { address: mb.address, password: mb.password } }).then(function(tok){
-                  takeToken(tok, tok.id || "");
-                });
-              }).catch(function(){ fail(); });
+              /* Account expired on Mail.tm — re-log in with the SAME
+                 address and password (shared helper: token first,
+                 then re-create + token). */
+              reauthMailbox().then(function(res){
+                if (res && res.ok){
+                  mb.token = res.token;
+                  adopt(res.token, res.accountId || "");
+                } else {
+                  fail();
+                }
+              });
             } else {
               /* 429 / network: keep the saved token and let the normal
                  forever auto-retry reconnect the mailbox. */
@@ -4034,14 +4081,24 @@ var I18N = {
         }, 2000);
 
         /* ---------- messages ---------- */
-        function fetchMessages(first){
-          if (!state.token || state.checking) return;
-          state.checking = true;
-          api("/messages?page=1").then(function(data){
+        /* Waiters for a forced refresh that arrived while a poll was
+           in flight — resolved with the queued run's result. */
+        var pendingRefreshWaiters = [];
+        /* One poll run. Returns a promise resolving {ok, hadNew,
+           newCount, count}. On 401/404 the token is dead: re-log in
+           once (shared helper) and retry the fetch a single time.
+           Any other failure is quiet — the last good state stays on
+           screen and the next tick retries at the plan base
+           interval. This does NOT touch state.checking; the
+           fetchMessages() wrapper owns that flag. */
+        function runFetch(first, retried){
+          return api("/messages?page=1").then(function(data){
             var msgs = memberList(data);
             var hadNew = msgs.length > state.messages.length;
             var oldById = {};
             state.messages.forEach(function(old){ if (old && old.id) oldById[old.id] = old; });
+            var newCount = 0;
+            msgs.forEach(function(nw){ if (nw && nw.id && !oldById[nw.id]) newCount++; });
             msgs.forEach(function(nw){
               var old = oldById[nw.id];
               if (!old){ nw._waitSince = Date.now(); return; }
@@ -4089,31 +4146,66 @@ var I18N = {
             state.messages = msgs;
             /* A successful poll resets the interval back to the plan base. */
             state.pollInterval = pollBaseSeconds();
-            state.pollRateLimited = false;
-            if (state.pollFailed){ state.pollFailed = false; statusText.textContent = t("statusWaiting"); }
+            state.countdown = state.pollInterval;
+            state.pollEverOk = true;
+            updateCountdown();
             renderMessages();
             state.messages.slice(0, 10).forEach(enrichMessage);
             fetchSavedMessages();
             if (!first && hadNew) showToast(t("toastNewMsg"));
+            return {ok:true, hadNew: hadNew, newCount: newCount, count: msgs.length};
           }).catch(function(err){
-            /* On a rate-limit (429/503) the poll interval doubles
-               5 -> 10 -> 20s, so the next polls back off instead of
-               hammering Mail.tm. Any other failure keeps 5s. */
-            /* Self-healing: the 5s timer keeps running and the next
-               poll retries automatically — no click needed. Just show
-               a small reconnecting status instead of an error. */
-            /* Yellow for a rate-limit backoff, red for any other
-               failure — the indicator state follows the cause. */
-            state.pollRateLimited = !!(err && (err.status === 429 || err.status === 503));
-            if (err && (err.status === 429 || err.status === 503)){
-              state.pollInterval = Math.min((state.pollInterval || pollBaseSeconds()) * 2, pollBaseSeconds() * 4);
+            /* Quiet failure: keep the last good state on screen —
+               statusText and the inbox are left exactly as they
+               were, no alarm. Back at the plan base interval; the
+               next 1s-tick poll retries on schedule. */
+            function quietFail(){
+              state.pollInterval = pollBaseSeconds();
               state.countdown = state.pollInterval;
               updateCountdown();
             }
-            state.pollFailed = true;
-            statusText.textContent = t("reconnecting");
-          }).then(function(){
+            if (err && (err.status === 401 || err.status === 404) && !retried && state.address && state.password){
+              /* Dead token — re-log in once for this failure
+                 episode, then retry this fetch a single time. If
+                 re-login fails, stay quiet; the next tick retries. */
+              return reauthMailbox().then(function(res){
+                if (res && res.ok){
+                  state.pollInterval = pollBaseSeconds();
+                  state.countdown = state.pollInterval;
+                  updateCountdown();
+                  return runFetch(first, true);
+                }
+                quietFail();
+                return {ok:false, reason:"reauth-failed"};
+              });
+            }
+            quietFail();
+            return {ok:false, reason:"poll-failed"};
+          });
+        }
+        /* Poll entry point. Resolves {ok, ...} (never rejects for a
+           plain poll failure). `force` is for manual Refresh: when a
+           poll is already in flight the forced fetch is NOT dropped —
+           it is queued to run right after the in-flight one finishes,
+           and the returned promise resolves with that run's result. */
+        function fetchMessages(first, force){
+          if (!state.token) return Promise.resolve({ok:false, reason:"no-token"});
+          if (state.checking){
+            if (!force) return Promise.resolve({ok:false, reason:"in-flight"});
+            state.refreshQueued = true;
+            return new Promise(function(resolve){ pendingRefreshWaiters.push(resolve); });
+          }
+          state.checking = true;
+          return runFetch(first, false).then(function(result){
             state.checking = false;
+            if (state.refreshQueued){
+              state.refreshQueued = false;
+              var waiters = pendingRefreshWaiters.splice(0);
+              fetchMessages(false, true).then(function(r){
+                waiters.forEach(function(w){ try { w(r); } catch(e){} });
+              });
+            }
+            return result;
           });
         }
         /* Ids that have already been rendered once — only genuinely
@@ -4489,6 +4581,10 @@ var I18N = {
           if (detectLimitWarning((m.subject || "") + " " + text)) m._limitWarn = true;
           var detailObj = (raw && (raw.text || raw.html)) ? raw : { text: text, html: html ? [html] : [] };
           var url = extractConfirmUrl(detailObj, m.subject || "");
+          /* A confirm link that only appears in the intro (same as
+             the live path, which passes intro as the text) still
+             earns its Confirm button in the saved view. */
+          if (!url && m.intro) url = extractConfirmUrl({ text: m.intro }, m.subject || "");
           if (url) m._confirmUrl = url;
           return m;
         }
@@ -4498,17 +4594,24 @@ var I18N = {
         function renderSavedMessages(){
           renderMessages();
         }
+        /* The in-flight saved fetch, shared so a manual Refresh that
+           arrives mid-fetch waits for it instead of starting a
+           second one (or reporting "no new" too early). */
+        var savedFetchPromise = null;
+        /* Returns a promise resolving true when a fetch ran, false
+           when throttled / already running / no addresses. Existing
+           callers ignore the return value. */
         function fetchSavedMessages(){
-          if (savedState.fetching) return;
-          if (Date.now() - savedState.lastFetch < 15000) return;
+          if (savedState.fetching) return savedFetchPromise || Promise.resolve(false);
+          if (Date.now() - savedState.lastFetch < 15000) return Promise.resolve(false);
           var addrs = knownAddresses();
-          if (!addrs.length) return;
+          if (!addrs.length) return Promise.resolve(false);
           savedState.fetching = true;
           savedState.lastFetch = Date.now();
           var jobs = addrs.map(function(a){
             return api("/saved?address=" + encodeURIComponent(a)).catch(function(){ return []; });
           });
-          Promise.all(jobs).then(function(results){
+          savedFetchPromise = Promise.all(jobs).then(function(results){
             var byId = {};
             results.forEach(function(rows){
               (Array.isArray(rows) ? rows : []).forEach(function(row){
@@ -4525,7 +4628,9 @@ var I18N = {
             savedState.loaded = true;
             savedState.fetching = false;
             renderSavedMessages();
+            return true;
           });
+          return savedFetchPromise;
         }
 
         /* ---------- reader ---------- */
@@ -5711,18 +5816,18 @@ var I18N = {
              countdown lives only in the small inbox indicator. */
           countdownText.textContent = "";
           /* Minimal Auto indicator, inside the inbox header only:
-             a small green dot + "Auto" while polling normally;
-             yellow while backed off (429), red while the poll is
-             failing/reconnecting. The title carries the real
+             a small dot + "Auto". Green once a fetch has succeeded;
+             grey while nothing has ever been fetched yet. Failures
+             are silent — the dot keeps the last good state and is
+             never red or amber. The title carries the real
              interval for anyone who hovers it. */
           var ri = $("refreshIndicator");
           if (!ri) return;
           var rit = $("refreshIndicatorText");
           if (rit) rit.textContent = t("autoShort");
           var base = pollBaseSeconds();
-          ri.classList.remove("warn", "err");
-          if (state.pollRateLimited) ri.classList.add("warn");
-          else if (state.pollFailed) ri.classList.add("err");
+          ri.classList.remove("warn", "err", "idle");
+          if (!state.pollEverOk) ri.classList.add("idle");
           try { ri.title = t("autoRefreshEvery", {n: state.pollInterval || base}); } catch(e) {}
         }
         document.addEventListener("visibilitychange", function(){
@@ -5861,15 +5966,46 @@ var I18N = {
           if (typeof QRCode === "undefined"){ showToast(t("toastQrUnavailable")); return; }
           p.classList.toggle("open");
         });
+        /* Manual Refresh — both buttons do the same full refresh.
+           Always starts from a clean slate (plan base interval, no
+           failed/backed-off state), forces a live fetch NOW even if
+           the poll failed or is backed off, re-logs in first if the
+           token is dead (same recovery as the poll loop), and
+           refreshes /saved too — saved rows stay visible with their
+           "✓ Saved" chips even when live is down. A click that lands
+           while a poll is in flight is queued, never dropped
+           (fetchMessages force flag). Ends with a short result
+           toast: "✓ Refreshed — N new", "No new messages", or a
+           plain error if it still fails. Never blocked by the failed
+           poll state: setBusy() only disables these buttons while a
+           create is busy or there is no token at all. */
         function manualRefresh(iconEl){
           if (!state.token) return;
           if (iconEl) iconEl.classList.add("spin");
-          state.countdown = pollBaseSeconds(); updateCountdown();
-          fetchMessages(false);
+          var base = pollBaseSeconds();
+          state.pollInterval = base;
+          state.countdown = base;
+          updateCountdown();
+          var before = mergedMessages().length;
+          savedState.lastFetch = 0;
+          var liveP = fetchMessages(false, true);
+          var savedP = fetchSavedMessages();
+          Promise.all([liveP, savedP]).then(function(results){
+            renderMessages();
+            var after = mergedMessages().length;
+            var added = Math.max(0, after - before);
+            var liveOk = !!(results && results[0] && results[0].ok);
+            if (added > 0) showToast(t("toastRefreshed", {n: added}));
+            else if (liveOk) showToast(t("toastNoNew"));
+            else showToast(t("toastRefreshFailed"));
+          }).catch(function(){
+            renderMessages();
+            showToast(t("toastRefreshFailed"));
+          });
           setTimeout(function(){ if (iconEl) iconEl.classList.remove("spin"); }, 900);
         }
         $("refreshBtn").addEventListener("click", function(){ manualRefresh($("refreshIcon")); });
-        $("inboxRefreshBtn").addEventListener("click", function(){ savedState.lastFetch = 0; manualRefresh($("inboxRefreshIcon")); });
+        $("inboxRefreshBtn").addEventListener("click", function(){ manualRefresh($("inboxRefreshIcon")); });
         $("changeBtn").addEventListener("click", function(){
           if (!guardDailyLimit()) return;
           maybeSaveBeforeGenerate(function(){
