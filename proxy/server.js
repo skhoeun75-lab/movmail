@@ -1219,6 +1219,68 @@ async function handleAdminNotify(req, res) {
   sendJson(res, 200, { ok: true, notified: 1 });
 }
 
+// Unified create-and-send: mint a FRESH unique code per recipient
+// and drop it in each recipient's bell in one call, so the admin UI
+// never has to create a code and then send it in two steps (and a
+// shared code can never be consumed by the first redeemer).
+// POST /api/admin/codes/send
+//   { expiryDays: 1-7, amountPerDay: 10-100,
+//     recipients: 'ALL' | [gmail, ...] }
+// -> { ok: true, results: [{ gmail, code, amountPerDay, expiresAt }] }
+// Recipients are validated up front: an unknown gmail in an array
+// aborts the whole request with 400 and creates nothing.
+async function handleAdminCodesSend(req, res) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  const expiryDays = Number(body.expiryDays);
+  if (!Number.isInteger(expiryDays) || expiryDays < 1 || expiryDays > 7) {
+    sendJson(res, 400, { error: "expiryDays must be an integer between 1 and 7" });
+    return;
+  }
+  const amountPerDay = Number(body.amountPerDay);
+  if (!Number.isInteger(amountPerDay) || amountPerDay < 10 || amountPerDay > 100) {
+    sendJson(res, 400, { error: "amountPerDay must be an integer between 10 and 100" });
+    return;
+  }
+  let gmails;
+  if (body.recipients === "ALL") {
+    const users = await listUsersWithRisk();
+    gmails = users.map((u) => u.gmail);
+  } else if (Array.isArray(body.recipients)) {
+    if (body.recipients.length === 0) {
+      sendJson(res, 400, { error: "recipients must be 'ALL' or a non-empty array of gmails" });
+      return;
+    }
+    gmails = body.recipients.map((g) => String(g || "").trim().toLowerCase());
+    if (gmails.some((g) => !g || g.indexOf("@") === -1)) {
+      sendJson(res, 400, { error: "recipients must be 'ALL' or a non-empty array of gmails" });
+      return;
+    }
+    // Validate every gmail exists BEFORE creating anything.
+    const unknown = [];
+    for (const g of gmails) {
+      const u = await getUser(g);
+      if (!u) unknown.push(g);
+    }
+    if (unknown.length) {
+      sendJson(res, 400, { error: "unknown account(s): " + unknown.join(", ") });
+      return;
+    }
+  } else {
+    sendJson(res, 400, { error: "recipients must be 'ALL' or a non-empty array of gmails" });
+    return;
+  }
+  // One shared expiry for all recipients; a fresh code per recipient.
+  const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000).toISOString();
+  const results = [];
+  for (const gmail of gmails) {
+    const code = await createCode(amountPerDay, expiresAt);
+    await createNotification(gmail, code.code, amountPerDay);
+    results.push({ gmail, code: code.code, amountPerDay, expiresAt });
+  }
+  sendJson(res, 200, { ok: true, results });
+}
+
 async function handleApiNotificationsList(req, res, url) {
   const gmail = (url.searchParams.get("gmail") || "").trim().toLowerCase();
   if (!gmail) {
@@ -1274,6 +1336,7 @@ async function handleApi(req, res, url) {
       const mCode = /^\/api\/admin\/codes\/([^/]+)\/(disable|activate)$/.exec(p);
       if (req.method === "POST" && mCode) return handleAdminCodeToggle(req, res, mCode[1], mCode[2]);
       if (req.method === "POST" && p === "/api/admin/notify") return handleAdminNotify(req, res);
+      if (req.method === "POST" && p === "/api/admin/codes/send") return handleAdminCodesSend(req, res);
       if (req.method === "GET" && p === "/api/admin/receipts") return handleAdminReceiptsList(req, res);
       const mRec = /^\/api\/admin\/receipts\/(\d+)\/(approve|reject)$/.exec(p);
       if (req.method === "POST" && mRec) return handleAdminReceiptDecide(req, res, mRec[1], mRec[2]);

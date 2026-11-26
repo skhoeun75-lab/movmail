@@ -202,6 +202,47 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
   flex-basis: 100%; font-size: 13px; font-weight: 600; color: var(--amber);
 }
 
+/* ---------- Unified create-and-send: recipients ---------- */
+.recipients-block { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 14px; }
+.recipients-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 700; font-size: 15px; }
+.selected-count { font-size: 13px; font-weight: 700; color: var(--accent); }
+.recipients-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+.recipient-list {
+  max-height: 180px; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border); border-radius: 10px; padding: 6px; display: grid; gap: 2px;
+}
+.recipient-row {
+  display: flex; gap: 9px; align-items: center; padding: 7px 8px;
+  border-radius: 8px; cursor: pointer; font-size: 14px;
+}
+.recipient-row:hover { background: var(--accent-soft); }
+.recipient-row input[type="checkbox"] { width: auto; flex: 0 0 auto; margin: 0; accent-color: var(--accent); }
+.recipient-row .r-who { min-width: 0; }
+.recipient-row .r-name { font-weight: 600; }
+.recipient-row .r-gmail { color: var(--muted); font-size: 13px; word-break: break-all; }
+/* Selected-users area: NO cap — lists every selected user, scrolls. */
+.selected-users {
+  max-height: 160px; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  border: 1px dashed var(--border); border-radius: 10px;
+  padding: 8px 10px; margin-top: 10px; display: grid; gap: 4px; font-size: 13px;
+}
+.selected-users-title { font-weight: 700; font-size: 13px; color: var(--muted); }
+.selected-user-row { word-break: break-all; }
+.selected-user-row .r-gmail { color: var(--muted); }
+
+/* ---------- Send results (code → Gmail) ---------- */
+.send-results { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 14px; }
+.send-results h3 { margin: 0 0 10px; font-size: 16px; }
+.send-results-list { display: grid; gap: 8px; max-height: 260px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.send-result-row {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px;
+  background: var(--green-bg);
+}
+.send-result-row code { font-size: 16px; font-weight: 800; letter-spacing: 1.5px; background: #fff; }
+.send-result-arrow { color: var(--muted); font-weight: 700; }
+.send-result-gmail { color: var(--muted); font-size: 13px; word-break: break-all; }
+
 /* ---------- Receipts ---------- */
 .receipts-list { display: grid; gap: 12px; }
 .receipt-row {
