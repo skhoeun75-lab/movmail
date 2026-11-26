@@ -15,7 +15,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script>try{var __l=localStorage.getItem("movmail-lang");if(__l==="en"||__l==="km"){document.documentElement.lang=__l==="en"?"en":"km";window.__MOVMAIL_LANG=__l;}}catch(e){}try{var __t=localStorage.getItem("movmail-theme");if(__t!=="light"&&__t!=="dark")__t="auto";document.documentElement.dataset.theme=__t;}catch(e){document.documentElement.dataset.theme="auto";}</script>
+    <script>try{var __l=localStorage.getItem("movmail-lang");if(__l==="en"||__l==="km"){document.documentElement.lang=__l==="en"?"en":"km";window.__MOVMAIL_LANG=__l;}}catch(e){}try{var __t=localStorage.getItem("movmail-theme");if(__t!=="light"&&__t!=="dark")__t="auto";document.documentElement.dataset.theme=__t;}catch(e){document.documentElement.dataset.theme="auto";}try{var __a=localStorage.getItem("movmail-accent");if(["green","ocean","sunset","royal","rose","midnight"].indexOf(__a)<0)__a="green";document.documentElement.dataset.accent=__a;}catch(e){document.documentElement.dataset.accent="green";}</script>
     <style>
       /* The `hidden` attribute must always hide, even on elements whose
          class sets display (e.g. .btn sets inline-flex, which otherwise
@@ -45,6 +45,9 @@
         --red-bg:#fdecea;
         --header:#101613;
         --header-ink:#eef4f1;
+        --hdr1:#0a2e22;
+        --hdr2:#087f5b;
+        --hdr3:#0a9d6e;
         --shadow:0 1px 2px rgba(16,30,24,.05),0 10px 30px -18px rgba(16,30,24,.25);
         --shadow-lg:0 8px 24px -8px rgba(16,30,24,.28),0 24px 48px -16px rgba(16,30,24,.35);
         --radius:16px;
@@ -91,6 +94,29 @@
           --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -18px rgba(0,0,0,.6);
         }
       }
+      /* ---------- Colour themes (accent palettes) ----------
+         The current green is the default (base :root values).
+         Five more palettes: Ocean, Sunset, Royal, Rose, Midnight.
+         data-accent picks the palette; Day/Night/Auto still pick
+         light or dark. Accent rules sit after the theme rules so
+         they win in both modes. */
+      html[data-accent="ocean"]{--accent:#0b6fa4;--accent-strong:#095a86;--accent-soft:#e2f1f8;--accent-ink:#0a557e;--hdr1:#06283d;--hdr2:#0b6fa4;--hdr3:#0e8fc7}
+      html[data-accent="sunset"]{--accent:#c2410c;--accent-strong:#9a3412;--accent-soft:#fdeeda;--accent-ink:#7c2d12;--hdr1:#3d1c07;--hdr2:#c2410c;--hdr3:#ea580c}
+      html[data-accent="royal"]{--accent:#6d28d9;--accent-strong:#5b21b6;--accent-soft:#efe7fd;--accent-ink:#4c1d95;--hdr1:#241040;--hdr2:#6d28d9;--hdr3:#8b5cf6}
+      html[data-accent="rose"]{--accent:#be185d;--accent-strong:#9d174d;--accent-soft:#fde8f0;--accent-ink:#831843;--hdr1:#3d0a20;--hdr2:#be185d;--hdr3:#db2777}
+      html[data-accent="midnight"]{--accent:#1e40af;--accent-strong:#1e3a8a;--accent-soft:#e3e9fb;--accent-ink:#172554;--hdr1:#0a1128;--hdr2:#1e40af;--hdr3:#3b82f6}
+      html[data-theme="dark"][data-accent="ocean"]{--accent:#38a3d8;--accent-strong:#5cb8e6;--accent-soft:#122e3d;--accent-ink:#8fd4f2}
+      html[data-theme="dark"][data-accent="sunset"]{--accent:#f97316;--accent-strong:#fb923c;--accent-soft:#3a2412;--accent-ink:#fdba74}
+      html[data-theme="dark"][data-accent="royal"]{--accent:#a78bfa;--accent-strong:#c4b5fd;--accent-soft:#2a1d3d;--accent-ink:#ddd6fe}
+      html[data-theme="dark"][data-accent="rose"]{--accent:#f472b6;--accent-strong:#f9a8d4;--accent-soft:#3d1a2c;--accent-ink:#fbcfe8}
+      html[data-theme="dark"][data-accent="midnight"]{--accent:#60a5fa;--accent-strong:#93c5fd;--accent-soft:#152238;--accent-ink:#bfdbfe}
+      @media (prefers-color-scheme: dark){
+        html[data-theme="auto"][data-accent="ocean"]{--accent:#38a3d8;--accent-strong:#5cb8e6;--accent-soft:#122e3d;--accent-ink:#8fd4f2}
+        html[data-theme="auto"][data-accent="sunset"]{--accent:#f97316;--accent-strong:#fb923c;--accent-soft:#3a2412;--accent-ink:#fdba74}
+        html[data-theme="auto"][data-accent="royal"]{--accent:#a78bfa;--accent-strong:#c4b5fd;--accent-soft:#2a1d3d;--accent-ink:#ddd6fe}
+        html[data-theme="auto"][data-accent="rose"]{--accent:#f472b6;--accent-strong:#f9a8d4;--accent-soft:#3d1a2c;--accent-ink:#fbcfe8}
+        html[data-theme="auto"][data-accent="midnight"]{--accent:#60a5fa;--accent-strong:#93c5fd;--accent-soft:#152238;--accent-ink:#bfdbfe}
+      }
       *{box-sizing:border-box}
       html{scroll-behavior:smooth}
       body{
@@ -104,9 +130,9 @@
 
       /* ---------- Header ---------- */
       header{
-        background:linear-gradient(135deg,#0a2e22 0%,#087f5b 55%,#0a9d6e 100%);color:var(--header-ink);
+        background:linear-gradient(135deg,var(--hdr1) 0%,var(--hdr2) 55%,var(--hdr3) 100%);color:var(--header-ink);
         position:sticky;top:0;z-index:40;
-        border-bottom:3px solid #0a9d6e;
+        border-bottom:3px solid var(--hdr3);
       }
       .header-in{
         max-width:1020px;margin:0 auto;padding:10px 16px;
@@ -269,11 +295,13 @@
 
       /* ---------- OTP hero card (TempMail Pro style) ---------- */
       .refresh-indicator{
-        display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;
+        display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;
         color:var(--muted);background:var(--surface);border:1px solid var(--border);
-        border-radius:999px;padding:5px 11px;white-space:nowrap;
+        border-radius:999px;padding:4px 10px;white-space:nowrap;
       }
-      .refresh-indicator .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:heroPulse 1.6s ease-in-out infinite}
+      .refresh-indicator .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;animation:heroPulse 1.6s ease-in-out infinite}
+      .refresh-indicator.warn .dot{background:#d97706;animation:none}
+      .refresh-indicator.err .dot{background:#dc2626;animation:none}
       @keyframes heroPulse{0%,100%{opacity:1}50%{opacity:.3}}
       .otp-hero{
         display:none;margin:14px 20px 0;padding:16px 18px 14px;border-radius:16px;
@@ -733,6 +761,29 @@
       .prob-row .prob-count{font-weight:800;white-space:nowrap}
       .no-problems{color:var(--accent-ink);font-weight:700;font-size:14px}
 
+      /* ---------- Batch 3: limit warning, compact bell, accent dots ---------- */
+      .limit-warn{display:inline-flex;align-items:center;gap:6px;background:var(--amber-bg);border:1px solid var(--amber-border);color:var(--amber-ink);border-radius:8px;padding:5px 10px;font-size:13px;font-weight:700}
+      .hero-limit-warn{margin-top:10px;background:var(--amber-bg);border:1px solid var(--amber-border);color:var(--amber-ink);border-radius:10px;padding:8px 12px;font-size:13.5px;font-weight:700}
+      .otp-hero-avatar{width:30px;height:30px;font-size:13px;flex:none}
+      .otp-hero-avatar img{border-radius:50%}
+      .bell-backdrop{position:fixed;inset:0;z-index:65;background:rgba(10,20,15,.28);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+      .bell-panel{width:280px}
+      .bell-panel .profile-body{padding:12px 14px}
+      .bell-identity{border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:10px;background:var(--surface-2)}
+      .bell-id-row{display:flex;gap:8px;align-items:baseline;font-size:12.5px;padding:1px 0;min-width:0}
+      .bell-id-row span{color:var(--muted);flex:none;font-weight:700}
+      .bell-id-row b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+      #bellNotifList{max-height:148px;overflow-y:auto}
+      .notif-item{font-size:13.5px;padding:6px 0}
+      .notif-item span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis}
+      .accent-pick{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0 4px}
+      .accent-dot{width:30px;height:30px;border-radius:50%;border:2px solid transparent;padding:0;min-height:30px;cursor:pointer;flex:none}
+      .accent-dot.active{border-color:var(--ink);box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--accent)}
+      .accent-name{font-size:13px;font-weight:700;color:var(--muted)}
+      .rec-badge{display:inline-block;background:var(--accent-soft);color:var(--accent-ink);border:1px solid var(--accent);border-radius:999px;padding:1px 8px;font-size:11.5px;font-weight:800;white-space:nowrap}
+      .pay-card .pay-card-brand{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-weight:800;font-size:14px;color:var(--ink)}
+      .pay-card .pay-card-brand img{width:24px;height:24px;max-width:24px;border-radius:6px;object-fit:cover}
+
       /* ---------- Saved mailbox tabs + tier badges ---------- */
       .mailbox-tabs{display:flex;gap:8px;margin-bottom:14px}
       .mailbox-tab{flex:1;border:1px solid var(--border);background:var(--surface-2);color:var(--ink);border-radius:10px;padding:9px 10px;font-weight:800;font-size:14px;min-height:40px;cursor:pointer}
@@ -1176,6 +1227,7 @@
               <span class="plan-feat" data-i18n="featProtectBasic">ការពារមូលដ្ឋាន៖ IP + ប្រទេស</span>
               <span class="plan-feat" data-i18n="featOneMailbox">អ៊ីមែលសកម្ម 1</span>
               <span class="plan-feat" data-i18n="featStdDomains">Domain ធម្មតា</span>
+              <span class="plan-feat" data-i18n="featSpeedFree">ល្បឿនមធ្យម — រៀងរាល់ 10 វិនាទី</span>
             </span>
           </button>
           <button type="button" class="plan-option" data-plan="pro-monthly">
@@ -1187,10 +1239,11 @@
               <span class="plan-feat" data-i18n="featCustomNames">ដាក់ឈ្មោះផ្ទាល់ខ្លួន</span>
               <span class="plan-feat" data-i18n="featSavedMailboxes">រក្សាទុកអ៊ីមែល</span>
               <span class="plan-feat" data-i18n="featRestore">ស្តារអ៊ីមែលឡើងវិញ</span>
+              <span class="plan-feat" data-i18n="featSpeedMonthly">ល្បឿនលឿន — រៀងរាល់ 5 វិនាទី</span>
             </span>
           </button>
           <button type="button" class="plan-option best" data-plan="pro-yearly">
-            <span class="plan-head"><span data-i18n="planProYearly">ប្រចាំឆ្នាំ</span><span class="best-badge" data-i18n="bestValue">ល្អបំផុត</span><span class="plan-price"><span class="old-price">$19.99</span>$11.99 / <span data-i18n="perYear">ឆ្នាំ</span><span class="off-badge" data-i18n="off40">បញ្ចុះ 40%</span></span></span>
+            <span class="plan-head"><span data-i18n="planProYearly">ប្រចាំឆ្នាំ</span><span class="best-badge" data-i18n="bestValue">ល្អបំផុត</span><span class="rec-badge" data-i18n="recommended">ណែនាំ</span><span class="plan-price"><span class="old-price">$19.99</span>$11.99 / <span data-i18n="perYear">ឆ្នាំ</span><span class="off-badge" data-i18n="off40">បញ្ចុះ 40%</span></span></span>
             <span class="plan-feats">
               <span class="plan-feat" data-i18n="featUnlimitedEmails">អ៊ីមែលគ្មានកំណត់</span>
               <span class="plan-feat" data-i18n="featAll48">ប្រទេសទាំង 48</span>
@@ -1198,6 +1251,7 @@
               <span class="plan-feat" data-i18n="featAdminSupport">ជំនួយពី Admin</span>
               <span class="plan-feat" data-i18n="featPriority">អាទិភាព</span>
               <span class="plan-feat" data-i18n="featAllMonthly">គ្រប់យ៉ាងនៅក្នុង Pro ប្រចាំខែ</span>
+              <span class="plan-feat" data-i18n="featSpeedYearly">ល្បឿនដូចរន្ទះ — រៀងរាល់ 2 វិនាទី</span>
             </span>
           </button>
         </div>
@@ -1213,6 +1267,7 @@
             <div class="pay-card-name">YEM SOKHOEUN</div>
             <div class="pay-card-price" id="payKhqrPrice">$2.99</div>
             <div class="pay-card-note" data-i18n="payKhqrNote">ស្កេន KHQR នេះដើម្បីទូទាត់តាមតម្លៃកញ្ចប់ខាងលើ</div>
+            <div class="pay-card-brand"><img src="logo.png" alt="MovMail" /><span>MovMail.com</span></div>
           </div>
           <div class="pay-card" id="payUsdtCard" hidden>
             <img src="usdt-qr.png" alt="USDT QR" id="payUsdtImg" onerror="this.style.display='none'" />
@@ -1221,6 +1276,7 @@
             <button type="button" class="btn-sm primary" id="payCopyAddrBtn" data-i18n="payCopyAddress">ចម្លងអាសយដ្ឋាន</button>
             <div class="pay-card-note">TRC20 only · Min &gt;0.01 USDT</div>
             <div class="pay-card-note" data-i18n="payEnterAmount">សូមបញ្ចូលចំនួនទឹកប្រាក់ដោយខ្លួនឯង — តាមតម្លៃកញ្ចប់ខាងលើ</div>
+            <div class="pay-card-brand"><img src="logo.png" alt="MovMail" /><span>MovMail.com</span></div>
           </div>
           <div class="pay-receipt" id="payReceiptBox" hidden>
             <label for="payReceiptInput" data-i18n="payUploadReceipt">បង្ហោះរូបថតវិក្កយបត្រទូទាត់</label>
@@ -1368,10 +1424,20 @@
         <button type="button" class="btn primary" id="profileUpgradeBtn"><span aria-hidden="true">★</span> <span data-i18n="upgradeBtn">Upgrade</span></button>
         <div class="profile-row"><span data-i18n="languageRow">ភាសា</span><span class="seg" id="profileLangSeg"><button type="button" data-lang="km">ខ្មែរ</button><button type="button" data-lang="en">EN</button></span></div>
         <div class="profile-row"><span data-i18n="themeRow">រចនាប័ទ្ម</span><span class="seg" id="profileThemeSeg"><button type="button" data-theme="light" data-i18n="themeDay">ថ្ងៃ</button><button type="button" data-theme="dark" data-i18n="themeNight">យប់</button><button type="button" data-theme="auto" data-i18n="themeAuto">ស្វ័យប្រវត្តិ</button></span></div>
+        <div class="profile-row"><span data-i18n="themeColorRow">ពណ៌រចនាប័ទ្ម</span><span class="accent-name" id="accentName">—</span></div>
+        <div class="accent-pick" id="accentPick" role="radiogroup" aria-label="Colour theme">
+          <button type="button" class="accent-dot" data-accent="green" data-i18n-aria="accentGreen" aria-label="Green" style="background:#087f5b"></button>
+          <button type="button" class="accent-dot" data-accent="ocean" data-i18n-aria="accentOcean" aria-label="Ocean Blue" style="background:#0b6fa4"></button>
+          <button type="button" class="accent-dot" data-accent="sunset" data-i18n-aria="accentSunset" aria-label="Sunset Orange" style="background:#c2410c"></button>
+          <button type="button" class="accent-dot" data-accent="royal" data-i18n-aria="accentRoyal" aria-label="Royal Purple" style="background:#6d28d9"></button>
+          <button type="button" class="accent-dot" data-accent="rose" data-i18n-aria="accentRose" aria-label="Rose Pink" style="background:#be185d"></button>
+          <button type="button" class="accent-dot" data-accent="midnight" data-i18n-aria="accentMidnight" aria-label="Midnight" style="background:#1e40af"></button>
+        </div>
         <button type="button" class="btn danger" id="signOutBtn" data-i18n="signOut">ចាកចេញ</button>
       </div>
     </div>
 
+    <div class="bell-backdrop" id="bellBackdrop" hidden></div>
     <!-- ===== Notification bell panel (small, top-right) ===== -->
     <div class="bell-panel" id="bellPanel" role="dialog" aria-modal="false" aria-label="Notifications">
       <div class="profile-head">
@@ -1382,6 +1448,11 @@
         <button class="panel-close" id="bellClose" aria-label="Close">✕</button>
       </div>
       <div class="profile-body">
+        <div class="bell-identity">
+          <div class="bell-id-row"><span data-i18n="bellGmailLabel">Gmail</span><b id="bellGmail">—</b></div>
+          <div class="bell-id-row"><span data-i18n="bellAddressLabel">អ៊ីមែលបច្ចុប្បន្ន</span><b id="bellAddress">—</b></div>
+          <div class="bell-id-row"><span data-i18n="bellIpLabel">IP</span><b id="bellIp">—</b></div>
+        </div>
         <div class="bell-section">
           <div class="profile-row"><span data-i18n="quotaToday">កូតាថ្ងៃនេះ</span><b id="bellQuotaText">—</b></div>
           <div class="quota-bar"><div class="quota-fill" id="bellQuotaFill" style="width:0%"></div></div>
@@ -1438,11 +1509,26 @@
            domain list. The live list is always preferred when it
            loads. */
         var FALLBACK_DOMAINS = [{ "domain": "euploading.com", "isActive": true }];
-        var POLL_SECONDS = 5;
         /* Poll backoff: on a Mail.tm rate-limit (429/503) the poll
-           interval doubles 5 -> 10 -> 20s until a poll succeeds,
-           then it returns to 5s. Never hammer the API. */
+           interval doubles up to 4x the plan base until a poll
+           succeeds, then it returns to the plan base. Never hammer
+           the API. */
         var POLL_MAX_SECONDS = 20;
+        /* Poll speed by plan (Batch 3): Free polls every 10s
+           (moderate, never too slow), Monthly every 5s, Yearly
+           every 2s (lightning fast). */
+        var POLL_BY_PLAN = { "free": 10, "pro-monthly": 5, "pro-yearly": 2 };
+        function pollBaseSeconds(){
+          var p = "free";
+          try { p = getCurrentPlan(); } catch(e) {}
+          return POLL_BY_PLAN[p] || 10;
+        }
+        function refreshPollForPlan(){
+          state.pollInterval = pollBaseSeconds();
+          state.countdown = state.pollInterval;
+          if (state.timer) startPolling();
+          updateCountdown();
+        }
         /* Plan daily limits: Free 10/day, Pro Monthly 100/day,
            Pro Yearly unlimited. Everyone is Free for now; the plan
            comes from the profile when paid plans exist. */
@@ -1696,7 +1782,7 @@
             var d2 = acctData();
             if (d2.pendingPayment){ d2.pendingPayment = null; saveAcctData(d2); }
           }
-          if (changed){ saveProfile(p); saveAccount(p); }
+          if (changed){ saveProfile(p); saveAccount(p); refreshPollForPlan(); }
           if (data.blocked) setBlocked(true);
           updateBellBadge(); updateGenerateState(); updateQuotaLine();
           if ($("profilePanel") && $("profilePanel").classList.contains("open")) renderProfileDynamic();
@@ -2299,6 +2385,22 @@ var I18N = {
     "heroFrom": "ពី {sender}",
     "copyOtp": "ចម្លង OTP",
     "autoRefreshEvery": "ធ្វើបច្ចុប្បន្នភាពរៀងរាល់ {n} វិនាទី",
+    "limitWarn": "⚠️ គេហទំព័រនេះកំណត់ការ log in — កុំ retry ច្រើនដង",
+    "recommended": "ណែនាំ",
+    "themeColorRow": "ពណ៌រចនាប័ទ្ម",
+    "accentGreen": "បៃតង",
+    "accentOcean": "ខៀវសមុទ្រ",
+    "accentSunset": "លឿងថ្ងៃលិច",
+    "accentRoyal": "ស្វាយរាជ",
+    "accentRose": "ផ្កាឈូក",
+    "accentMidnight": "ខៀវងងឹត",
+    "autoShort": "Auto",
+    "bellGmailLabel": "Gmail",
+    "bellAddressLabel": "អ៊ីមែលបច្ចុប្បន្ន",
+    "bellIpLabel": "IP",
+    "featSpeedFree": "ល្បឿនមធ្យម — រៀងរាល់ 10 វិនាទី",
+    "featSpeedMonthly": "ល្បឿនលឿន — រៀងរាល់ 5 វិនាទី",
+    "featSpeedYearly": "ល្បឿនដូចរន្ទះ — រៀងរាល់ 2 វិនាទី",
     "heroDismiss": "បិទ"
   },
   "en": {
@@ -2594,6 +2696,22 @@ var I18N = {
     "heroFrom": "from {sender}",
     "copyOtp": "Copy OTP",
     "autoRefreshEvery": "Auto-refreshing every {n}s",
+    "limitWarn": "⚠️ This site limits logins — don't retry too often",
+    "recommended": "Recommended",
+    "themeColorRow": "Colour theme",
+    "accentGreen": "Green",
+    "accentOcean": "Ocean Blue",
+    "accentSunset": "Sunset Orange",
+    "accentRoyal": "Royal Purple",
+    "accentRose": "Rose Pink",
+    "accentMidnight": "Midnight",
+    "autoShort": "Auto",
+    "bellGmailLabel": "Gmail",
+    "bellAddressLabel": "Current email",
+    "bellIpLabel": "IP",
+    "featSpeedFree": "Moderate speed — every 10 seconds",
+    "featSpeedMonthly": "Fast speed — every 5 seconds",
+    "featSpeedYearly": "Lightning speed — every 2 seconds",
     "heroDismiss": "Dismiss"
   }
 };
@@ -2660,15 +2778,16 @@ var I18N = {
           updateIpLine();
           syncLangSeg();
           syncThemeSeg();
+          syncAccentPicker();
         }
         function setLang(next){ applyLang(next); }
 
         var state = {
           address: "", password: "", token: "", accountId: "",
-          messages: [], timer: null, countdown: POLL_SECONDS, pollInterval: POLL_SECONDS,
+          messages: [], timer: null, countdown: 10, pollInterval: 10,
           creating: false, checking: false, retryCount: 0,
           failed: false, retrying: false, lastErrorCode: "",
-          createTimer: null, pollFailed: false
+          createTimer: null, pollFailed: false, pollRateLimited: false
         };
 
         /* Saved messages live in the server database, not in Mail.tm,
@@ -3760,7 +3879,15 @@ var I18N = {
             if (otp){ cur._otp = otp; noteExtracted(cur); }
             var url = extractConfirmUrl(detail, cur.subject || "");
             if (url){ cur._confirmUrl = url; noteExtracted(cur); }
-            if (otp || url) renderMessages();
+            /* Body read later: if the full text mentions a login
+               limit, warn too — the code/confirm is already on
+               screen, the warning just joins it. */
+            var lw = false;
+            if (!cur._limitWarn){
+              lw = detectLimitWarning((cur.subject || "") + " " + text);
+              if (lw) cur._limitWarn = true;
+            }
+            if (otp || url || lw) renderMessages();
             enrichActive--; pumpEnrich();
           }).catch(function(err){
             /* quiet: no banner. On a rate-limit (429/503) or network
@@ -3828,6 +3955,7 @@ var I18N = {
               if (old.seen) nw.seen = true;
               if (old._otp) nw._otp = old._otp;
               if (old._confirmUrl) nw._confirmUrl = old._confirmUrl;
+              if (old._limitWarn) nw._limitWarn = true;
               if (old._detailFetched) nw._detailFetched = true;
               if (old._detailFetching) nw._detailFetching = true;
               if (old._detailRetries) nw._detailRetries = old._detailRetries;
@@ -3852,6 +3980,12 @@ var I18N = {
                 var u = extractConfirmUrl({ text: nw.intro || "", html: [] }, nw.subject || "");
                 if (u){ nw._confirmUrl = u; noteExtracted(nw); }
               }
+              /* Limit warning, code-first: subject + intro only,
+                 0 extra calls — the warning rides the same render
+                 as the code/confirm. */
+              if (!nw._limitWarn){
+                nw._limitWarn = detectLimitWarning((nw.subject || "") + " " + (nw.intro || ""));
+              }
               /* Code first: the code/confirm is already on screen,
                  so the full body waits — it is read later, in the
                  background, for completeness (reader view). */
@@ -3860,8 +3994,9 @@ var I18N = {
               }
             });
             state.messages = msgs;
-            /* A successful poll resets the interval back to 5s. */
-            state.pollInterval = POLL_SECONDS;
+            /* A successful poll resets the interval back to the plan base. */
+            state.pollInterval = pollBaseSeconds();
+            state.pollRateLimited = false;
             if (state.pollFailed){ state.pollFailed = false; statusText.textContent = t("statusWaiting"); }
             renderMessages();
             state.messages.slice(0, 10).forEach(enrichMessage);
@@ -3874,8 +4009,11 @@ var I18N = {
             /* Self-healing: the 5s timer keeps running and the next
                poll retries automatically — no click needed. Just show
                a small reconnecting status instead of an error. */
+            /* Yellow for a rate-limit backoff, red for any other
+               failure — the indicator state follows the cause. */
+            state.pollRateLimited = !!(err && (err.status === 429 || err.status === 503));
             if (err && (err.status === 429 || err.status === 503)){
-              state.pollInterval = Math.min((state.pollInterval || POLL_SECONDS) * 2, POLL_MAX_SECONDS);
+              state.pollInterval = Math.min((state.pollInterval || pollBaseSeconds()) * 2, pollBaseSeconds() * 4);
               state.countdown = state.pollInterval;
               updateCountdown();
             }
@@ -3989,6 +4127,12 @@ var I18N = {
             if (m._otp || m._confirmUrl){
               var quick = document.createElement("div");
               quick.className = "msg-quick";
+              if (m._limitWarn){
+                var lwChip = document.createElement("span");
+                lwChip.className = "limit-warn";
+                lwChip.textContent = t("limitWarn");
+                quick.appendChild(lwChip);
+              }
               if (m._otp){
                 var chip = document.createElement("span");
                 chip.className = "code-chip";
@@ -4032,6 +4176,15 @@ var I18N = {
               }
               li.appendChild(quick);
             } else {
+              if (m._limitWarn){
+                var quickL = document.createElement("div");
+                quickL.className = "msg-quick";
+                var lwChip2 = document.createElement("span");
+                lwChip2.className = "limit-warn";
+                lwChip2.textContent = t("limitWarn");
+                quickL.appendChild(lwChip2);
+                li.appendChild(quickL);
+              }
               /* No code/confirm yet: a fresh message (under 3 minutes
                  old) shows a live ticking "Waiting for code… Ns" /
                  "Waiting for confirm… Ns" chip instead of a bare row. */
@@ -4129,6 +4282,12 @@ var I18N = {
           hero.classList.add("show");
           var top = document.createElement("div");
           top.className = "otp-hero-top";
+          /* Logo + sender name ride in the SAME render as the code:
+             the avatar element is built synchronously here, next to
+             the name, so it can never lag behind the code. */
+          var heroAv = makeAvatar((target.from && target.from.address) || "", heroSender(target));
+          heroAv.classList.add("otp-hero-avatar");
+          top.appendChild(heroAv);
           var lbl = document.createElement("span");
           lbl.textContent = kind === "otp" ? t("otpDetected") : t("confirmDetected");
           var from = document.createElement("span");
@@ -4187,6 +4346,12 @@ var I18N = {
           subj.className = "otp-hero-subject";
           subj.textContent = target.subject || t("noSubject");
           hero.appendChild(subj);
+          if (target._limitWarn){
+            var hw = document.createElement("div");
+            hw.className = "hero-limit-warn";
+            hw.textContent = t("limitWarn");
+            hero.appendChild(hw);
+          }
         }
 
         function renderMessages(){
@@ -4228,6 +4393,7 @@ var I18N = {
           };
           var otp = extractOtp((m.subject || "") + " " + text);
           if (otp) m._otp = otp;
+          if (detectLimitWarning((m.subject || "") + " " + text)) m._limitWarn = true;
           var detailObj = (raw && (raw.text || raw.html)) ? raw : { text: text, html: html ? [html] : [] };
           var url = extractConfirmUrl(detailObj, m.subject || "");
           if (url) m._confirmUrl = url;
@@ -4271,6 +4437,45 @@ var I18N = {
 
         /* ---------- reader ---------- */
         var overlay = $("readerOverlay"), currentOtp = "";
+        /* ---------- limit-warning detector (Batch 3) ----------
+           Some services cap logins (e.g. "only 2 logins per hour").
+           When a message's subject/intro (or its body, read later)
+           says so, warn Mov in the website so he does not retry too
+           many times with many Gmails. Strong patterns match alone;
+           weak ones need a login/attempt context, so an ordinary
+           "Your code expires in 10 minutes" never warns. */
+        var LIMIT_STRONG = [
+          /too many (login|log-in|sign[- ]?in|attempt|request)/i,
+          /(login|log-in|sign[- ]?in|hourly|daily|attempt) limit/i,
+          /limit (reached|exceeded)/i,
+          /(account|login|sign[- ]?in) (is )?(temporarily )?(locked|blocked|suspended)/i,
+          /temporarily (blocked|locked|suspended)/i,
+          /rate[- ]?limit/i,
+          /maximum (number of )?(login|log-in|sign[- ]?in|attempt)/i,
+          /too many requests/i,
+          /exceeded (the )?(maximum|hourly|daily|login|attempt)/i,
+          /only \d+ (times?|logins?|attempts?) (per|in an?|a) (hour|day)/i,
+          /\b\d+ (times?|logins?|attempts?) per hour\b/i
+        ];
+        var LIMIT_WEAK = [
+          /wait \d+ (seconds?|minutes?|hours?)/i,
+          /try again in \d+ (seconds?|minutes?|hours?)/i,
+          /suspended/i,
+          /too many/i
+        ];
+        function detectLimitWarning(text){
+          var hay = String(text || "");
+          if (!hay) return false;
+          for (var i = 0; i < LIMIT_STRONG.length; i++){
+            if (LIMIT_STRONG[i].test(hay)) return true;
+          }
+          var ctx = /(login|log-in|sign[- ]?in|attempt|limit|locked|blocked|verify|verification|code|account|request)/i.test(hay);
+          if (!ctx) return false;
+          for (var j = 0; j < LIMIT_WEAK.length; j++){
+            if (LIMIT_WEAK[j].test(hay)) return true;
+          }
+          return false;
+        }
         function extractOtp(text){
           if (!text) return "";
           var m = text.match(/\b(\d{4,8})\b/g);
@@ -4705,6 +4910,39 @@ var I18N = {
           });
         }
 
+        /* ---------- colour theme (accent palette) ----------
+           Six palettes; the current green is the default. The
+           choice is stored in localStorage and applied to
+           <html data-accent>, so every accent colour/highlight on
+           the page follows it. Day/Night/Auto keep working
+           independently for light/dark. */
+        var ACCENT_KEY = "movmail-accent";
+        var ACCENTS = ["green", "ocean", "sunset", "royal", "rose", "midnight"];
+        function currentAccent(){
+          var a = "green";
+          try { var s = localStorage.getItem(ACCENT_KEY); if (ACCENTS.indexOf(s) >= 0) a = s; } catch(e) {}
+          return a;
+        }
+        function applyAccent(name){
+          var a = ACCENTS.indexOf(name) >= 0 ? name : "green";
+          try { localStorage.setItem(ACCENT_KEY, a); } catch(e) {}
+          document.documentElement.dataset.accent = a;
+          syncAccentPicker();
+        }
+        function syncAccentPicker(){
+          var pick = $("accentPick");
+          if (pick){
+            Array.prototype.forEach.call(pick.querySelectorAll("button"), function(b){
+              b.classList.toggle("active", b.getAttribute("data-accent") === currentAccent());
+            });
+          }
+          var nm = $("accentName");
+          if (nm){
+            var key = { "green": "accentGreen", "ocean": "accentOcean", "sunset": "accentSunset", "royal": "accentRoyal", "rose": "accentRose", "midnight": "accentMidnight" }[currentAccent()];
+            nm.textContent = t(key);
+          }
+        }
+
         /* ---------- local user account (device-local only) ----------
            One profile per device, stored in localStorage. The password
            is never stored in plaintext: SHA-256 + a random salt. */
@@ -4899,6 +5137,13 @@ var I18N = {
           var ba = $("bellRedeemedAmount");
           if (ba) ba.textContent = "+" + rd;
           updateQuotaLine();
+          /* Compact identity: signed-in Gmail + current address +
+             flag + IP, each on one ellipsised line. */
+          var prof = null;
+          try { prof = loadProfile(); } catch(e) {}
+          var bgm = $("bellGmail"); if (bgm) bgm.textContent = (prof && prof.email) ? prof.email : "—";
+          var badr = $("bellAddress"); if (badr) badr.textContent = state.address || "—";
+          var bip = $("bellIp"); if (bip) bip.textContent = currentIp ? ipText(currentIp) : "—";
           var nl = $("bellNotifList");
           nl.innerHTML = "";
           var notifs = loadNotifications();
@@ -4948,8 +5193,15 @@ var I18N = {
             });
           }
         }
-        function openBellPanel(){ closeProfilePanel(); renderBellPanel(); openAnimated($("bellPanel")); }
-        function closeBellPanel(){ closeAnimated($("bellPanel"), null); }
+        function openBellPanel(){
+          closeProfilePanel(); renderBellPanel();
+          var bd = $("bellBackdrop"); if (bd) bd.hidden = false;
+          openAnimated($("bellPanel"));
+        }
+        function closeBellPanel(){
+          var bd = $("bellBackdrop"); if (bd) bd.hidden = true;
+          closeAnimated($("bellPanel"), null);
+        }
 
         /* ---------- sign-up gate / sign-in ---------- */
         var authMode = "signup";
@@ -5121,6 +5373,7 @@ var I18N = {
           renderProfileDynamic();
           syncLangSeg();
           syncThemeSeg();
+          syncAccentPicker();
           openAnimated($("profilePanel"));
         }
         function closeProfilePanel(){ closeAnimated($("profilePanel"), null); }
@@ -5163,6 +5416,9 @@ var I18N = {
         Array.prototype.forEach.call(document.querySelectorAll("#profileThemeSeg button"), function(btn){
           btn.addEventListener("click", function(){ applyTheme(btn.getAttribute("data-theme")); });
         });
+        Array.prototype.forEach.call(document.querySelectorAll("#accentPick button"), function(btn){
+          btn.addEventListener("click", function(){ applyAccent(btn.getAttribute("data-accent")); });
+        });
 
         /* ---------- notification bell ---------- */
         $("bellBtn").addEventListener("click", function(e){
@@ -5172,6 +5428,8 @@ var I18N = {
           else openBellPanel();
         });
         $("bellClose").addEventListener("click", closeBellPanel);
+        var bellBd = $("bellBackdrop");
+        if (bellBd) bellBd.addEventListener("click", closeBellPanel);
         document.addEventListener("click", function(e){
           var panel = $("bellPanel");
           if (panel && panel.classList.contains("open") && !e.target.closest("#bellPanel") && !e.target.closest("#bellBtn")) closeBellPanel();
@@ -5234,12 +5492,15 @@ var I18N = {
         /* ---------- polling ---------- */
         function startPolling(){
           stopPolling();
-          state.countdown = state.pollInterval || POLL_SECONDS;
+          /* (Re)starting a poll run always begins at the plan's base
+             interval — backoff only grows inside a running timer. */
+          state.pollInterval = pollBaseSeconds();
+          state.countdown = state.pollInterval;
           updateCountdown();
           state.timer = setInterval(function(){
             state.countdown--;
             if (state.countdown <= 0){
-              state.countdown = state.pollInterval || POLL_SECONDS;
+              state.countdown = state.pollInterval || pollBaseSeconds();
               fetchMessages(false);
             }
             updateCountdown();
@@ -5249,13 +5510,23 @@ var I18N = {
           if (state.timer){ clearInterval(state.timer); state.timer = null; }
         }
         function updateCountdown(){
-          countdownText.textContent = state.token
-            ? t("countdown", {n: state.countdown})
-            : "";
-          /* "Auto-refreshing every 5s" indicator: always reflects the
-             real poll interval (5s, or the backed-off 10s/20s on 429). */
-          var ri = $("refreshIndicatorText");
-          if (ri) ri.textContent = t("autoRefreshEvery", {n: state.pollInterval || POLL_SECONDS});
+          /* No countdown numbers at the top any more: the poll
+             countdown lives only in the small inbox indicator. */
+          countdownText.textContent = "";
+          /* Minimal Auto indicator, inside the inbox header only:
+             a small green dot + "Auto" while polling normally;
+             yellow while backed off (429), red while the poll is
+             failing/reconnecting. The title carries the real
+             interval for anyone who hovers it. */
+          var ri = $("refreshIndicator");
+          if (!ri) return;
+          var rit = $("refreshIndicatorText");
+          if (rit) rit.textContent = t("autoShort");
+          var base = pollBaseSeconds();
+          ri.classList.remove("warn", "err");
+          if (state.pollRateLimited) ri.classList.add("warn");
+          else if (state.pollFailed) ri.classList.add("err");
+          try { ri.title = t("autoRefreshEvery", {n: state.pollInterval || base}); } catch(e) {}
         }
         document.addEventListener("visibilitychange", function(){
           if (!document.hidden && state.token) fetchMessages(false);
@@ -5396,7 +5667,7 @@ var I18N = {
         function manualRefresh(iconEl){
           if (!state.token) return;
           if (iconEl) iconEl.classList.add("spin");
-          state.countdown = POLL_SECONDS; updateCountdown();
+          state.countdown = pollBaseSeconds(); updateCountdown();
           fetchMessages(false);
           setTimeout(function(){ if (iconEl) iconEl.classList.remove("spin"); }, 900);
         }
