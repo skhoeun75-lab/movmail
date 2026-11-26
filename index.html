@@ -5,15 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <meta name="description" content="MovMail.com — អ៊ីមែលបណ្តោះអាសន្នឥតគិតថ្លៃ សម្រាប់ទទួលលេខកូដ OTP និងការពារឯកជនភាព មិនបាច់ចុះឈ្មោះ" />
-    <link rel="icon" href="data:," />
+    <meta name="theme-color" content="#087f5b" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
     <title>MovMail.com — អ៊ីមែលបណ្តោះអាសន្ន</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script>try{var __l=localStorage.getItem("movmail-lang");if(__l==="en"||__l==="km"){document.documentElement.lang=__l==="en"?"en":"km";window.__MOVMAIL_LANG=__l;}}catch(e){}</script>
+    <script>try{var __l=localStorage.getItem("movmail-lang");if(__l==="en"||__l==="km"){document.documentElement.lang=__l==="en"?"en":"km";window.__MOVMAIL_LANG=__l;}}catch(e){}try{var __t=localStorage.getItem("movmail-theme");if(__t!=="light"&&__t!=="dark")__t="auto";document.documentElement.dataset.theme=__t;}catch(e){document.documentElement.dataset.theme="auto";}</script>
     <style>
-      :root{
+      /* ---------- Theme: Day / Night / Auto ----------
+         Day (light) is the default. Night (dark) is the current dark
+         look. Auto follows the OS and updates live. Every colour on
+         the page comes from these variables, so text can never clash
+         with the background in either theme. */
+      :root, html[data-theme="light"]{
         --bg:#f3f5f4;
         --surface:#ffffff;
         --surface-2:#eef2f0;
@@ -36,8 +45,28 @@
         --shadow-lg:0 8px 24px -8px rgba(16,30,24,.28),0 24px 48px -16px rgba(16,30,24,.35);
         --radius:16px;
       }
+      html[data-theme="dark"]{
+        --bg:#0d1210;
+        --surface:#161e1a;
+        --surface-2:#1d2721;
+        --ink:#e9f0ec;
+        --muted:#9db1a5;
+        --faint:#71857a;
+        --border:#27332c;
+        --accent:#2fbf8f;
+        --accent-strong:#4ad3a4;
+        --accent-soft:#17352a;
+        --accent-ink:#7fe3c0;
+        --amber-bg:#2c2410;
+        --amber-border:#57481c;
+        --amber-ink:#ecc979;
+        --red:#f0938a;
+        --red-bg:#38201d;
+        --header:#0a0e0c;
+        --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -18px rgba(0,0,0,.6);
+      }
       @media (prefers-color-scheme: dark){
-        :root{
+        html[data-theme="auto"]{
           --bg:#0d1210;
           --surface:#161e1a;
           --surface-2:#1d2721;
@@ -81,10 +110,10 @@
       }
       .brand{display:flex;align-items:center;gap:11px;text-decoration:none;color:var(--header-ink)}
       .brand-mark{
-        width:40px;height:40px;border-radius:10px;background:var(--accent);
-        display:flex;align-items:center;justify-content:center;flex:none;
+        width:40px;height:40px;border-radius:10px;background:transparent;
+        display:flex;align-items:center;justify-content:center;flex:none;overflow:hidden;
       }
-      .brand-mark svg{width:23px;height:23px;fill:#fff}
+      .brand-mark img{width:100%;height:100%;object-fit:cover;display:block}
       .brand-name{font-weight:800;font-size:20px;letter-spacing:.4px;line-height:1.15}
       .brand-name em{font-style:normal;color:var(--accent)}
       @media (prefers-color-scheme: dark){ .brand-name em{color:var(--accent)} }
@@ -395,11 +424,11 @@
       .mini-modal h3{margin:0 0 6px;font-size:18px}
       .mini-modal p{margin:0 0 14px;font-size:14.5px;color:var(--muted)}
       .mini-modal label{display:block;font-size:13.5px;font-weight:700;margin:0 0 5px}
-      .mini-modal input[type="text"],.mini-modal select{
+      .mini-modal input[type="text"],.mini-modal input[type="email"],.mini-modal input[type="password"],.mini-modal select{
         width:100%;padding:11px 13px;border:1px solid var(--border);border-radius:10px;
         font:inherit;font-size:15px;background:var(--surface);color:var(--ink);margin-bottom:14px;
       }
-      .mini-modal input[type="text"]:focus,.mini-modal select:focus{outline:2px solid var(--accent);outline-offset:1px}
+      .mini-modal input[type="text"]:focus,.mini-modal input[type="email"]:focus,.mini-modal input[type="password"]:focus,.mini-modal select:focus{outline:2px solid var(--accent);outline-offset:1px}
       .mini-actions{display:flex;flex-wrap:wrap;gap:9px;justify-content:flex-end}
       .mini-modal .ip-preview{
         background:var(--surface-2);border-radius:10px;padding:10px 13px;font-size:13.5px;
@@ -459,6 +488,106 @@
       .reader-actions .confirm-strip .confirm-btn{width:100%;padding:12px 16px;font-size:16px}
       .confirm-btn.done,.chip-copy.done,.otp-strip button.done{background:#1e9e6a;border-color:#1e9e6a}
 
+      /* ---------- New-message animation (blurry -> clear, smooth) ---------- */
+      @keyframes msgIn{from{opacity:0;filter:blur(8px);transform:translateY(6px)}to{opacity:1;filter:blur(0);transform:translateY(0)}}
+      .msg-item.msg-new{animation:msgIn .5s ease-out}
+      @media (prefers-reduced-motion: reduce){ .msg-item.msg-new{animation:none} }
+      /* "Saved" chip on rows that came from the saved store */
+      .saved-chip{
+        display:inline-flex;align-items:center;gap:4px;margin-top:4px;
+        background:var(--accent-soft);color:var(--accent-ink);
+        border:1px solid var(--accent);border-radius:999px;
+        padding:1px 9px;font-size:12px;font-weight:700;white-space:nowrap;
+      }
+      /* Verified profile badge (completeness indicator inside MovMail) */
+      .verified-badge{
+        display:inline-flex;align-items:center;gap:4px;
+        background:var(--accent-soft);color:var(--accent-ink);
+        border:1px solid var(--accent);border-radius:999px;
+        padding:2px 10px;font-size:12.5px;font-weight:700;white-space:nowrap;
+      }
+
+      /* ---------- Country picker (small dropdown, ~5 rows visible) ---------- */
+      .ip-wrap{position:relative;display:inline-flex;gap:8px;flex-wrap:wrap;align-items:center}
+      .country-dropdown{
+        position:absolute;top:calc(100% + 6px);left:0;z-index:50;width:264px;max-width:92vw;
+        max-height:232px;overflow-y:auto;background:var(--surface);color:var(--ink);
+        border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-lg);
+        display:none;padding:4px;
+      }
+      .country-dropdown.open{display:block}
+      .country-option{
+        display:flex;align-items:center;gap:10px;width:100%;background:none;border:none;
+        text-align:left;padding:10px 12px;min-height:44px;border-radius:8px;
+        font-size:14.5px;color:var(--ink);cursor:pointer;
+      }
+      .country-option:hover{background:var(--surface-2)}
+      .country-option .c-flag{font-size:18px;flex:none}
+      .country-option .c-name{font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .country-option .c-city{font-size:13px;color:var(--muted);white-space:nowrap}
+      .country-option .c-check{color:var(--accent);font-weight:800;flex:none}
+
+      /* ---------- Blur animations for every popup/panel/modal ---------- */
+      @keyframes blurIn{from{opacity:0;filter:blur(8px)}to{opacity:1;filter:blur(0)}}
+      @keyframes blurOut{from{opacity:1;filter:blur(0)}to{opacity:0;filter:blur(8px)}}
+      .overlay.open .reader{animation:blurIn .3s ease}
+      .mini-overlay.open .mini-modal{animation:blurIn .3s ease}
+      .float-panel.open{animation:blurIn .3s ease}
+      .country-dropdown.open{animation:blurIn .25s ease}
+      .profile-panel.open{animation:blurIn .3s ease}
+      .overlay.open .reader.blur-out,
+      .mini-overlay.open .mini-modal.blur-out,
+      .float-panel.open.blur-out,
+      .country-dropdown.open.blur-out,
+      .profile-panel.open.blur-out{animation:blurOut .28s ease forwards}
+      @media (prefers-reduced-motion: reduce){
+        .overlay.open .reader,.mini-overlay.open .mini-modal,.float-panel.open,
+        .country-dropdown.open,.profile-panel.open,
+        .overlay.open .reader.blur-out,.mini-overlay.open .mini-modal.blur-out,
+        .float-panel.open.blur-out,.country-dropdown.open.blur-out,
+        .profile-panel.open.blur-out{animation:none}
+      }
+
+      /* ---------- Header profile avatar ---------- */
+      .profile-slot{display:flex;align-items:center;margin-left:10px;flex:none}
+      .avatar-btn{width:38px;height:38px;min-height:38px;border-radius:50%;border:2px solid rgba(255,255,255,.55);background:var(--accent);color:#fff;font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex:none}
+      .profile-signup-btn{background:#fff;border-color:#fff;color:#065f46}
+      @media (max-width:560px){ .profile-slot{margin-left:4px} }
+
+      /* ---------- Profile panel (small, top-right) ---------- */
+      .profile-panel{
+        position:fixed;z-index:70;top:64px;right:14px;width:320px;max-width:92vw;max-height:82vh;
+        background:var(--surface);color:var(--ink);border:1px solid var(--border);
+        border-radius:16px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;overflow:hidden;
+      }
+      .profile-panel.open{display:flex}
+      .profile-head{display:flex;gap:12px;align-items:center;padding:16px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+      .profile-avatar-big{width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center;flex:none}
+      .profile-head .profile-name{font-weight:800;font-size:16.5px;line-height:1.3;overflow-wrap:anywhere}
+      .profile-head .profile-id{font-size:13px;color:var(--muted)}
+      .profile-head .spacer{flex:1}
+      .panel-close{width:34px;height:34px;min-height:34px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--ink);font-size:15px;line-height:1;flex:none;cursor:pointer}
+      .profile-body{overflow:auto;padding:16px;display:grid;gap:12px;min-height:0}
+      .profile-row{display:flex;justify-content:space-between;gap:12px;font-size:14.5px;align-items:center}
+      .profile-row>span:first-child{color:var(--muted);flex:none}
+      .profile-row b{overflow-wrap:anywhere;text-align:right;font-weight:700}
+      .profile-pricing h4{margin:0 0 8px;font-size:14.5px}
+      .plan-option{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;font-size:14.5px;font-weight:700;color:var(--ink);cursor:pointer;margin-bottom:8px;min-height:44px;text-align:left}
+      .plan-option:last-child{margin-bottom:0}
+      .plan-option.selected{border-color:var(--accent);background:var(--accent-soft)}
+      .plan-option .plan-price{color:var(--accent-ink);white-space:nowrap}
+      .seg{display:inline-flex;border:1px solid var(--border);border-radius:999px;overflow:hidden;flex:none}
+      .seg button{border:none;background:var(--surface);color:var(--ink);padding:6px 12px;font-weight:700;font-size:13.5px;min-height:34px;cursor:pointer}
+      .seg button.active{background:var(--accent);color:#fff}
+
+      /* ---------- Auth modal ---------- */
+      .auth-error{background:var(--red-bg);color:var(--red);border:1px solid var(--red);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:12px}
+      .auth-switch{margin:14px 0 0;text-align:center}
+      .link-btn{background:none;border:none;color:var(--accent);font-weight:700;font-size:14.5px;cursor:pointer;padding:6px;min-height:36px}
+      .success-modal{text-align:center}
+      .success-check{width:64px;height:64px;border-radius:50%;background:#1e9e6a;color:#fff;font-size:34px;font-weight:800;display:flex;align-items:center;justify-content:center;margin:6px auto 14px}
+      .success-modal p{margin:0 0 16px;color:var(--muted);font-size:14.5px}
+
       /* ---------- Mobile layout: no horizontal overflow on phones ---------- */
       html,body{overflow-x:clip}
       @supports not (overflow-x:clip){ html,body{overflow-x:hidden} }
@@ -516,7 +645,7 @@
       <div class="header-in">
         <a class="brand" href="#" aria-label="MovMail.com">
           <span class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
+            <img src="logo.png" alt="" />
           </span>
           <span>
             <span class="brand-name">Mov<em>Mail</em>.com</span>
@@ -526,13 +655,17 @@
         <nav>
           <a href="#inbox" data-i18n="navInbox">ប្រអប់សារ</a>
           <a href="#mailboxesBox" data-i18n="navMailboxes">អ៊ីមែលរក្សាទុក</a>
-          <a href="#savedBox" data-i18n="navSaved">សាររក្សាទុក</a>
+          <a href="#inbox" data-i18n="navSaved">សាររក្សាទុក</a>
           <a href="#how" data-i18n="navHow">របៀបប្រើ</a>
           <a href="#faq" data-i18n="navFaq">សំណួរ</a>
         </nav>
         <div class="lang-switch" role="group" aria-label="Language / ភាសា">
           <button type="button" class="lang-btn active" id="langKm" aria-pressed="true">ខ្មែរ</button>
           <button type="button" class="lang-btn" id="langEn" aria-pressed="false">EN</button>
+        </div>
+        <div class="profile-slot" id="profileSlot">
+          <button type="button" class="avatar-btn" id="avatarBtn" hidden aria-label="Profile"><span id="avatarInitials">?</span></button>
+          <button type="button" class="btn pill profile-signup-btn" id="headerSignupBtn"><span data-i18n="signUpBtn">ចុះឈ្មោះ</span></button>
         </div>
       </div>
     </header>
@@ -549,12 +682,19 @@
         <div class="ip-line" id="ipLine" hidden>
           <span><span data-i18n="ipLabel">IP</span>៖ <span class="ip-val mono" id="ipValue">—</span></span>
           <span id="ipLocation">—</span>
+          <span><span data-i18n="proxyLabel">Proxy</span>៖ <span class="ip-val" id="ipProxy">—</span></span>
+          <span><span data-i18n="createdLabel">បង្កើត</span>៖ <span class="ip-val" id="ipCreated">—</span></span>
+          <span class="verified-badge" id="verifiedBadge" hidden>✓ <span data-i18n="verifiedBadge">បានផ្ទៀងផ្ទាត់</span></span>
           <span class="ip-note" data-i18n="ipDisplayNote">IP សម្រាប់បង្ហាញតែប៉ុណ្ណោះ</span>
         </div>
 
         <div class="actions">
           <button class="btn primary pill" id="generateBtn" data-i18n="generate">បង្កើតអ៊ីមែល</button>
-          <button class="btn pill" id="generateIpBtn" data-i18n="generateIp">បង្កើត IP</button>
+          <span class="ip-wrap">
+            <button class="btn pill" id="generateIpBtn" data-i18n="generateIp">បង្កើត IP</button>
+            <button class="btn pill" id="countryBtn" type="button" aria-haspopup="true" aria-expanded="false" data-i18n-aria="countryPickerLabel"><span id="countryBtnLabel">🇰🇭 Cambodia</span></button>
+            <span class="country-dropdown" id="countryDropdown" role="listbox" aria-label="Country"></span>
+          </span>
           <button class="btn pill" id="saveBtn" disabled>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10v4z"/></svg>
             <span data-i18n="saveEmail">រក្សាទុក</span>
@@ -642,27 +782,6 @@
               <p id="mailboxEmptyText">ចុច «រក្សាទុក» នៅខាងលើ ដើម្បីរក្សាអ៊ីមែលនេះទុកប្រើម្តងទៀត — វានឹងមានឈ្មោះ និង Logo របស់វា។</p>
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- ===== Saved messages (kept forever) ===== -->
-      <div class="inbox" id="savedBox">
-        <div class="inbox-head">
-          <h2>
-            <svg viewBox="0 0 24 24"><path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10v4z"/></svg>
-            <span data-i18n="savedTitle">សារដែលបានរក្សាទុក</span> <span style="color:var(--faint);font-weight:600;font-size:13px;letter-spacing:1px">SAVED</span>
-          </h2>
-          <span class="count-badge" id="savedCountBadge">0</span>
-          <span class="spacer"></span>
-          <button class="icon-btn" id="savedRefreshBtn" aria-label="ធ្វើឱ្យសារដែលបានរក្សាទុកស្រស់" data-i18n-aria="savedRefreshLabel">
-            <svg viewBox="0 0 24 24" fill="currentColor" id="savedRefreshIcon"><path d="M17.65 6.35A8 8 0 1 0 19.73 14h-2.08a6 6 0 1 1-1.41-6.65L13 11h7V4l-2.35 2.35z"/></svg>
-          </button>
-        </div>
-        <ul class="msg-list" id="savedList"></ul>
-        <div class="empty-state" id="savedEmptyState">
-          <svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="m3 7 9 6 9-6" stroke-linejoin="round"/></svg>
-          <h3 id="savedEmptyTitle">មិនទាន់មានសារដែលបានរក្សាទុក</h3>
-          <p id="savedEmptyText">សារដែលចូលមកក្នុងប្រអប់សារនឹងត្រូវបានរក្សាទុកដោយស្វ័យប្រវត្តិនៅទីនេះ — ទោះបីជាអ្នកប្តូរអ៊ីមែលថ្មី ឬបិទទំព័រចោលក៏ដោយ។</p>
         </div>
       </div>
 
@@ -845,6 +964,76 @@
       </div>
     </div>
 
+    <!-- ===== Auth (sign-up gate / sign-in) ===== -->
+    <div class="mini-overlay" id="authOverlay" role="dialog" aria-modal="true">
+      <div class="mini-modal" id="authModal">
+        <h3 id="authTitle" data-i18n="authTitle">បង្កើតគណនីរបស់អ្នក</h3>
+        <p id="authSubtitle" data-i18n="authSubtitle">ចុះឈ្មោះដើម្បីរក្សាអ៊ីមែល និងការកំណត់របស់អ្នកទុកនៅលើឧបករណ៍នេះ។</p>
+        <div class="auth-error" id="authError" hidden></div>
+        <div id="authSignupFields">
+          <label for="authFirstName" data-i18n="firstNameLabel">នាមត្រកូល</label>
+          <input type="text" id="authFirstName" maxlength="40" autocomplete="given-name" />
+          <label for="authLastName" data-i18n="lastNameLabel">នាមខ្លួន</label>
+          <input type="text" id="authLastName" maxlength="40" autocomplete="family-name" />
+          <label for="authEmail" data-i18n="emailLabel">អ៊ីមែល</label>
+          <input type="email" id="authEmail" maxlength="80" autocomplete="email" />
+          <label for="authPassword" data-i18n="passwordLabel">ពាក្យសម្ងាត់</label>
+          <input type="password" id="authPassword" maxlength="80" autocomplete="new-password" />
+          <label for="authPassword2" data-i18n="confirmPasswordLabel">បញ្ជាក់ពាក្យសម្ងាត់</label>
+          <input type="password" id="authPassword2" maxlength="80" autocomplete="new-password" />
+        </div>
+        <div id="authSigninFields" hidden>
+          <label for="authEmailIn" data-i18n="emailLabel">អ៊ីមែល</label>
+          <input type="email" id="authEmailIn" maxlength="80" autocomplete="email" />
+          <label for="authPasswordIn" data-i18n="passwordLabel">ពាក្យសម្ងាត់</label>
+          <input type="password" id="authPasswordIn" maxlength="80" autocomplete="current-password" />
+        </div>
+        <div class="mini-actions">
+          <button class="btn primary" id="authSubmitBtn"><span id="authSubmitLabel" data-i18n="createAccountBtn">បង្កើតគណនី</span></button>
+        </div>
+        <p class="auth-switch"><button type="button" class="link-btn" id="authSwitchBtn" data-i18n="haveAccount">មានគណនីរួចហើយ? ចូលប្រើ</button></p>
+      </div>
+    </div>
+
+    <!-- ===== Sign-up success ===== -->
+    <div class="mini-overlay" id="authSuccessOverlay" role="dialog" aria-modal="true">
+      <div class="mini-modal success-modal">
+        <div class="success-check" aria-hidden="true">✓</div>
+        <h3 data-i18n="authSuccess">បានបង្កើតគណនីដោយជោគជ័យ</h3>
+        <p id="authSuccessText"></p>
+        <div class="mini-actions" style="justify-content:center">
+          <button class="btn primary" id="authSuccessClose" data-i18n="okBtn">យល់ព្រម</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Profile panel (small, top-right) ===== -->
+    <div class="profile-panel" id="profilePanel" role="dialog" aria-modal="false" aria-label="Profile">
+      <div class="profile-head">
+        <span class="profile-avatar-big" id="profileAvatarBig">?</span>
+        <div style="min-width:0">
+          <div class="profile-name" id="profileName">—</div>
+          <div class="profile-id mono" id="profileId">—</div>
+        </div>
+        <span class="spacer"></span>
+        <button class="panel-close" id="profileClose" aria-label="Close">✕</button>
+      </div>
+      <div class="profile-body">
+        <div class="profile-row"><span data-i18n="emailLabel">អ៊ីមែល</span><b id="profileEmail">—</b></div>
+        <div class="profile-row"><span data-i18n="registeredLabel">ចុះឈ្មោះនៅ</span><b id="profileDate">—</b></div>
+        <div class="profile-row"><span data-i18n="planLabel">គម្រោង</span><b id="profilePlan">Free</b></div>
+        <div class="profile-pricing">
+          <h4 data-i18n="pricingTitle">តម្លៃ</h4>
+          <button type="button" class="plan-option selected" data-plan="free"><span data-i18n="planFree">Free</span><span class="plan-price">$0</span></button>
+          <button type="button" class="plan-option" data-plan="pro-monthly"><span data-i18n="planProMonthly">Pro — ប្រចាំខែ</span><span class="plan-price">$3 / <span data-i18n="perMonth">ខែ</span></span></button>
+          <button type="button" class="plan-option" data-plan="pro-yearly"><span data-i18n="planProYearly">Pro — ប្រចាំឆ្នាំ</span><span class="plan-price">$30 / <span data-i18n="perYear">ឆ្នាំ</span></span></button>
+        </div>
+        <div class="profile-row"><span data-i18n="languageRow">ភាសា</span><span class="seg" id="profileLangSeg"><button type="button" data-lang="km">ខ្មែរ</button><button type="button" data-lang="en">EN</button></span></div>
+        <div class="profile-row"><span data-i18n="themeRow">រចនាប័ទ្ម</span><span class="seg" id="profileThemeSeg"><button type="button" data-theme="light" data-i18n="themeDay">ថ្ងៃ</button><button type="button" data-theme="dark" data-i18n="themeNight">យប់</button><button type="button" data-theme="auto" data-i18n="themeAuto">ស្វ័យប្រវត្តិ</button></span></div>
+        <button type="button" class="btn danger" id="signOutBtn" data-i18n="signOut">ចាកចេញ</button>
+      </div>
+    </div>
+
     <div class="toast" id="toast" role="status"></div>
 
     <script>
@@ -936,7 +1125,7 @@ var I18N = {
     "faqQ4": "តើខ្ញុំអាចផ្ញើអ៊ីមែលចេញបានទេ?",
     "faqA4": "មិនបានទេ។ សេវានេះសម្រាប់តែ <b>ទទួល</b> សារប៉ុណ្ណោះ — ដូចជាលេខកូដ OTP និងអ៊ីមែលបញ្ជាក់ការចុះឈ្មោះ។ ការផ្ញើចេញត្រូវបានបិទ ដើម្បីការពារការប្រើប្រាស់ខុសគោលបំណង។",
     "faqQ5": "បើខ្ញុំចុច «{change}» តើសារចាស់ទៅណា?",
-    "faqA5": "អ៊ីមែលចាស់នឹងត្រូវបោះបង់ តែសារទាំងអស់របស់វាត្រូវបានរក្សាទុកដោយស្វ័យប្រវត្តិនៅក្នុងផ្នែក «សារដែលបានរក្សាទុក» ខាងក្រោម — អ្នកអាចត្រឡប់ទៅមើលវិញបានគ្រប់ពេល។",
+    "faqA5": "អ៊ីមែលចាស់នឹងត្រូវបោះបង់ តែសារទាំងអស់របស់វាត្រូវបានរក្សាទុកដោយស្វ័យប្រវត្តិនៅក្នុងប្រអប់សារខាងក្រោម — អ្នកអាចត្រឡប់ទៅមើលវិញបានគ្រប់ពេល។",
     "footerP1": "អ៊ីមែលបណ្តោះអាសន្នសម្រាប់ការចុះឈ្មោះសាកល្បង និងការពារឯកជនភាព",
     "footerP2": "ប្រអប់សារដំណើរការដោយ Mail.tm API · សារត្រូវបានលុបដោយស្វ័យប្រវត្តិបន្ទាប់ពីផុតកំណត់",
     "readerFromLabel": "ពី៖",
@@ -1018,7 +1207,53 @@ var I18N = {
     "floatDragHint": "អូសដើម្បីផ្លាស់ទី",
     "floatMessagesTitle": "សាររបស់អ៊ីមែលនេះ",
     "floatNoMessages": "មិនទាន់មានសារ",
-    "floatProxyLabel": "Proxy"
+    "floatProxyLabel": "Proxy",
+    "savedChip": "✓ បានរក្សាទុក",
+    "createdLabel": "បង្កើត",
+    "verifiedBadge": "បានផ្ទៀងផ្ទាត់",
+    "countryPickerLabel": "ជ្រើសរើសប្រទេស",
+    "countryPickerTitle": "ជ្រើសរើសប្រទេស",
+    "signUpBtn": "ចុះឈ្មោះ",
+    "authTitle": "បង្កើតគណនីរបស់អ្នក",
+    "authSubtitle": "ចុះឈ្មោះដើម្បីរក្សាអ៊ីមែល និងការកំណត់របស់អ្នកទុកនៅលើឧបករណ៍នេះ។",
+    "authSigninTitle": "ចូលប្រើគណនីរបស់អ្នក",
+    "authSigninSubtitle": "សូមបញ្ចូលអ៊ីមែល និងពាក្យសម្ងាត់របស់អ្នក។",
+    "firstNameLabel": "នាមខ្លួន",
+    "lastNameLabel": "នាមត្រកូល",
+    "emailLabel": "អ៊ីមែល",
+    "passwordLabel": "ពាក្យសម្ងាត់",
+    "confirmPasswordLabel": "បញ្ជាក់ពាក្យសម្ងាត់",
+    "createAccountBtn": "បង្កើតគណនី",
+    "signInBtn": "ចូលប្រើ",
+    "haveAccount": "មានគណនីរួចហើយ? ចូលប្រើ",
+    "noAccount": "មិនទាន់មានគណនី? ចុះឈ្មោះ",
+    "skipForNow": "រំលងសិន",
+    "okBtn": "យល់ព្រម",
+    "authCreating": "កំពុងបង្កើតគណនី…",
+    "authSuccess": "បានបង្កើតគណនីដោយជោគជ័យ",
+    "authSuccessText": "ស្វាគមន៍មកកាន់ MovMail, {name}!",
+    "authErrAllFields": "សូមបំពេញគ្រប់ប្រអប់ជាមុន។",
+    "authErrEmail": "អ៊ីមែលមិនត្រឹមត្រូវ។ សូមពិនិត្យម្តងទៀត។",
+    "authErrPassMatch": "ពាក្យសម្ងាត់ទាំងពីរមិនត្រូវគ្នាទេ។",
+    "authErrPassShort": "ពាក្យសម្ងាត់ត្រូវមានយ៉ាងហោចណាស់ ៦ តួអក្សរ។",
+    "authErrNoAccount": "មិនទាន់មានគណនីជាមួយអ៊ីមែលនេះទេ។ សូមចុះឈ្មោះជាមុន។",
+    "authErrWrongPass": "ពាក្យសម្ងាត់មិនត្រឹមត្រូវ។ សូមព្យាយាមម្តងទៀត។",
+    "toastWelcomeBack": "ស្វាគមន៍ត្រឡប់មកវិញ!",
+    "comingSoon": "មកដល់ឆាប់ៗនេះ",
+    "registeredLabel": "ចុះឈ្មោះនៅ",
+    "planLabel": "គម្រោង",
+    "pricingTitle": "តម្លៃ",
+    "planFree": "Free",
+    "planProMonthly": "Pro — ប្រចាំខែ",
+    "planProYearly": "Pro — ប្រចាំឆ្នាំ",
+    "perMonth": "ខែ",
+    "perYear": "ឆ្នាំ",
+    "languageRow": "ភាសា",
+    "themeRow": "រចនាប័ទ្ម",
+    "themeDay": "ថ្ងៃ",
+    "themeNight": "យប់",
+    "themeAuto": "ស្វ័យប្រវត្តិ",
+    "signOut": "ចាកចេញ"
   },
   "en": {
     "docTitle": "MovMail.com — Temporary Email",
@@ -1084,7 +1319,7 @@ var I18N = {
     "faqQ4": "Can I send emails from it?",
     "faqA4": "No. This service is for <b>receiving</b> messages only — such as OTP codes and sign-up confirmation emails. Sending is disabled to prevent abuse.",
     "faqQ5": "If I click “{change}”, what happens to the old messages?",
-    "faqA5": "The old email is discarded, but all of its messages are saved automatically in the “Saved messages” section below — you can go back and read them any time.",
+    "faqA5": "The old email is discarded, but all of its messages are saved automatically in the inbox below — you can go back and read them any time.",
     "footerP1": "Temporary email for trial sign-ups and protecting your privacy",
     "footerP2": "Inbox powered by Mail.tm API · Messages are deleted automatically after expiry",
     "readerFromLabel": "From:",
@@ -1166,7 +1401,53 @@ var I18N = {
     "floatDragHint": "Drag to move",
     "floatMessagesTitle": "Messages for this email",
     "floatNoMessages": "No messages yet",
-    "floatProxyLabel": "Proxy"
+    "floatProxyLabel": "Proxy",
+    "savedChip": "✓ Saved",
+    "createdLabel": "Created",
+    "verifiedBadge": "Verified",
+    "countryPickerLabel": "Choose country",
+    "countryPickerTitle": "Choose country",
+    "signUpBtn": "Sign up",
+    "authTitle": "Create your account",
+    "authSubtitle": "Sign up to keep your emails and settings on this device.",
+    "authSigninTitle": "Sign in to your account",
+    "authSigninSubtitle": "Enter your email and password.",
+    "firstNameLabel": "First name",
+    "lastNameLabel": "Last name",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "confirmPasswordLabel": "Confirm password",
+    "createAccountBtn": "Create Account",
+    "signInBtn": "Sign in",
+    "haveAccount": "Already have an account? Sign in",
+    "noAccount": "No account yet? Sign up",
+    "skipForNow": "Skip for now",
+    "okBtn": "OK",
+    "authCreating": "Creating account…",
+    "authSuccess": "Account created successfully",
+    "authSuccessText": "Welcome to MovMail, {name}!",
+    "authErrAllFields": "Please fill in all fields first.",
+    "authErrEmail": "That email doesn't look right. Please check it.",
+    "authErrPassMatch": "The two passwords don't match.",
+    "authErrPassShort": "Password must be at least 6 characters.",
+    "authErrNoAccount": "No account with this email yet. Please sign up first.",
+    "authErrWrongPass": "Wrong password. Please try again.",
+    "toastWelcomeBack": "Welcome back!",
+    "comingSoon": "Coming soon",
+    "registeredLabel": "Registered",
+    "planLabel": "Plan",
+    "pricingTitle": "Pricing",
+    "planFree": "Free",
+    "planProMonthly": "Pro — Monthly",
+    "planProYearly": "Pro — Yearly",
+    "perMonth": "month",
+    "perYear": "year",
+    "languageRow": "Language",
+    "themeRow": "Theme",
+    "themeDay": "Day",
+    "themeNight": "Night",
+    "themeAuto": "Auto",
+    "signOut": "Sign out"
   }
 };
         var lang = "km";
@@ -1226,6 +1507,8 @@ var I18N = {
           renderSavedMessages();
           renderMailboxes();
           updateIpLine();
+          syncLangSeg();
+          syncThemeSeg();
         }
         function setLang(next){ applyLang(next); }
 
@@ -1381,6 +1664,38 @@ var I18N = {
         }
         function hideError(){ errorBanner.classList.remove("show"); }
 
+        /* ---------- blur open/close animation for popups ----------
+           Open: blur-in + fade (~0.3s, CSS keyed on .open).
+           Close: blur-out + fade, then hide — routed through
+           closeAnimated so a re-open during the close cancels it.
+           Reduced motion skips the animation entirely. */
+        function reducedMotion(){
+          try { return window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches; }
+          catch(e){ return false; }
+        }
+        function openAnimated(el){
+          if (!el) return;
+          if (el._closeTimer){ clearTimeout(el._closeTimer); el._closeTimer = null; }
+          el.classList.remove("blur-out");
+          var inner = el.querySelector(".blur-out");
+          if (inner) inner.classList.remove("blur-out");
+          el.classList.add("open");
+        }
+        function closeAnimated(el, innerSel, done){
+          if (!el){ if (done) done(); return; }
+          if (!el.classList.contains("open")){ if (done) done(); return; }
+          if (reducedMotion()){ el.classList.remove("open"); if (done) done(); return; }
+          if (el._closeTimer) return;
+          var inner = innerSel ? el.querySelector(innerSel) : el;
+          if (inner) inner.classList.add("blur-out");
+          el._closeTimer = setTimeout(function(){
+            el._closeTimer = null;
+            if (inner) inner.classList.remove("blur-out");
+            el.classList.remove("open");
+            if (done) done();
+          }, 280);
+        }
+
         /* ---------- account lifecycle ---------- */
         function createAccount(){
           if (state.creating) return;
@@ -1427,6 +1742,7 @@ var I18N = {
             state.retryCount = 0;
             state.failed = false;
             state.retrying = false;
+            state.createdAt = new Date().toISOString();
             if (!currentIp) currentIp = generateIpProfile();
             updateIpLine();
             addrText.textContent = state.address;
@@ -1602,34 +1918,139 @@ var I18N = {
            email only — it does not route traffic and does not change
            any network or proxy behaviour. */
         var IP_POOL = [
-          { prefix: "23.45", flag: "🇺🇸", country: "United States", city: "New York" },
-          { prefix: "104.16", flag: "🇺🇸", country: "United States", city: "San Francisco" },
-          { prefix: "103.86", flag: "🇸🇬", country: "Singapore", city: "Singapore" },
-          { prefix: "128.199", flag: "🇸🇬", country: "Singapore", city: "Singapore" },
           { prefix: "103.146", flag: "🇰🇭", country: "Cambodia", city: "Phnom Penh" },
           { prefix: "116.212", flag: "🇰🇭", country: "Cambodia", city: "Phnom Penh" },
-          { prefix: "103.5", flag: "🇯🇵", country: "Japan", city: "Tokyo" },
-          { prefix: "45.88", flag: "🇩🇪", country: "Germany", city: "Frankfurt" },
-          { prefix: "51.89", flag: "🇬🇧", country: "United Kingdom", city: "London" },
-          { prefix: "51.91", flag: "🇫🇷", country: "France", city: "Paris" },
-          { prefix: "192.99", flag: "🇨🇦", country: "Canada", city: "Montreal" },
-          { prefix: "103.233", flag: "🇦🇺", country: "Australia", city: "Sydney" },
+          { prefix: "103.86", flag: "🇸🇬", country: "Singapore", city: "Singapore" },
+          { prefix: "128.199", flag: "🇸🇬", country: "Singapore", city: "Singapore" },
           { prefix: "103.246", flag: "🇹🇭", country: "Thailand", city: "Bangkok" },
+          { prefix: "183.88", flag: "🇹🇭", country: "Thailand", city: "Bangkok" },
           { prefix: "103.28", flag: "🇻🇳", country: "Vietnam", city: "Ho Chi Minh City" },
+          { prefix: "14.160", flag: "🇻🇳", country: "Vietnam", city: "Ho Chi Minh City" },
           { prefix: "103.6", flag: "🇲🇾", country: "Malaysia", city: "Kuala Lumpur" },
+          { prefix: "175.136", flag: "🇲🇾", country: "Malaysia", city: "Kuala Lumpur" },
           { prefix: "103.147", flag: "🇮🇩", country: "Indonesia", city: "Jakarta" },
+          { prefix: "36.68", flag: "🇮🇩", country: "Indonesia", city: "Jakarta" },
+          { prefix: "112.198", flag: "🇵🇭", country: "Philippines", city: "Manila" },
+          { prefix: "121.54", flag: "🇵🇭", country: "Philippines", city: "Manila" },
+          { prefix: "103.5", flag: "🇯🇵", country: "Japan", city: "Tokyo" },
+          { prefix: "133.242", flag: "🇯🇵", country: "Japan", city: "Tokyo" },
+          { prefix: "121.134", flag: "🇰🇷", country: "South Korea", city: "Seoul" },
+          { prefix: "175.196", flag: "🇰🇷", country: "South Korea", city: "Seoul" },
+          { prefix: "103.44", flag: "🇨🇳", country: "China", city: "Beijing" },
+          { prefix: "117.136", flag: "🇨🇳", country: "China", city: "Beijing" },
+          { prefix: "103.10", flag: "🇭🇰", country: "Hong Kong", city: "Hong Kong" },
+          { prefix: "45.118", flag: "🇭🇰", country: "Hong Kong", city: "Hong Kong" },
+          { prefix: "103.17", flag: "🇹🇼", country: "Taiwan", city: "Taipei" },
+          { prefix: "60.250", flag: "🇹🇼", country: "Taiwan", city: "Taipei" },
           { prefix: "103.21", flag: "🇮🇳", country: "India", city: "Mumbai" },
+          { prefix: "49.205", flag: "🇮🇳", country: "India", city: "Mumbai" },
+          { prefix: "103.31", flag: "🇵🇰", country: "Pakistan", city: "Karachi" },
+          { prefix: "39.40", flag: "🇵🇰", country: "Pakistan", city: "Karachi" },
+          { prefix: "103.48", flag: "🇧🇩", country: "Bangladesh", city: "Dhaka" },
+          { prefix: "180.210", flag: "🇧🇩", country: "Bangladesh", city: "Dhaka" },
+          { prefix: "103.69", flag: "🇳🇵", country: "Nepal", city: "Kathmandu" },
+          { prefix: "103.90", flag: "🇳🇵", country: "Nepal", city: "Kathmandu" },
+          { prefix: "112.134", flag: "🇱🇰", country: "Sri Lanka", city: "Colombo" },
+          { prefix: "123.231", flag: "🇱🇰", country: "Sri Lanka", city: "Colombo" },
+          { prefix: "103.151", flag: "🇲🇲", country: "Myanmar", city: "Yangon" },
+          { prefix: "203.81", flag: "🇲🇲", country: "Myanmar", city: "Yangon" },
+          { prefix: "103.80", flag: "🇱🇦", country: "Laos", city: "Vientiane" },
+          { prefix: "118.175", flag: "🇱🇦", country: "Laos", city: "Vientiane" },
+          { prefix: "103.233", flag: "🇦🇺", country: "Australia", city: "Sydney" },
+          { prefix: "1.144", flag: "🇦🇺", country: "Australia", city: "Sydney" },
+          { prefix: "23.45", flag: "🇺🇸", country: "United States", city: "New York" },
+          { prefix: "104.16", flag: "🇺🇸", country: "United States", city: "San Francisco" },
+          { prefix: "172.67", flag: "🇺🇸", country: "United States", city: "Los Angeles" },
+          { prefix: "192.99", flag: "🇨🇦", country: "Canada", city: "Montreal" },
+          { prefix: "142.115", flag: "🇨🇦", country: "Canada", city: "Toronto" },
+          { prefix: "187.189", flag: "🇲🇽", country: "Mexico", city: "Mexico City" },
+          { prefix: "189.203", flag: "🇲🇽", country: "Mexico", city: "Mexico City" },
           { prefix: "177.36", flag: "🇧🇷", country: "Brazil", city: "São Paulo" },
+          { prefix: "187.44", flag: "🇧🇷", country: "Brazil", city: "Rio de Janeiro" },
+          { prefix: "51.89", flag: "🇬🇧", country: "United Kingdom", city: "London" },
+          { prefix: "185.93", flag: "🇬🇧", country: "United Kingdom", city: "London" },
+          { prefix: "45.88", flag: "🇩🇪", country: "Germany", city: "Frankfurt" },
+          { prefix: "138.201", flag: "🇩🇪", country: "Germany", city: "Berlin" },
+          { prefix: "51.91", flag: "🇫🇷", country: "France", city: "Paris" },
+          { prefix: "195.154", flag: "🇫🇷", country: "France", city: "Paris" },
           { prefix: "45.79", flag: "🇳🇱", country: "Netherlands", city: "Amsterdam" },
-          { prefix: "193.32", flag: "🇰🇷", country: "South Korea", city: "Seoul" }
+          { prefix: "185.107", flag: "🇳🇱", country: "Netherlands", city: "Amsterdam" },
+          { prefix: "51.83", flag: "🇪🇸", country: "Spain", city: "Madrid" },
+          { prefix: "185.34", flag: "🇪🇸", country: "Spain", city: "Madrid" },
+          { prefix: "51.75", flag: "🇮🇹", country: "Italy", city: "Rome" },
+          { prefix: "93.34", flag: "🇮🇹", country: "Italy", city: "Milan" },
+          { prefix: "51.90", flag: "🇸🇪", country: "Sweden", city: "Stockholm" },
+          { prefix: "185.76", flag: "🇸🇪", country: "Sweden", city: "Stockholm" },
+          { prefix: "51.175", flag: "🇳🇴", country: "Norway", city: "Oslo" },
+          { prefix: "185.56", flag: "🇳🇴", country: "Norway", city: "Oslo" },
+          { prefix: "87.49", flag: "🇩🇰", country: "Denmark", city: "Copenhagen" },
+          { prefix: "185.20", flag: "🇩🇰", country: "Denmark", city: "Copenhagen" },
+          { prefix: "85.76", flag: "🇫🇮", country: "Finland", city: "Helsinki" },
+          { prefix: "95.175", flag: "🇫🇮", country: "Finland", city: "Helsinki" },
+          { prefix: "185.44", flag: "🇨🇭", country: "Switzerland", city: "Zurich" },
+          { prefix: "146.70", flag: "🇨🇭", country: "Switzerland", city: "Zurich" },
+          { prefix: "185.92", flag: "🇧🇪", country: "Belgium", city: "Brussels" },
+          { prefix: "193.191", flag: "🇧🇪", country: "Belgium", city: "Brussels" },
+          { prefix: "193.186", flag: "🇦🇹", country: "Austria", city: "Vienna" },
+          { prefix: "84.115", flag: "🇦🇹", country: "Austria", city: "Vienna" },
+          { prefix: "85.72", flag: "🇬🇷", country: "Greece", city: "Athens" },
+          { prefix: "94.66", flag: "🇬🇷", country: "Greece", city: "Athens" },
+          { prefix: "83.24", flag: "🇵🇱", country: "Poland", city: "Warsaw" },
+          { prefix: "185.45", flag: "🇵🇱", country: "Poland", city: "Warsaw" },
+          { prefix: "193.29", flag: "🇺🇦", country: "Ukraine", city: "Kyiv" },
+          { prefix: "91.210", flag: "🇺🇦", country: "Ukraine", city: "Kyiv" },
+          { prefix: "95.181", flag: "🇷🇺", country: "Russia", city: "Moscow" },
+          { prefix: "178.45", flag: "🇷🇺", country: "Russia", city: "Moscow" },
+          { prefix: "78.160", flag: "🇹🇷", country: "Turkey", city: "Istanbul" },
+          { prefix: "88.240", flag: "🇹🇷", country: "Turkey", city: "Ankara" },
+          { prefix: "84.95", flag: "🇮🇱", country: "Israel", city: "Tel Aviv" },
+          { prefix: "85.64", flag: "🇮🇱", country: "Israel", city: "Tel Aviv" },
+          { prefix: "94.200", flag: "🇦🇪", country: "UAE", city: "Dubai" },
+          { prefix: "185.106", flag: "🇦🇪", country: "UAE", city: "Dubai" },
+          { prefix: "94.201", flag: "🇸🇦", country: "Saudi Arabia", city: "Riyadh" },
+          { prefix: "95.187", flag: "🇸🇦", country: "Saudi Arabia", city: "Riyadh" },
+          { prefix: "41.234", flag: "🇪🇬", country: "Egypt", city: "Cairo" },
+          { prefix: "197.32", flag: "🇪🇬", country: "Egypt", city: "Cairo" },
+          { prefix: "41.86", flag: "🇿🇦", country: "South Africa", city: "Johannesburg" },
+          { prefix: "102.132", flag: "🇿🇦", country: "South Africa", city: "Cape Town" },
+          { prefix: "41.203", flag: "🇳🇬", country: "Nigeria", city: "Lagos" },
+          { prefix: "105.112", flag: "🇳🇬", country: "Nigeria", city: "Lagos" }
         ];
-        function generateIpProfile(){
-          var entry = IP_POOL[Math.floor(Math.random() * IP_POOL.length)];
-          function octet(){ return 1 + Math.floor(Math.random() * 253); }
-          return {
-            ip: entry.prefix + "." + octet() + "." + octet(),
-            flag: entry.flag, country: entry.country, city: entry.city
-          };
+        /* Country picked in the picker next to Generate IP. Defaults
+           to Cambodia; follows the active mailbox's country on restore. */
+        var selectedCountry = "Cambodia";
+        /* Recently generated IPs (per session) — never hand out the
+           same IP twice in a row. */
+        var recentIps = [];
+        function generateIpProfile(country){
+          var want = country || selectedCountry;
+          var pool = IP_POOL.filter(function(e){ return e.country === want; });
+          if (!pool.length) pool = IP_POOL;
+          function roll(entry){
+            function octet(){ return 1 + Math.floor(Math.random() * 253); }
+            return {
+              ip: entry.prefix + "." + octet() + "." + octet(),
+              flag: entry.flag, country: entry.country, city: entry.city
+            };
+          }
+          var prof = null;
+          for (var attempt = 0; attempt < 10; attempt++){
+            var entry = pool[Math.floor(Math.random() * pool.length)];
+            var cand = roll(entry);
+            if (recentIps.indexOf(cand.ip) === -1){ prof = cand; break; }
+          }
+          if (!prof) prof = roll(pool[Math.floor(Math.random() * pool.length)]);
+          recentIps.push(prof.ip);
+          if (recentIps.length > 50) recentIps.shift();
+          return prof;
+        }
+        /* Unique countries in pool order (for the picker). */
+        function countryList(){
+          var seen = {}, out = [];
+          IP_POOL.forEach(function(e){
+            if (!seen[e.country]){ seen[e.country] = true; out.push({ flag: e.flag, country: e.country, city: e.city }); }
+          });
+          return out;
         }
         /* The IP profile shown for the current mailbox. */
         var currentIp = null;
@@ -1637,20 +2058,48 @@ var I18N = {
           if (!p) return "—";
           return (p.flag ? p.flag + " " : "") + p.ip + " · " + p.country + ", " + p.city;
         }
+        function shortDate(iso){
+          if (!iso) return "—";
+          var d = new Date(iso);
+          if (isNaN(d.getTime())) return "—";
+          try { return d.toLocaleDateString(lang === "en" ? "en-US" : "km-KH", { day: "numeric", month: "short", year: "numeric" }); }
+          catch(e){ return d.toLocaleDateString(); }
+        }
+        /* Profile completeness: IP + country/city + proxy all present.
+           Shown as a green "Verified" badge — a completeness indicator
+           inside MovMail only, not an external verification. */
+        function profileComplete(p, proxyPref){
+          return !!(p && p.ip && p.country && (proxyPref || "auto"));
+        }
+        function proxyLabelText(pref){
+          if (pref === "proxy1") return "Proxy 1";
+          if (pref === "proxy2") return "Proxy 2";
+          return t("proxyAuto");
+        }
         function updateIpLine(){
           var line = $("ipLine");
           if (!line) return;
-          if (!currentIp){ line.hidden = true; return; }
+          if (!state.address){ line.hidden = true; return; }
+          /* The profile must never be empty: generate one if missing. */
+          if (!currentIp) currentIp = generateIpProfile();
           line.hidden = false;
           $("ipValue").textContent = currentIp.ip;
           $("ipLocation").textContent = (currentIp.flag ? currentIp.flag + " " : "") + currentIp.country + ", " + currentIp.city;
+          var px = $("ipProxy");
+          if (px) px.textContent = proxyLabelText(currentProxyPref);
+          var cr = $("ipCreated");
+          if (cr) cr.textContent = shortDate(state.createdAt);
+          var badge = $("verifiedBadge");
+          if (badge) badge.hidden = !profileComplete(currentIp, currentProxyPref);
         }
 
         /* ---------- proxy preference ---------- */
         /* "auto" = default failover order; "proxy1"/"proxy2" puts that
            proxy first. Stored per mailbox and applied on restore/edit. */
         var apiOrderOverride = null;
+        var currentProxyPref = "auto";
         function applyProxyPref(pref){
+          currentProxyPref = (pref === "proxy1" || pref === "proxy2") ? pref : "auto";
           if (pref === "proxy1") apiOrderOverride = [PROXY, PROXY2, DIRECT];
           else if (pref === "proxy2") apiOrderOverride = [PROXY2, PROXY, DIRECT];
           else apiOrderOverride = null;
@@ -1711,6 +2160,17 @@ var I18N = {
           var listEl = $("mailboxList"), empty = $("mailboxEmptyState");
           if (!listEl || !empty) return;
           var list = loadMailboxes();
+          /* A saved mailbox must never show an empty profile: fill in
+             a missing IP automatically and persist it. */
+          var mbChanged = false;
+          list.forEach(function(mb){
+            if (!mb.ip){
+              var p = generateIpProfile(mb.country || selectedCountry);
+              mb.ip = p.ip; mb.country = p.country; mb.city = p.city; mb.flag = p.flag;
+              mbChanged = true;
+            }
+          });
+          if (mbChanged) saveMailboxes(list);
           $("mailboxCountBadge").textContent = list.length;
           listEl.innerHTML = "";
           empty.style.display = list.length ? "none" : "block";
@@ -1733,11 +2193,22 @@ var I18N = {
             ad.textContent = mb.address;
             var ip = document.createElement("div");
             ip.className = "mailbox-ip";
-            ip.innerHTML = "";
             var ipTxt = document.createElement("span");
             ipTxt.innerHTML = "<b>" + escapeHtml(mb.ip || "—") + "</b> · " + escapeHtml((mb.flag ? mb.flag + " " : "") + (mb.country || "") + (mb.city ? ", " + mb.city : ""));
             ip.appendChild(ipTxt);
-            main.appendChild(nm); main.appendChild(ad); main.appendChild(ip);
+            var meta = document.createElement("div");
+            meta.className = "mailbox-ip";
+            var metaTxt = document.createElement("span");
+            metaTxt.textContent = t("proxyLabel") + "៖ " + proxyLabelText(mb.proxy || "auto") + " · " + t("createdLabel") + "៖ " + shortDate(mb.createdAt);
+            meta.appendChild(metaTxt);
+            if (profileComplete(mb, mb.proxy || "auto")){
+              var vb = document.createElement("span");
+              vb.className = "verified-badge";
+              vb.style.marginLeft = "6px";
+              vb.textContent = "✓ " + t("verifiedBadge");
+              meta.appendChild(vb);
+            }
+            main.appendChild(nm); main.appendChild(ad); main.appendChild(ip); main.appendChild(meta);
             row.appendChild(main);
             var actions = document.createElement("div");
             actions.className = "mailbox-actions";
@@ -1816,6 +2287,8 @@ var I18N = {
             addrText.classList.remove("loading");
             statusText.textContent = t("statusWaiting");
             if (mb.ip) currentIp = { ip: mb.ip, country: mb.country, city: mb.city, flag: mb.flag };
+            state.createdAt = mb.createdAt || new Date().toISOString();
+            if (mb.country){ selectedCountry = mb.country; updateCountryBtn(); }
             updateIpLine();
             applyProxyPref(mb.proxy || "auto");
             setBusy(false);
@@ -1878,11 +2351,11 @@ var I18N = {
         function openSavePrompt(after){
           savePromptAfter = after || null;
           $("saveNameInput").value = "";
-          $("savePromptOverlay").classList.add("open");
+          openAnimated($("savePromptOverlay"));
           setTimeout(function(){ $("saveNameInput").focus(); }, 50);
         }
         function closeSavePrompt(){
-          $("savePromptOverlay").classList.remove("open");
+          closeAnimated($("savePromptOverlay"), ".mini-modal");
           savePromptAfter = null;
         }
         function maybeSaveBeforeGenerate(after){
@@ -1918,7 +2391,7 @@ var I18N = {
           $("editNameInput").value = mb.name || "";
           $("editProxySelect").value = mb.proxy || "auto";
           updateEditIpPreview();
-          $("editOverlay").classList.add("open");
+          openAnimated($("editOverlay"));
         }
         function updateEditIpPreview(){
           var p = editIpDraft;
@@ -1927,7 +2400,7 @@ var I18N = {
             : "—";
         }
         function closeEditModal(){
-          $("editOverlay").classList.remove("open");
+          closeAnimated($("editOverlay"), ".mini-modal");
           editingMailbox = null;
           editIpDraft = null;
         }
@@ -2081,9 +2554,20 @@ var I18N = {
             state.checking = false;
           });
         }
+        /* Ids that have already been rendered once — only genuinely
+           new rows animate in, never the whole list on a re-render.
+           The timestamp window keeps the animation alive through the
+           quick re-render that follows enrichment (OTP/confirm
+           lookup), while a later 20s poll never re-animates. */
+        var seenMsgIds = {};
         function buildMsgItem(m){
             var li = document.createElement("li");
             li.className = "msg-item" + (m.seen ? " seen" : "");
+            if (m.id){
+              var firstSeen = seenMsgIds[m.id];
+              if (!firstSeen){ seenMsgIds[m.id] = Date.now(); li.classList.add("msg-new"); }
+              else if (Date.now() - firstSeen < 700){ li.classList.add("msg-new"); }
+            }
             var btn = document.createElement("button");
             btn.className = "msg-btn";
             btn.type = "button";
@@ -2109,6 +2593,12 @@ var I18N = {
             intro.className = "msg-intro";
             intro.textContent = m.intro || "";
             main.appendChild(f); main.appendChild(s); main.appendChild(intro);
+            if (m._saved){
+              var savedChip = document.createElement("span");
+              savedChip.className = "saved-chip";
+              savedChip.textContent = t("savedChip");
+              main.appendChild(savedChip);
+            }
 
             var time = document.createElement("span");
             time.className = "msg-time";
@@ -2159,10 +2649,40 @@ var I18N = {
             return li;
         }
 
+        /* ONE merged inbox: live messages for the current address +
+           saved messages from all addresses, deduplicated by id
+           (a message present in both counts once), newest first.
+           The live copy wins for display fields; the saved copy
+           keeps the stored body so the reader works offline. */
+        function mergedMessages(){
+          var byId = {}, all = [];
+          state.messages.forEach(function(m){
+            if (m && m.id){ byId[m.id] = m; all.push(m); }
+          });
+          savedState.messages.forEach(function(s){
+            if (!s || !s.id) return;
+            var live = byId[s.id];
+            if (live){
+              live._saved = true;
+              if (!live._textBody && s._textBody) live._textBody = s._textBody;
+              if (!live._htmlBody && s._htmlBody) live._htmlBody = s._htmlBody;
+            } else {
+              all.push(s);
+            }
+          });
+          all.sort(function(a, b){
+            var ta = new Date(a.createdAt || 0).getTime() || 0;
+            var tb = new Date(b.createdAt || 0).getTime() || 0;
+            return tb - ta;
+          });
+          return all;
+        }
+
         function renderMessages(){
-          countBadge.textContent = state.messages.length;
+          var all = mergedMessages();
+          countBadge.textContent = all.length;
           msgList.innerHTML = "";
-          if (!state.messages.length){
+          if (!all.length){
             emptyState.style.display = "block";
             emptyTitle.textContent = state.token ? t("emptyReadyTitle") : t("emptyPreparingTitle");
             emptyText.textContent = state.token ? t("emptyReadyText") : t("emptyPreparingText");
@@ -2171,7 +2691,7 @@ var I18N = {
           }
           emptyState.style.display = "none";
           waitingBar.style.display = "none";
-          state.messages.forEach(function(m){ msgList.appendChild(buildMsgItem(m)); });
+          all.forEach(function(m){ msgList.appendChild(buildMsgItem(m)); });
         }
 
 
@@ -2199,19 +2719,11 @@ var I18N = {
           if (url) m._confirmUrl = url;
           return m;
         }
+        /* The Saved box is gone — saved messages live inside the one
+           merged inbox now. This stays as a delegate so every existing
+           call site keeps working. */
         function renderSavedMessages(){
-          var list = $("savedList"), empty = $("savedEmptyState");
-          if (!list || !empty) return;
-          $("savedCountBadge").textContent = savedState.messages.length;
-          list.innerHTML = "";
-          if (!savedState.messages.length){
-            empty.style.display = "block";
-            $("savedEmptyTitle").textContent = savedState.loaded ? t("savedEmptyTitle") : t("savedLoading");
-            $("savedEmptyText").textContent = savedState.loaded ? t("savedEmptyText") : "";
-            return;
-          }
-          empty.style.display = "none";
-          savedState.messages.forEach(function(m){ list.appendChild(buildMsgItem(m)); });
+          renderMessages();
         }
         function fetchSavedMessages(){
           if (savedState.fetching) return;
@@ -2253,7 +2765,7 @@ var I18N = {
           return kw ? m[0] : "";
         }
         function openMessage(m){
-          overlay.classList.add("open");
+          openAnimated(overlay);
           document.body.style.overflow = "hidden";
           $("readerSubject").textContent = m.subject || t("noSubject");
           var readerAvOld = $("readerAvatar");
@@ -2349,12 +2861,11 @@ var I18N = {
         }
         function closeMessage(){
           state.readerSeq = (state.readerSeq || 0) + 1;
-          overlay.classList.remove("open");
-          document.body.style.overflow = "";
+          closeAnimated(overlay, ".reader", function(){ document.body.style.overflow = ""; });
         }
         $("readerClose").addEventListener("click", closeMessage);
         overlay.addEventListener("click", function(e){ if (e.target === overlay) closeMessage(); });
-        document.addEventListener("keydown", function(e){ if (e.key === "Escape"){ closeMessage(); closeFloatPanel(); } });
+        document.addEventListener("keydown", function(e){ if (e.key === "Escape"){ closeMessage(); closeFloatPanel(); closeProfilePanel(); } });
         $("otpCopyBtn").addEventListener("click", function(){
           if (currentOtp){ flashCheck($("otpCopyBtn"), t("copiedCheck")); copyText(currentOtp, t("toastCopiedCode")); }
         });
@@ -2375,11 +2886,18 @@ var I18N = {
             token: state.token || "",
             ip: currentIp ? currentIp.ip : "", country: currentIp ? currentIp.country : "",
             city: currentIp ? currentIp.city : "", flag: currentIp ? currentIp.flag : "",
-            proxy: "auto", createdAt: ""
+            proxy: currentProxyPref || "auto", createdAt: state.createdAt || ""
           };
         }
         function openFloatPanel(mb){
           if (!mb) return;
+          if (!mb.ip){
+            var fp = generateIpProfile(mb.country || selectedCountry);
+            mb.ip = fp.ip; mb.country = fp.country; mb.city = fp.city; mb.flag = fp.flag;
+            var _list = loadMailboxes(), _changed = false;
+            _list.forEach(function(m){ if (m.address === mb.address){ m.ip = mb.ip; m.country = mb.country; m.city = mb.city; m.flag = mb.flag; _changed = true; } });
+            if (_changed){ saveMailboxes(_list); renderMailboxes(); }
+          }
           floatMailbox = mb;
           floatTitle.textContent = mb.name || mb.address;
           floatBody.innerHTML = "";
@@ -2409,7 +2927,17 @@ var I18N = {
             meta.appendChild(d);
           }
           metaLine(t("ipLabel"), ipText({ ip: mb.ip || "—", flag: mb.flag || "", country: mb.country || "", city: mb.city || "" }));
-          metaLine(t("floatProxyLabel"), mb.proxy === "proxy1" ? "Proxy 1" : mb.proxy === "proxy2" ? "Proxy 2" : t("proxyAuto"));
+          metaLine(t("floatProxyLabel"), proxyLabelText(mb.proxy || "auto"));
+          metaLine(t("createdLabel"), mb.createdAt ? fullDate(mb.createdAt) : "—");
+          if (profileComplete(mb, mb.proxy || "auto")){
+            var vb = document.createElement("div");
+            vb.className = "row-line";
+            var vspan = document.createElement("span");
+            vspan.className = "verified-badge";
+            vspan.textContent = "✓ " + t("verifiedBadge");
+            vb.appendChild(vspan);
+            meta.appendChild(vb);
+          }
           floatBody.appendChild(meta);
           var acts = document.createElement("div");
           acts.className = "float-actions";
@@ -2444,11 +2972,10 @@ var I18N = {
             msgsWrap.appendChild(ul);
           }
           floatBody.appendChild(msgsWrap);
-          floatPanel.classList.add("open");
+          openAnimated(floatPanel);
         }
         function closeFloatPanel(){
-          floatPanel.classList.remove("open");
-          floatMailbox = null;
+          closeAnimated(floatPanel, null, function(){ floatMailbox = null; });
         }
         $("floatClose").addEventListener("click", closeFloatPanel);
         /* Drag by the header (mouse + touch via pointer events). */
@@ -2502,6 +3029,255 @@ var I18N = {
           handle.addEventListener("pointercancel", endResize);
         })();
 
+        /* ---------- theme (Day / Night / Auto) ---------- */
+        var THEME_KEY = "movmail-theme";
+        function currentTheme(){
+          var th = "auto";
+          try { var s = localStorage.getItem(THEME_KEY); if (s === "light" || s === "dark" || s === "auto") th = s; } catch(e) {}
+          return th;
+        }
+        function applyTheme(choice){
+          var th = (choice === "light" || choice === "dark" || choice === "auto") ? choice : "auto";
+          try { localStorage.setItem(THEME_KEY, th); } catch(e) {}
+          document.documentElement.dataset.theme = th;
+          try { document.documentElement.style.colorScheme = th === "dark" ? "dark" : th === "light" ? "light" : "light dark"; } catch(e) {}
+          syncThemeSeg();
+        }
+        function syncThemeSeg(){
+          var seg = $("profileThemeSeg");
+          if (!seg) return;
+          var th = currentTheme();
+          Array.prototype.forEach.call(seg.querySelectorAll("button"), function(b){
+            b.classList.toggle("active", b.getAttribute("data-theme") === th);
+          });
+        }
+
+        /* ---------- local user account (device-local only) ----------
+           One profile per device, stored in localStorage. The password
+           is never stored in plaintext: SHA-256 + a random salt. */
+        var PROFILE_KEY = "movmail-profile";
+        /* Registered accounts stay on the device even after sign-out,
+           so sign-in can verify the hash later. Sign-out only clears
+           the active session (PROFILE_KEY), never the accounts. */
+        var ACCOUNTS_KEY = "movmail-accounts";
+        function loadAccounts(){
+          try {
+            var raw = localStorage.getItem(ACCOUNTS_KEY);
+            var list = raw ? JSON.parse(raw) : [];
+            return Array.isArray(list) ? list : [];
+          } catch(e){ return []; }
+        }
+        function saveAccount(p){
+          var list = loadAccounts(), found = false;
+          list.forEach(function(a){
+            if (a.email && a.email.toLowerCase() === p.email.toLowerCase()){
+              Object.keys(p).forEach(function(k){ a[k] = p[k]; });
+              found = true;
+            }
+          });
+          if (!found) list.push(p);
+          try { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(list)); } catch(e) {}
+        }
+        function findAccount(email){
+          var list = loadAccounts();
+          for (var i = 0; i < list.length; i++){
+            if (list[i].email && list[i].email.toLowerCase() === String(email).toLowerCase()) return list[i];
+          }
+          return null;
+        }
+        function loadProfile(){
+          try {
+            var raw = localStorage.getItem(PROFILE_KEY);
+            var p = raw ? JSON.parse(raw) : null;
+            return (p && p.email) ? p : null;
+          } catch(e){ return null; }
+        }
+        function saveProfile(p){
+          try { localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); } catch(e) {}
+        }
+        function clearProfile(){
+          try { localStorage.removeItem(PROFILE_KEY); } catch(e) {}
+        }
+        function profileInitials(p){
+          var a = ((p.firstName || "").trim()[0] || "");
+          var b = ((p.lastName || "").trim()[0] || "");
+          return (a + b).toUpperCase() || "?";
+        }
+        function hashPassword(pw, salt){
+          /* SHA-256(salt + ":" + password) via WebCrypto. The fallback
+             only runs where subtle crypto is unavailable (never on the
+             live https site); the profile stays on this device either
+             way. */
+          if (window.crypto && crypto.subtle && crypto.subtle.digest && window.TextEncoder){
+            var data = new TextEncoder().encode(salt + ":" + pw);
+            return crypto.subtle.digest("SHA-256", data).then(function(buf){
+              return Array.prototype.map.call(new Uint8Array(buf), function(x){ return ("0" + x.toString(16)).slice(-2); }).join("");
+            });
+          }
+          return Promise.resolve().then(function(){
+            var h = 0x811c9dc5, s = salt + ":" + pw;
+            for (var i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+            return "fnv1a-" + h.toString(16);
+          });
+        }
+
+        /* ---------- sign-up gate / sign-in ---------- */
+        var authMode = "signup";
+        function showAuthError(msg){
+          var el = $("authError");
+          if (!msg){ el.hidden = true; el.textContent = ""; return; }
+          el.textContent = msg;
+          el.hidden = false;
+        }
+        function openAuthModal(mode){
+          authMode = (mode === "signin") ? "signin" : "signup";
+          showAuthError("");
+          $("authSignupFields").hidden = authMode !== "signup";
+          $("authSigninFields").hidden = authMode !== "signin";
+          $("authTitle").textContent = authMode === "signin" ? t("authSigninTitle") : t("authTitle");
+          $("authSubtitle").textContent = authMode === "signin" ? t("authSigninSubtitle") : t("authSubtitle");
+          $("authSubmitLabel").textContent = authMode === "signin" ? t("signInBtn") : t("createAccountBtn");
+          $("authSwitchBtn").textContent = authMode === "signin" ? t("noAccount") : t("haveAccount");
+          openAnimated($("authOverlay"));
+          setTimeout(function(){
+            var f = authMode === "signin" ? $("authEmailIn") : $("authFirstName");
+            if (f) f.focus();
+          }, 80);
+        }
+        function closeAuthModal(){ closeAnimated($("authOverlay"), ".mini-modal"); }
+        function setAuthBusy(busy){
+          var btn = $("authSubmitBtn");
+          btn.disabled = busy;
+          if (busy) btn.innerHTML = '<span class="spin">⟳</span> ' + t("authCreating");
+          else btn.innerHTML = '<span id="authSubmitLabel">' + (authMode === "signin" ? t("signInBtn") : t("createAccountBtn")) + '</span>';
+        }
+        function doSignIn(){
+          var email = $("authEmailIn").value.trim();
+          var pw = $("authPasswordIn").value;
+          if (!email || !pw){ showAuthError(t("authErrAllFields")); return; }
+          var profile = findAccount(email) || loadProfile();
+          if (!profile || profile.email.toLowerCase() !== email.toLowerCase()){ showAuthError(t("authErrNoAccount")); return; }
+          setAuthBusy(true);
+          hashPassword(pw, profile.salt).then(function(hash){
+            setAuthBusy(false);
+            if (hash === profile.passwordHash){
+              saveProfile(profile);
+              closeAuthModal();
+              updateAvatarUI();
+              showToast(t("toastWelcomeBack"));
+            } else {
+              showAuthError(t("authErrWrongPass"));
+            }
+          });
+        }
+        $("authSubmitBtn").addEventListener("click", function(){
+          if (authMode === "signin"){ doSignIn(); return; }
+          var first = $("authFirstName").value.trim();
+          var last = $("authLastName").value.trim();
+          var email = $("authEmail").value.trim();
+          var pw = $("authPassword").value;
+          var pw2 = $("authPassword2").value;
+          if (!first || !last || !email || !pw || !pw2){ showAuthError(t("authErrAllFields")); return; }
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ showAuthError(t("authErrEmail")); return; }
+          if (pw.length < 6){ showAuthError(t("authErrPassShort")); return; }
+          if (pw !== pw2){ showAuthError(t("authErrPassMatch")); return; }
+          showAuthError("");
+          var started = Date.now();
+          setAuthBusy(true);
+          var salt = randomStr(24);
+          hashPassword(pw, salt).then(function(hash){
+            /* Loading lasts exactly 5 seconds from the click. */
+            var wait = Math.max(0, 5000 - (Date.now() - started));
+            setTimeout(function(){
+              var profile = {
+                firstName: first, lastName: last, email: email,
+                id: "MOV-" + randomStr(6).toUpperCase(),
+                createdAt: new Date().toISOString(),
+                salt: salt, passwordHash: hash
+              };
+              saveProfile(profile);
+              saveAccount(profile);
+              setAuthBusy(false);
+              closeAuthModal();
+              $("authSuccessText").textContent = t("authSuccessText", {name: first});
+              openAnimated($("authSuccessOverlay"));
+              updateAvatarUI();
+            }, wait);
+          }).catch(function(){
+            setAuthBusy(false);
+            showAuthError(t("authErrAllFields"));
+          });
+        });
+        $("authSwitchBtn").addEventListener("click", function(){ openAuthModal(authMode === "signin" ? "signup" : "signin"); });
+        $("authSuccessClose").addEventListener("click", function(){ closeAnimated($("authSuccessOverlay"), ".mini-modal"); });
+        $("headerSignupBtn").addEventListener("click", function(){ openAuthModal("signup"); });
+
+        /* ---------- profile panel ---------- */
+        function updateAvatarUI(){
+          var p = loadProfile();
+          var avBtn = $("avatarBtn"), suBtn = $("headerSignupBtn");
+          if (p){
+            $("avatarInitials").textContent = profileInitials(p);
+            avBtn.hidden = false;
+            suBtn.hidden = true;
+          } else {
+            avBtn.hidden = true;
+            suBtn.hidden = false;
+          }
+        }
+        function syncLangSeg(){
+          var seg = $("profileLangSeg");
+          if (!seg) return;
+          Array.prototype.forEach.call(seg.querySelectorAll("button"), function(b){
+            b.classList.toggle("active", b.getAttribute("data-lang") === lang);
+          });
+        }
+        function openProfilePanel(){
+          var p = loadProfile();
+          if (!p){ openAuthModal("signup"); return; }
+          $("profileAvatarBig").textContent = profileInitials(p);
+          $("profileName").textContent = (p.firstName + " " + p.lastName).trim();
+          $("profileId").textContent = p.id || "—";
+          $("profileEmail").textContent = p.email;
+          $("profileDate").textContent = p.createdAt ? fullDate(p.createdAt) : "—";
+          $("profilePlan").textContent = "Free";
+          syncLangSeg();
+          syncThemeSeg();
+          openAnimated($("profilePanel"));
+        }
+        function closeProfilePanel(){ closeAnimated($("profilePanel"), null); }
+        $("avatarBtn").addEventListener("click", function(){
+          var panel = $("profilePanel");
+          if (panel.classList.contains("open")) closeProfilePanel();
+          else openProfilePanel();
+        });
+        $("profileClose").addEventListener("click", closeProfilePanel);
+        document.addEventListener("click", function(e){
+          var panel = $("profilePanel");
+          if (panel && panel.classList.contains("open") && !e.target.closest("#profilePanel") && !e.target.closest("#avatarBtn")) closeProfilePanel();
+        });
+        $("signOutBtn").addEventListener("click", function(){
+          clearProfile();
+          updateAvatarUI();
+          closeProfilePanel();
+          openAuthModal("signup");
+        });
+        /* Pricing: display only — paid plans are not sold yet. */
+        Array.prototype.forEach.call(document.querySelectorAll(".plan-option"), function(btn){
+          btn.addEventListener("click", function(){
+            if (btn.getAttribute("data-plan") !== "free"){ showToast(t("comingSoon")); return; }
+            Array.prototype.forEach.call(document.querySelectorAll(".plan-option"), function(b){ b.classList.remove("selected"); });
+            btn.classList.add("selected");
+          });
+        });
+        /* Language + theme rows inside the profile panel. */
+        Array.prototype.forEach.call(document.querySelectorAll("#profileLangSeg button"), function(btn){
+          btn.addEventListener("click", function(){ setLang(btn.getAttribute("data-lang")); syncLangSeg(); });
+        });
+        Array.prototype.forEach.call(document.querySelectorAll("#profileThemeSeg button"), function(btn){
+          btn.addEventListener("click", function(){ applyTheme(btn.getAttribute("data-theme")); });
+        });
+
         /* ---------- polling ---------- */
         function startPolling(){
           stopPolling();
@@ -2545,11 +3321,19 @@ var I18N = {
             createAccount();
           });
         });
-        $("generateIpBtn").addEventListener("click", function(){
+        /* ---------- country picker (small dropdown, ~5 rows) ---------- */
+        function updateCountryBtn(){
+          var label = $("countryBtnLabel");
+          if (!label) return;
+          var entry = null;
+          IP_POOL.forEach(function(e){ if (!entry && e.country === selectedCountry) entry = e; });
+          label.textContent = (entry ? entry.flag + " " : "") + selectedCountry;
+        }
+        function applyNewIp(){
+          /* Generate a fresh IP for the selected country and keep the
+             saved mailbox's stored profile in sync. */
           currentIp = generateIpProfile();
           updateIpLine();
-          /* If the current mailbox is already saved, keep its stored
-             profile in sync with the new IP. */
           if (state.address){
             var list = loadMailboxes(), changed = false;
             list.forEach(function(m){
@@ -2560,6 +3344,66 @@ var I18N = {
             });
             if (changed){ saveMailboxes(list); renderMailboxes(); }
           }
+        }
+        function buildCountryDropdown(){
+          var dd = $("countryDropdown");
+          if (!dd) return;
+          dd.innerHTML = "";
+          countryList().forEach(function(c){
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "country-option";
+            b.setAttribute("role", "option");
+            var fl = document.createElement("span");
+            fl.className = "c-flag"; fl.textContent = c.flag;
+            var nm = document.createElement("span");
+            nm.className = "c-name"; nm.textContent = c.country;
+            var ct = document.createElement("span");
+            ct.className = "c-city"; ct.textContent = c.city;
+            b.appendChild(fl); b.appendChild(nm); b.appendChild(ct);
+            if (c.country === selectedCountry){
+              var chk = document.createElement("span");
+              chk.className = "c-check"; chk.textContent = "✓";
+              b.appendChild(chk);
+            }
+            b.addEventListener("click", function(){
+              selectedCountry = c.country;
+              updateCountryBtn();
+              closeCountryDropdown();
+              /* The displayed country must match the displayed IP, so
+                 regenerate the IP for the new country at once. */
+              applyNewIp();
+              showToast(t("toastIpGenerated"));
+            });
+            dd.appendChild(b);
+          });
+        }
+        function openCountryDropdown(){
+          buildCountryDropdown();
+          openAnimated($("countryDropdown"));
+          $("countryBtn").setAttribute("aria-expanded", "true");
+        }
+        function closeCountryDropdown(){
+          closeAnimated($("countryDropdown"), null);
+          var btn = $("countryBtn");
+          if (btn) btn.setAttribute("aria-expanded", "false");
+        }
+        $("countryBtn").addEventListener("click", function(e){
+          e.stopPropagation();
+          var dd = $("countryDropdown");
+          if (dd.classList.contains("open")) closeCountryDropdown();
+          else openCountryDropdown();
+        });
+        document.addEventListener("click", function(e){
+          var dd = $("countryDropdown");
+          if (dd && dd.classList.contains("open") && !e.target.closest(".ip-wrap")) closeCountryDropdown();
+        });
+        document.addEventListener("keydown", function(e){
+          if (e.key === "Escape") closeCountryDropdown();
+        });
+
+        $("generateIpBtn").addEventListener("click", function(){
+          applyNewIp();
           showToast(t("toastIpGenerated"));
         });
         $("saveBtn").addEventListener("click", function(){
@@ -2587,8 +3431,7 @@ var I18N = {
           setTimeout(function(){ if (iconEl) iconEl.classList.remove("spin"); }, 900);
         }
         $("refreshBtn").addEventListener("click", function(){ manualRefresh($("refreshIcon")); });
-        $("inboxRefreshBtn").addEventListener("click", function(){ manualRefresh($("inboxRefreshIcon")); });
-        $("savedRefreshBtn").addEventListener("click", function(){ savedState.lastFetch = 0; fetchSavedMessages(); });
+        $("inboxRefreshBtn").addEventListener("click", function(){ savedState.lastFetch = 0; manualRefresh($("inboxRefreshIcon")); });
         $("changeBtn").addEventListener("click", function(){
           maybeSaveBeforeGenerate(function(){
             showToast(t("toastCreatingNew"));
@@ -2606,7 +3449,23 @@ var I18N = {
         applyLang(lang);
         renderMailboxes();
         updateIpLine();
+        updateCountryBtn();
+        updateAvatarUI();
+        applyTheme(currentTheme());
         createAccount();
+        /* Sign-up gate: if no profile exists yet, show it on top of
+           the page — the temp email still generates behind it. */
+        if (!loadProfile()){
+          setTimeout(function(){ if (!loadProfile()) openAuthModal("signup"); }, 400);
+        }
+
+        /* ---------- PWA: service worker (installable app) ---------- */
+        if ("serviceWorker" in navigator){
+          window.addEventListener("load", function(){
+            try { navigator.serviceWorker.register("/sw.js").catch(function(){}); }
+            catch(e){ /* registration must never break the page */ }
+          });
+        }
       })();
     </script>
   </body>
