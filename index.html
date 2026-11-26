@@ -1944,12 +1944,37 @@
           if (av){
             ini.style.display = "none"; img.hidden = true;
             if (av.video){
-              vid.src = av.video; vid.poster = av.file; vid.hidden = false;
+              /* Only assign src when it changed: re-assigning the same
+                 data URI resets currentTime to 0 and restarts the video,
+                 so every updateAvatarUI() call (panel open, sign-in, ...)
+                 used to jump the header video back to frame 0. */
+              if (vid.getAttribute("src") !== av.video) vid.src = av.video;
+              vid.poster = av.file; vid.hidden = false;
               vid.onerror = function(){ vid.hidden = true; img.src = av.file; img.hidden = false; };
-              var pr = vid.play(); if (pr && pr.catch) pr.catch(function(){});
+              playVideo(vid);
             } else { vid.hidden = true; img.src = av.file; img.hidden = false; }
           } else { if (vid) vid.hidden = true; img.hidden = true; ini.style.display = ""; }
         }
+        /* Play once, then retry once if the video is still paused: a
+           rejected or stalled play() (autoplay edge, background tab)
+           used to leave the video stuck on its poster forever, because
+           the rejection was swallowed and nothing ever retried. */
+        function playVideo(vid){
+          var pr = vid.play(); if (pr && pr.catch) pr.catch(function(){});
+          var src = vid.getAttribute("src");
+          setTimeout(function(){
+            if (vid && !vid.hidden && vid.paused && vid.getAttribute("src") === src){
+              var pr2 = vid.play(); if (pr2 && pr2.catch) pr2.catch(function(){});
+            }
+          }, 600);
+        }
+        /* If the tab was hidden when playback stalled, resume the header
+           video when it becomes visible again. Registered once. */
+        document.addEventListener("visibilitychange", function(){
+          if (document.visibilityState !== "visible") return;
+          var v = $("avatarVideo");
+          if (v && !v.hidden && v.paused && v.getAttribute("src")){ var pr = v.play(); if (pr && pr.catch) pr.catch(function(){}); }
+        });
         var pendingAvatar = "";
         function buildAvatarPicker(containerId, selectedId, onPick){
           var c = $(containerId);
@@ -5339,11 +5364,14 @@ var I18N = {
           var img = $("avatarImg"), ini = $("avatarInitials");
           if (p){
             if (ini) ini.textContent = profileInitials(p);
+            /* Unhide the button BEFORE setAvatarMedia: play() used to be
+               called while the button (and the video) was still
+               display:none, which can stall playback in some browsers. */
+            avBtn.hidden = false;
+            suBtn.hidden = true;
             if (img){
               setAvatarMedia(img, $("avatarVideo"), ini, p.avatar);
             }
-            avBtn.hidden = false;
-            suBtn.hidden = true;
           } else {
             avBtn.hidden = true;
             suBtn.hidden = false;
