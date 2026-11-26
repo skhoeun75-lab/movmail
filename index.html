@@ -178,6 +178,11 @@
       .addr-text{
         font-size:clamp(16px,4.4vw,24px);font-weight:700;word-break:break-all;line-height:1.35;color:var(--ink);
       }
+      /* Fully-rounded pill for a displayed address (mailbox card +
+         profile email row): full address visible, wraps instead of
+         clipping, never overflows at 360px. */
+      .gmail-pill{display:inline-block;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);padding:8px 16px;overflow-wrap:anywhere;word-break:break-all;max-width:100%;line-height:1.4}
+      .profile-row b.gmail-pill{min-width:0;text-align:left;font-weight:600}
       .addr-text.loading{color:var(--faint);font-family:"Noto Sans Khmer",sans-serif;font-weight:500;font-size:16px}
       .actions{
         display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:16px;
@@ -702,6 +707,7 @@
       .bell-btn svg{display:block}
       .bell-badge{position:absolute;top:-5px;right:-5px;min-width:19px;height:19px;border-radius:999px;background:#2563eb;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid #0a9d6e}
       .bell-badge.zero{background:#dc2626}
+      .bell-badge.gift{background:#7c3aed}
 
       /* ---------- Profile panel (small, top-right) ---------- */
       .profile-panel{
@@ -717,7 +723,7 @@
       .profile-head .profile-id{font-size:13px;color:var(--muted)}
       .profile-head .spacer{flex:1}
       .panel-close{width:34px;height:34px;min-height:34px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--ink);font-size:15px;line-height:1;flex:none;cursor:pointer}
-      .profile-body{overflow:auto;padding:16px;display:grid;gap:12px;min-height:0}
+      .profile-body{overflow:auto;padding:16px;display:grid;grid-template-columns:minmax(0,1fr);gap:12px;min-height:0}
       .profile-row{display:flex;justify-content:space-between;gap:12px;font-size:14.5px;align-items:center}
       .profile-row>span:first-child{color:var(--muted);flex:none}
       .profile-row b{overflow-wrap:anywhere;text-align:right;font-weight:700}
@@ -776,6 +782,10 @@
       #bellNotifList{max-height:148px;overflow-y:auto}
       .notif-item{font-size:13.5px;padding:6px 0}
       .notif-item span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis}
+      /* Admin gift row: tappable, unmistakably a gift. */
+      .gift-row{width:100%;text-align:left;background:var(--accent-soft);border:1px solid var(--accent);border-radius:10px;padding:8px 10px;margin-bottom:6px;cursor:pointer;color:var(--ink);font:inherit}
+      .gift-row:hover{filter:brightness(.97)}
+      .gift-code{font-size:26px;font-weight:800;letter-spacing:2px;text-align:center;background:var(--surface-2);border:1px dashed var(--faint);border-radius:12px;padding:14px 10px;margin:12px 0;overflow-wrap:anywhere;word-break:break-all}
       .accent-pick{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0 4px}
       .accent-dot{width:30px;height:30px;border-radius:50%;border:2px solid transparent;padding:0;min-height:30px;cursor:pointer;flex:none}
       .accent-dot.active{border-color:var(--ink);box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--accent)}
@@ -823,7 +833,7 @@
       .redeem-box{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--surface-2)}
       .redeem-box>label{display:block;font-size:13.5px;font-weight:700;margin-bottom:6px}
       .redeem-input-row{display:flex;gap:8px}
-      .redeem-input-row input{flex:1;min-width:0;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font:inherit;font-size:15px;background:var(--surface);color:var(--ink);text-transform:uppercase}
+      .redeem-input-row input{flex:1;min-width:0;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font:inherit;font-size:15px;background:var(--surface);color:var(--ink)}
       .redeem-status{margin-top:8px;font-size:13.5px;font-weight:600}
       .redeem-status.err{color:var(--red)}
       .redeem-disabled-row b{color:var(--red)}
@@ -939,7 +949,7 @@
         <h1 data-i18n="cardTitle">អ៊ីមែលបណ្តោះអាសន្នរបស់អ្នក</h1>
 
         <div class="addr-box">
-          <span class="addr-text mono loading" id="addrText">កំពុងបង្កើតអ៊ីមែល…</span>
+          <span class="addr-text mono loading gmail-pill" id="addrText">កំពុងបង្កើតអ៊ីមែល…</span>
         </div>
 
         <div class="ip-line" id="ipLine" hidden>
@@ -1390,6 +1400,20 @@
       </div>
     </div>
 
+    <!-- ===== Admin gift (redeem code sent to the bell) ===== -->
+    <div class="mini-overlay" id="giftOverlay" role="dialog" aria-modal="true">
+      <div class="mini-modal success-modal">
+        <div class="success-check" aria-hidden="true">🎁</div>
+        <h3 data-i18n="giftTitle">🎁 កាដូពីអេតមីន</h3>
+        <p id="giftAmountText"></p>
+        <div class="gift-code mono" id="giftCodeText">—</div>
+        <div class="mini-actions" style="justify-content:center">
+          <button class="btn primary" id="giftCopyBtn" data-i18n="otpCopy">ចម្លងលេខកូដ</button>
+          <button class="btn" id="giftCloseBtn" data-i18n="okBtn">យល់ព្រម</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ===== Profile panel (small, top-right) ===== -->
     <div class="profile-panel" id="profilePanel" role="dialog" aria-modal="false" aria-label="Profile">
       <div class="profile-head">
@@ -1402,7 +1426,7 @@
         <button class="panel-close" id="profileClose" aria-label="Close">✕</button>
       </div>
       <div class="profile-body">
-        <div class="profile-row"><span data-i18n="emailLabel">អ៊ីមែល</span><b id="profileEmail">—</b></div>
+        <div class="profile-row"><span data-i18n="emailLabel">អ៊ីមែល</span><b id="profileEmail" class="gmail-pill">—</b></div>
         <div class="profile-row"><span data-i18n="registeredLabel">ចុះឈ្មោះនៅ</span><b id="profileDate">—</b></div>
         <div class="profile-row"><span data-i18n="planLabel">គម្រោង</span><b id="profilePlan">Free</b></div>
         <div class="profile-row"><span data-i18n="ipLabel">IP</span><b id="profileIp">—</b></div>
@@ -1414,15 +1438,12 @@
         <div class="redeem-box">
           <label for="redeemCodeInput" data-i18n="redeemTitle">Redeem Refresh Code</label>
           <div class="redeem-input-row">
-            <input type="text" id="redeemCodeInput" maxlength="8" placeholder="XXXXXXXX" autocomplete="off" />
+            <input type="text" id="redeemCodeInput" placeholder="XXXXXXXX" autocomplete="off" />
             <button type="button" class="btn-sm primary" id="redeemScanBtn" data-i18n="redeemScan">Scan</button>
           </div>
           <div class="redeem-status" id="redeemStatus" hidden></div>
         </div>
-        <div>
-          <div class="profile-row" style="margin-bottom:6px"><span data-i18n="chooseAvatar">រូបភាព</span></div>
-          <div class="avatar-pick" id="profileAvatarPick" role="radiogroup" aria-label="Avatar"></div>
-        </div>
+        <div class="profile-row"><span data-i18n="avatarRow">រូបភាព</span><b id="profileAvatarName">—</b></div>
         <button type="button" class="btn primary" id="profileUpgradeBtn"><span aria-hidden="true">★</span> <span data-i18n="upgradeBtn">Upgrade</span></button>
         <div class="profile-row"><span data-i18n="languageRow">ភាសា</span><span class="seg" id="profileLangSeg"><button type="button" data-lang="km">ខ្មែរ</button><button type="button" data-lang="en">EN</button></span></div>
         <div class="profile-row"><span data-i18n="themeRow">រចនាប័ទ្ម</span><span class="seg" id="profileThemeSeg"><button type="button" data-theme="light" data-i18n="themeDay">ថ្ងៃ</button><button type="button" data-theme="dark" data-i18n="themeNight">យប់</button><button type="button" data-theme="auto" data-i18n="themeAuto">ស្វ័យប្រវត្តិ</button></span></div>
@@ -1617,6 +1638,7 @@
             mailboxes: [], addresses: [],
             dailyUse: { date: localDateKey(), count: 0, total: 0 },
             notifications: [], problems: [],
+            giftNotifications: [], seenGiftIds: [],
             redeemedPerDay: 0, redeemedCodes: [], pendingPayment: null
           };
         }
@@ -1657,6 +1679,8 @@
           if (!Array.isArray(d.addresses)) d.addresses = [];
           if (!Array.isArray(d.notifications)) d.notifications = [];
           if (!Array.isArray(d.problems)) d.problems = [];
+          if (!Array.isArray(d.giftNotifications)) d.giftNotifications = [];
+          if (!Array.isArray(d.seenGiftIds)) d.seenGiftIds = [];
           if (!Array.isArray(d.redeemedCodes)) d.redeemedCodes = [];
         }
         function acctData(){
@@ -1896,6 +1920,9 @@
             /* Signed out: the anonymous bucket is wiped too, so the
                page shows a clean empty state (0 everything). */
             try { saveAcctData(defaultAcctData()); } catch(e) {}
+            stopGiftPolling();
+          } else {
+            startGiftPolling();
           }
           renderMessages(); renderMailboxes(); updateBellBadge();
           updateGenerateState(); updateIpLine(); updateQuotaLine();
@@ -2033,7 +2060,9 @@
         }
         function doRedeem(){
           var input = $("redeemCodeInput"), status = $("redeemStatus");
-          var code = (input ? input.value : "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+          /* Trim surrounding spaces only and send the code exactly as
+             typed — the server lookup is case-insensitive. */
+          var code = (input ? input.value : "").trim();
           function showErr(key){
             if (status){ status.textContent = t(key); status.className = "redeem-status err"; status.hidden = false; }
           }
@@ -2407,6 +2436,11 @@ var I18N = {
     "redeemNeedCode": "សូមបញ្ចូលកូដជាមុន។",
     "redeemNeedSignin": "សូមចូលប្រើជាមុន។",
     "redeemFailed": "មិនអាចពិនិត្យកូដបានទេ។ សូមព្យាយាមម្តងទៀត។",
+    "giftFromAdmin": "🎁 កាដូពីអេតមីន",
+    "giftTitle": "🎁 កាដូពីអេតមីន",
+    "giftAmount": "+{n} ដងក្នុងមួយថ្ងៃ",
+    "avatarRow": "រូបភាព",
+    "avatarNone": "មិនទាន់ជ្រើសរើសរូបភាព",
     "payPlanLabel": "កញ្ចប់",
     "payKhqrNote": "ស្កេន KHQR នេះដើម្បីទូទាត់តាមតម្លៃកញ្ចប់ខាងលើ",
     "payCopyAddress": "ចម្លងអាសយដ្ឋាន",
@@ -2718,6 +2752,11 @@ var I18N = {
     "redeemNeedCode": "Please enter a code first.",
     "redeemNeedSignin": "Please sign in first.",
     "redeemFailed": "Could not check the code. Please try again.",
+    "giftFromAdmin": "🎁 Gift from admin",
+    "giftTitle": "🎁 Gift from admin",
+    "giftAmount": "+{n} extra uses per day",
+    "avatarRow": "Avatar",
+    "avatarNone": "No avatar chosen",
     "payPlanLabel": "Plan",
     "payKhqrNote": "Scan this KHQR to pay the plan price above",
     "payCopyAddress": "Copy address",
@@ -2830,6 +2869,9 @@ var I18N = {
           syncLangSeg();
           syncThemeSeg();
           syncAccentPicker();
+          /* Re-render the chosen-avatar name (and header avatar) in the
+             new language: it is dynamic text, not a data-i18n node. */
+          updateAvatarUI();
         }
         function setLang(next){ applyLang(next); }
 
@@ -5163,6 +5205,17 @@ var I18N = {
         function updateBellBadge(){
           var b = $("bellBadge");
           if (!b) return;
+          /* Unread admin gifts take over the badge (purple, unmistakable):
+             the gift count shows while any gift is unread; the daily quota
+             stays visible inside the bell panel. */
+          var gifts = unreadGiftCount();
+          if (gifts > 0){
+            b.textContent = String(gifts);
+            b.classList.remove("zero");
+            b.classList.add("gift");
+            return;
+          }
+          b.classList.remove("gift");
           if (getCurrentPlan() === "pro-yearly"){ b.textContent = "∞"; b.classList.remove("zero"); return; }
           var rem = dailyRemaining();
           b.textContent = String(rem);
@@ -5197,8 +5250,25 @@ var I18N = {
           var bip = $("bellIp"); if (bip) bip.textContent = currentIp ? ipText(currentIp) : "—";
           var nl = $("bellNotifList");
           nl.innerHTML = "";
+          /* Admin gifts first: one tappable row per unread gift. Tapping
+             opens the gift popup (code + Copy); the gift is marked read
+             when the popup opens, so the badge clears. */
+          var gifts = loadGiftNotifications();
+          gifts.forEach(function(g){
+            var grow = document.createElement("button");
+            grow.type = "button";
+            grow.className = "notif-item gift-row";
+            var gtx = document.createElement("span");
+            gtx.textContent = t("giftFromAdmin") + ((typeof g.amountPerDay === "number" && g.amountPerDay > 0) ? " · +" + g.amountPerDay : "");
+            var gtm = document.createElement("span");
+            gtm.className = "notif-time";
+            gtm.textContent = g.created_at ? relTime(g.created_at) : "";
+            grow.appendChild(gtx); grow.appendChild(gtm);
+            grow.addEventListener("click", function(){ openGiftPopup(g); });
+            nl.appendChild(grow);
+          });
           var notifs = loadNotifications();
-          if (!notifs.length){
+          if (!gifts.length && !notifs.length){
             var em = document.createElement("div");
             em.className = "notif-empty";
             em.textContent = t("notifEmpty");
@@ -5243,6 +5313,87 @@ var I18N = {
               pl.appendChild(row);
             });
           }
+        }
+        /* ---------- admin gift notifications ----------
+           GET /api/notifications?gmail=<gmail> returns the unread gifts
+           for that Gmail plus the ALL-user gifts: [{id, code,
+           amountPerDay, created_at}]. Polled every 30s while signed in
+           only (never while signed out, never hammering). Dedup is by
+           notification id, kept in the per-account bundle (seenGiftIds),
+           so a second poll never duplicates a gift. Gifts are never
+           auto-redeemed: the user copies the code and presses Scan. */
+        var GIFT_POLL_MS = 30000;
+        var giftTimer = null;
+        var giftPolling = false;
+        var currentGiftCode = "";
+        function loadGiftNotifications(){
+          var d = acctData();
+          return Array.isArray(d.giftNotifications) ? d.giftNotifications : [];
+        }
+        function unreadGiftCount(){ return loadGiftNotifications().length; }
+        function fetchGiftNotifications(){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p || !p.email) return Promise.resolve([]);
+          return apiAdmin("/api/notifications?gmail=" + encodeURIComponent(p.email)).then(function(data){
+            var list = Array.isArray(data) ? data : (data && Array.isArray(data.notifications) ? data.notifications : []);
+            var d = acctData();
+            var seen = Array.isArray(d.seenGiftIds) ? d.seenGiftIds : [];
+            var gifts = Array.isArray(d.giftNotifications) ? d.giftNotifications : [];
+            var known = {};
+            gifts.forEach(function(g){ known[String(g.id)] = true; });
+            list.forEach(function(item){
+              if (!item || item.id === undefined || item.id === null) return;
+              var id = String(item.id);
+              if (seen.indexOf(id) !== -1 || known[id]) return;
+              known[id] = true;
+              gifts.push({ id: id, code: String(item.code || ""), amountPerDay: (typeof item.amountPerDay === "number" ? item.amountPerDay : 0), created_at: item.created_at || new Date().toISOString() });
+            });
+            d.giftNotifications = gifts;
+            saveAcctData(d);
+            updateBellBadge();
+            if ($("bellPanel") && $("bellPanel").classList.contains("open")) renderBellPanel();
+            return gifts;
+          }).catch(function(){ return []; });
+        }
+        function startGiftPolling(){
+          stopGiftPolling();
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p || !p.email) return;
+          giftPolling = true;
+          fetchGiftNotifications();
+          giftTimer = setInterval(function(){ if (giftPolling) fetchGiftNotifications(); }, GIFT_POLL_MS);
+        }
+        function stopGiftPolling(){
+          giftPolling = false;
+          if (giftTimer){ clearInterval(giftTimer); giftTimer = null; }
+        }
+        function markGiftRead(gift){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          var d = acctData();
+          var id = String(gift.id);
+          var seen = Array.isArray(d.seenGiftIds) ? d.seenGiftIds : [];
+          if (seen.indexOf(id) === -1) seen.push(id);
+          d.seenGiftIds = seen;
+          d.giftNotifications = (Array.isArray(d.giftNotifications) ? d.giftNotifications : []).filter(function(g){ return String(g.id) !== id; });
+          saveAcctData(d);
+          updateBellBadge();
+          if ($("bellPanel") && $("bellPanel").classList.contains("open")) renderBellPanel();
+          if (p && p.email){
+            apiAdmin("/api/notifications/read", { method: "POST", body: { gmail: p.email, id: gift.id } }).catch(function(){});
+          }
+        }
+        function openGiftPopup(gift){
+          currentGiftCode = gift.code || "";
+          var codeEl = $("giftCodeText");
+          if (codeEl) codeEl.textContent = currentGiftCode || "—";
+          var amt = $("giftAmountText");
+          if (amt) amt.textContent = (typeof gift.amountPerDay === "number" && gift.amountPerDay > 0) ? t("giftAmount", {n: gift.amountPerDay}) : "";
+          /* Read the moment the popup opens, so the badge clears. */
+          markGiftRead(gift);
+          openAnimated($("giftOverlay"));
         }
         function openBellPanel(){
           closeProfilePanel(); renderBellPanel();
@@ -5381,6 +5532,14 @@ var I18N = {
             pini.textContent = p ? profileInitials(p) : "?";
             setAvatarMedia(pimg, $("profileAvatarVideo"), pini, p ? p.avatar : "");
           }
+          /* Profile shows ONLY the chosen avatar: one video + its name.
+             There is no picker here any more (the picker lives in the
+             sign-up modal only). */
+          var anm = $("profileAvatarName");
+          if (anm){
+            var av = p ? avatarById(avatarIdFromFile(p.avatar)) : null;
+            anm.textContent = av ? t(av.labelKey) : t("avatarNone");
+          }
         }
         function syncLangSeg(){
           var seg = $("profileLangSeg");
@@ -5399,15 +5558,6 @@ var I18N = {
           $("profileDate").textContent = p.createdAt ? fullDate(p.createdAt) : "—";
           var _plan = getCurrentPlan();
           $("profilePlan").textContent = _plan === "pro-monthly" ? t("planProMonthly") : _plan === "pro-yearly" ? t("planProYearly") : t("planFree");
-          buildAvatarPicker("profileAvatarPick", (p.avatar || "").replace(/^avatar-/, "").replace(/\.png$/, ""), function(id){
-            var pp = loadProfile();
-            if (!pp) return;
-            pp.avatar = id ? ("avatar-" + id + ".png") : "";
-            saveProfile(pp);
-            saveAccount(pp);
-            updateAvatarUI();
-            showToast(t("avatarChanged"));
-          });
           renderProfileDynamic();
           syncLangSeg();
           syncThemeSeg();
@@ -5476,10 +5626,19 @@ var I18N = {
         /* ---------- redeem + payment wiring ---------- */
         $("redeemScanBtn").addEventListener("click", doRedeem);
         $("redeemCodeInput").addEventListener("input", function(){
-          this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+          /* Length cap only (after trimming): the code is sent exactly as
+             typed (the server lookup is case-insensitive), so do not force
+             upper-case or strip characters here. Trimming FIRST matters:
+             pasting a code with surrounding spaces must not eat the code's
+             last characters under the 8-char cap. */
+          var v = this.value.trim();
+          if (v.length > 8) v = v.slice(0, 8);
+          if (v !== this.value) this.value = v;
         });
         $("redeemCodeInput").addEventListener("keydown", function(e){ if (e.key === "Enter") doRedeem(); });
         $("redeemSuccessClose").addEventListener("click", function(){ closeAnimated($("redeemSuccessOverlay"), ".mini-modal"); });
+        $("giftCopyBtn").addEventListener("click", function(){ if (currentGiftCode) copyText(currentGiftCode, t("toastCopiedCode")); });
+        $("giftCloseBtn").addEventListener("click", function(){ closeAnimated($("giftOverlay"), ".mini-modal"); });
         $("payBackBtn").addEventListener("click", closePayment);
         $("payKhqrBtn").addEventListener("click", function(){
           payMethod = "khqr";
@@ -5735,6 +5894,7 @@ var I18N = {
           checkBlocked();
           syncAccountToServer();
           refreshAccountFromServer();
+          startGiftPolling();
         }
         applyLang(lang);
         renderMailboxes();

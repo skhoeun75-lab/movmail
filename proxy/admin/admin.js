@@ -94,6 +94,10 @@ const I18N = {
     blockReason: 'មូលហេតុបិទ', blockReasonPh: 'ឧ. ប៉ុនប៉ង hack ដើម្បីប្រើមិនកំណត់',
     securityEvents: 'ព្រឹត្តិការណ៍សុវត្ថិភាព', noSecurityEvents: 'មិនមានព្រឹត្តិការណ៍សុវត្ថិភាពទេ',
     generateCode: 'បង្កើតកូដថ្មី', usesPerDay: 'ចំនួនប្រើក្នុងមួយថ្ងៃ (10–100)', expiry: 'ផុតកំណត់',
+    expiryDays: 'ផុតកំណត់ (ថ្ងៃ)', day: 'ថ្ងៃ', days: 'ថ្ងៃ',
+    sendCode: 'ផ្ញើកូដ', allUsers: 'អ្នកប្រើទាំងអស់', selectRecipient: 'ជ្រើសរើសអ្នកទទួល',
+    sentToUser: 'បានផ្ញើកូដទៅ {name} រួចហើយ', sentToAll: 'បានផ្ញើកូដទៅអ្នកប្រើទាំងអស់រួចហើយ',
+    errSendCode: 'បរាជ័យក្នុងការផ្ញើកូដ។ សូមព្យាយាមម្តងទៀត។', generating: 'កំពុងបង្កើត…',
     generate: 'បង្កើត', yourCode: 'កូដរបស់អ្នក៖', copy: 'ចម្លង', copied: 'បានចម្លង',
     codesList: 'បញ្ជីកូដ', noCodes: 'មិនមានកូដទេ',
     active: 'សកម្ម', used: 'បានប្រើ', disabled: 'បានបិទ', expired: 'ផុតកំណត់',
@@ -134,6 +138,10 @@ const I18N = {
     blockReason: 'Block reason', blockReasonPh: 'e.g. tried to hack for unlimited use',
     securityEvents: 'Security events', noSecurityEvents: 'No security events',
     generateCode: 'Generate new code', usesPerDay: 'Uses per day (10–100)', expiry: 'Expiry',
+    expiryDays: 'Expires in (days)', day: 'day', days: 'days',
+    sendCode: 'Send code', allUsers: 'All users', selectRecipient: 'Choose recipient',
+    sentToUser: 'Code sent to {name}', sentToAll: 'Code sent to all users',
+    errSendCode: 'Failed to send the code. Please try again.', generating: 'Generating…',
     generate: 'Generate', yourCode: 'Your code:', copy: 'Copy', copied: 'Copied',
     codesList: 'Code list', noCodes: 'No codes yet',
     active: 'Active', used: 'Used', disabled: 'Disabled', expired: 'Expired',
@@ -321,6 +329,7 @@ async function loadUsers() {
     var list = Array.isArray(data) ? data : (data.users || []);
     usersCache = list.map(normUser);
     renderUsers();
+    refreshSendRecipients();
     updateStats();
   } catch (e) { showError($('usersError'), t('errLoad')); }
 }
@@ -459,6 +468,17 @@ async function onUnblockClick() {
 }
 
 /* ---------- Codes ---------- */
+/* Expiry picker: 1–7 days, chosen as a segmented control (no free typing). */
+var selectedExpiryDays = 1;
+function renderExpirySeg() {
+  var seg = $('expirySeg');
+  if (!seg) return;
+  seg.querySelectorAll('.seg-btn').forEach(function (b) {
+    var d = Number(b.dataset.days);
+    b.classList.toggle('active', d === selectedExpiryDays);
+    b.textContent = d + ' ' + (d === 1 ? t('day') : t('days'));
+  });
+}
 function codeStatus(c) {
   if (c.disabled) return 'disabled';
   if (c.usedBy || c.usedOnceBy || c.used) return 'used';
@@ -479,32 +499,109 @@ function renderCodes() {
     var action = st === 'disabled'
       ? '<button class="btn btn-secondary" type="button" data-code-action="activate" data-code="' + esc(code) + '">' + esc(t('activate')) + '</button>'
       : '<button class="btn btn-secondary" type="button" data-code-action="disable" data-code="' + esc(code) + '">' + esc(t('disable')) + '</button>';
+    /* Active codes can be sent straight to a user (or to all users). */
+    var sendRow = st === 'active'
+      ? '<div class="send-row"><select class="send-recipient" data-code="' + esc(code) + '" aria-label="' + esc(t('selectRecipient')) + '"></select>'
+        + '<button class="btn btn-primary" type="button" data-send-code="' + esc(code) + '">' + esc(t('sendCode')) + '</button>'
+        + '<span class="send-status" data-send-status="' + esc(code) + '" role="status" hidden></span></div>'
+      : '';
     return '<div class="code-row status-' + st + '"><code>' + esc(code) + '</code>'
       + '<span class="pill ' + pillCls + '">' + esc(t(st)) + '</span>'
-      + '<span class="meta">' + meta + '</span>' + action + '</div>';
+      + '<span class="meta">' + meta + '</span>' + action + sendRow + '</div>';
   }).join('');
   show($('codesEmpty'), codesCache.length === 0);
+  refreshSendRecipients();
+}
+
+/* ---------- Send a code to users (bell gift) ---------- */
+function displayNameForGmail(gmail) {
+  var u = null;
+  for (var i = 0; i < usersCache.length; i++) if (usersCache[i].gmail === gmail) { u = usersCache[i]; break; }
+  return u ? u.name : gmail;
+}
+function showSendStatus(el, msg, isErr) {
+  if (!el) return;
+  el.textContent = msg || '';
+  el.classList.toggle('send-error', !!isErr);
+  el.hidden = !msg;
+}
+function recipientOptionsHTML(selected) {
+  var opts = '<option value="ALL"' + (selected === 'ALL' ? ' selected' : '') + '>' + esc(t('allUsers')) + '</option>';
+  usersCache.forEach(function (u) {
+    if (!u.gmail) return;
+    opts += '<option value="' + esc(u.gmail) + '"' + (u.gmail === selected ? ' selected' : '') + '>'
+      + esc(u.name + ' (' + u.gmail + ')') + '</option>';
+  });
+  return opts;
+}
+/* (Re)build every recipient dropdown from the loaded users list. */
+function refreshSendRecipients() {
+  var selects = [];
+  if ($('newCodeRecipient')) selects.push($('newCodeRecipient'));
+  document.querySelectorAll('select.send-recipient').forEach(function (sel) { selects.push(sel); });
+  selects.forEach(function (sel) {
+    var prev = sel.value || 'ALL';
+    sel.innerHTML = recipientOptionsHTML(prev);
+    if (!sel.value) sel.value = 'ALL';
+  });
+}
+async function sendCodeTo(code, gmail, statusEl) {
+  if (!getToken()) { showSendStatus(statusEl, t('errNoToken'), true); return false; }
+  try {
+    await api('/api/admin/notify', { method: 'POST', body: { code: code, gmail: gmail } });
+    var msg = gmail === 'ALL' ? t('sentToAll') : t('sentToUser').replace('{name}', displayNameForGmail(gmail));
+    showSendStatus(statusEl, msg, false);
+    toast(msg);
+    return true;
+  } catch (err) { showSendStatus(statusEl, t('errSendCode'), true); return false; }
+}
+async function onSendCodeClick(btn) {
+  var code = btn.dataset.sendCode;
+  var row = btn.closest('.code-row');
+  var sel = row ? row.querySelector('select.send-recipient') : null;
+  var statusEl = row ? row.querySelector('[data-send-status]') : null;
+  var gmail = sel ? (sel.value || 'ALL') : 'ALL';
+  btn.disabled = true;
+  try { await sendCodeTo(code, gmail, statusEl); }
+  finally { btn.disabled = false; }
 }
 async function onCodeSubmit(e) {
   e.preventDefault();
   var amount = Number($('codeAmount').value);
-  var expiry = $('codeExpiry').value;
   if (!Number.isInteger(amount) || amount < 10 || amount > 100) return showError($('codeError'), t('errAmount'));
-  if (!expiry || new Date(expiry) <= new Date()) return showError($('codeError'), t('errExpiry'));
   showError($('codeError'), '');
+  /* Deliberate ~5s loading state on the Generate button, then show the code. */
+  var btn = $('generateCodeBtn');
+  var originalText = btn.textContent;
+  var startedAt = Date.now();
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.innerHTML = '<span class="spinner" aria-hidden="true"></span> ' + esc(t('generating'));
   try {
+    var expiresAt = new Date(Date.now() + selectedExpiryDays * 24 * 60 * 60 * 1000).toISOString();
     var data = await api('/api/admin/codes', {
       method: 'POST',
-      body: { amountPerDay: amount, expiresAt: new Date(expiry).toISOString() }
+      body: { amountPerDay: amount, expiresAt: expiresAt }
     });
+    var elapsed = Date.now() - startedAt;
+    if (elapsed < 5000) await new Promise(function (r) { setTimeout(r, 5000 - elapsed); });
     var code = (data && (data.code || data.refreshCode)) || '';
     $('newCodeValue').textContent = code;
     show($('newCodeBox'), true);
     $('copyCodeBtn').textContent = t('copy');
+    showSendStatus($('newCodeSendStatus'), '', false);
+    refreshSendRecipients();
     loadCodes();
   } catch (err) { showError($('codeError'), t('errCode')); }
+  finally {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.textContent = originalText;
+  }
 }
 async function onCodeActionClick(e) {
+  var sendBtn = e.target.closest('[data-send-code]');
+  if (sendBtn) { onSendCodeClick(sendBtn); return; }
   var btn = e.target.closest('[data-code-action]');
   if (!btn) return;
   var code = btn.dataset.code, action = btn.dataset.codeAction;
@@ -576,7 +673,8 @@ function init() {
     LANG = LANG === 'km' ? 'en' : 'km';
     localStorage.setItem(LS_LANG, LANG);
     applyI18n();
-    if (isLoggedIn()) { renderUsers(); renderCodes(); renderReceipts(); updateStats(); }
+    renderExpirySeg();
+    if (isLoggedIn()) { renderUsers(); renderCodes(); renderReceipts(); updateStats(); refreshSendRecipients(); }
   });
   $('setupForm').addEventListener('submit', onSetupSubmit);
   $('loginForm').addEventListener('submit', onLoginSubmit);
@@ -600,6 +698,22 @@ function init() {
   $('unblockBtn').addEventListener('click', onUnblockClick);
 
   $('codeForm').addEventListener('submit', onCodeSubmit);
+  $('expirySeg').addEventListener('click', function (e) {
+    var b = e.target.closest('.seg-btn');
+    if (!b) return;
+    selectedExpiryDays = Number(b.dataset.days) || 1;
+    renderExpirySeg();
+  });
+  renderExpirySeg();
+  refreshSendRecipients();
+  $('sendNewCodeBtn').addEventListener('click', async function () {
+    var code = $('newCodeValue').textContent.trim();
+    if (!code) return;
+    var btn = $('sendNewCodeBtn');
+    btn.disabled = true;
+    try { await sendCodeTo(code, $('newCodeRecipient').value || 'ALL', $('newCodeSendStatus')); }
+    finally { btn.disabled = false; }
+  });
   $('codesList').addEventListener('click', onCodeActionClick);
   $('copyCodeBtn').addEventListener('click', function () {
     var code = $('newCodeValue').textContent;

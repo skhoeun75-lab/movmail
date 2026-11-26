@@ -54,6 +54,16 @@ code { background: var(--grey-bg); padding: 2px 6px; border-radius: 6px; font-si
 }
 .brand-text { display: flex; flex-direction: column; line-height: 1.2; }
 .brand-text strong { font-size: 19px; letter-spacing: .2px; }
+.admin-logo-img { display: block; object-fit: contain; }
+.logo .admin-logo-img { width: 40px; height: 40px; border-radius: 10px; }
+.auth-logo { display: flex; justify-content: center; margin-bottom: 12px; }
+.auth-logo .admin-logo-img { width: 84px; height: 84px; }
+.dashboard-brand, .settings-brand { display: flex; align-items: center; gap: 12px; }
+.dashboard-brand .admin-logo-img { width: 48px; height: 48px; }
+.settings-brand { margin-bottom: 12px; }
+.settings-brand .admin-logo-img { width: 44px; height: 44px; }
+.db-text { display: flex; flex-direction: column; line-height: 1.25; }
+.db-text strong { font-size: 17px; }
 .admin-badge {
   font-size: 12px; opacity: .9;
   background: rgba(255, 255, 255, .18);
@@ -159,6 +169,34 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
 .code-row.status-disabled { border-color: var(--red-border); background: var(--red-bg); }
 .code-row.status-used { background: var(--grey-bg); }
 .code-row.status-expired { background: var(--amber-bg); border-color: var(--amber-border); }
+
+/* Expiry segmented control (1–7 days) */
+.expiry-seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.seg-btn {
+  border: 1px solid var(--border); background: #fff; color: var(--ink);
+  border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+}
+.seg-btn:hover { border-color: var(--accent); }
+.seg-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Generate spinner (deliberate ~5s loading state) */
+.btn.loading { pointer-events: none; }
+.spinner {
+  width: 14px; height: 14px; flex: 0 0 14px;
+  border: 2px solid rgba(255, 255, 255, .4); border-top-color: #fff;
+  border-radius: 50%; display: inline-block;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Send-code rows (new code + existing active codes) */
+.send-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.new-code .send-row { flex-basis: 100%; margin-top: 4px; }
+.code-row .send-row { flex-basis: 100%; margin-top: 2px; }
+.send-row select.send-recipient { flex: 1 1 200px; width: auto; }
+.send-status { font-size: 13px; color: var(--green); font-weight: 600; }
+.send-status.send-error { color: var(--red); }
 
 /* ---------- Receipts ---------- */
 .receipts-list { display: grid; gap: 12px; }
