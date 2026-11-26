@@ -33,7 +33,8 @@
         --header:#101613;
         --header-ink:#eef4f1;
         --shadow:0 1px 2px rgba(16,30,24,.05),0 10px 30px -18px rgba(16,30,24,.25);
-        --radius:14px;
+        --shadow-lg:0 8px 24px -8px rgba(16,30,24,.28),0 24px 48px -16px rgba(16,30,24,.35);
+        --radius:16px;
       }
       @media (prefers-color-scheme: dark){
         :root{
@@ -70,9 +71,9 @@
 
       /* ---------- Header ---------- */
       header{
-        background:var(--header);color:var(--header-ink);
+        background:linear-gradient(135deg,#0a2e22 0%,#087f5b 55%,#0a9d6e 100%);color:var(--header-ink);
         position:sticky;top:0;z-index:40;
-        border-bottom:3px solid var(--accent);
+        border-bottom:3px solid #0a9d6e;
       }
       .header-in{
         max-width:1020px;margin:0 auto;padding:10px 16px;
@@ -334,6 +335,130 @@
       }
       .toast.show{transform:translate(-50%,0)}
 
+      /* ---------- Pill buttons (small, side by side, never overflow) ---------- */
+      .btn.pill{border-radius:999px;padding:8px 15px;font-size:14px;min-height:40px;gap:6px}
+      .btn.pill svg{width:16px;height:16px}
+      .btn-sm{
+        display:inline-flex;align-items:center;justify-content:center;gap:5px;
+        border-radius:999px;padding:6px 13px;font-weight:700;font-size:13.5px;
+        border:1px solid var(--border);background:var(--surface);color:var(--ink);
+        min-height:34px;cursor:pointer;white-space:nowrap;
+      }
+      .btn-sm:hover{background:var(--surface-2)}
+      .btn-sm.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+      .btn-sm.primary:hover{background:var(--accent-strong)}
+      .btn-sm.danger{color:var(--red)}
+      .btn-sm.danger:hover{background:var(--red-bg);border-color:var(--red)}
+      .btn-sm.done{background:#1e9e6a;border-color:#1e9e6a;color:#fff}
+      .btn-sm:disabled{opacity:.55;cursor:wait}
+
+      /* ---------- Current mailbox profile (IP / location) ---------- */
+      .ip-line{
+        margin:10px auto 0;max-width:640px;display:flex;flex-wrap:wrap;gap:4px 14px;
+        justify-content:center;align-items:center;font-size:13.5px;color:var(--muted);
+      }
+      .ip-line .ip-val{font-weight:700;color:var(--ink)}
+      .ip-line .ip-note{font-size:12px;color:var(--faint)}
+
+      /* ---------- Saved mailboxes ---------- */
+      .mailboxes{margin-top:22px}
+      .mailbox-row{
+        display:flex;flex-wrap:wrap;gap:12px;align-items:center;
+        background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+        box-shadow:var(--shadow);padding:14px 16px;margin-bottom:10px;
+      }
+      .mailbox-row .avatar{width:46px;height:46px;font-size:19px}
+      .mailbox-main{flex:1 1 160px;min-width:0}
+      .mailbox-name{font-weight:800;font-size:15.5px;line-height:1.3}
+      .mailbox-addr{font-size:13.5px;color:var(--muted);word-break:break-all;overflow-wrap:anywhere}
+      .mailbox-ip{font-size:13px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
+      .mailbox-ip b{color:var(--ink);font-weight:700}
+      .mailbox-actions{display:flex;flex-wrap:wrap;gap:7px}
+      .mailbox-del-confirm{
+        flex:1 1 100%;display:none;align-items:center;flex-wrap:wrap;gap:10px;
+        background:var(--red-bg);border:1px solid var(--red);border-radius:10px;padding:10px 12px;
+        font-size:14px;color:var(--red);font-weight:600;
+      }
+      .mailbox-del-confirm.show{display:flex}
+      .mailbox-del-confirm .btn-sm{margin-left:auto}
+
+      /* ---------- Mini modal (save / edit prompts) ---------- */
+      .mini-overlay{
+        position:fixed;inset:0;background:rgba(8,14,11,.55);z-index:75;
+        display:none;align-items:center;justify-content:center;padding:20px;
+      }
+      .mini-overlay.open{display:flex}
+      .mini-modal{
+        background:var(--surface);color:var(--ink);width:100%;max-width:420px;
+        border-radius:16px;box-shadow:var(--shadow-lg);padding:22px;
+      }
+      .mini-modal h3{margin:0 0 6px;font-size:18px}
+      .mini-modal p{margin:0 0 14px;font-size:14.5px;color:var(--muted)}
+      .mini-modal label{display:block;font-size:13.5px;font-weight:700;margin:0 0 5px}
+      .mini-modal input[type="text"],.mini-modal select{
+        width:100%;padding:11px 13px;border:1px solid var(--border);border-radius:10px;
+        font:inherit;font-size:15px;background:var(--surface);color:var(--ink);margin-bottom:14px;
+      }
+      .mini-modal input[type="text"]:focus,.mini-modal select:focus{outline:2px solid var(--accent);outline-offset:1px}
+      .mini-actions{display:flex;flex-wrap:wrap;gap:9px;justify-content:flex-end}
+      .mini-modal .ip-preview{
+        background:var(--surface-2);border-radius:10px;padding:10px 13px;font-size:13.5px;
+        color:var(--muted);margin-bottom:14px;overflow-wrap:anywhere;
+      }
+      .mini-modal .ip-preview b{color:var(--ink)}
+
+      /* ---------- Floating panel (Android floating window style) ---------- */
+      .float-panel{
+        position:fixed;z-index:70;top:110px;right:14px;width:min(360px,92vw);max-width:92vw;
+        background:var(--surface);color:var(--ink);border:1px solid var(--border);
+        border-radius:16px;box-shadow:var(--shadow-lg);
+        display:none;flex-direction:column;overflow:hidden;
+        max-height:82vh;
+      }
+      .float-panel.open{display:flex}
+      .float-head{
+        display:flex;align-items:center;gap:10px;padding:11px 12px 11px 16px;
+        background:linear-gradient(135deg,#0a2e22,#087f5b);color:#fff;cursor:grab;
+        touch-action:none;user-select:none;-webkit-user-select:none;flex:none;
+      }
+      .float-head:active{cursor:grabbing}
+      .float-head .float-title{flex:1;min-width:0;font-weight:800;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .float-head .float-drag-hint{font-size:12px;opacity:.75;white-space:nowrap}
+      .float-close{
+        width:34px;height:34px;min-height:34px;border-radius:50%;border:1px solid rgba(255,255,255,.4);
+        background:rgba(255,255,255,.14);color:#fff;font-size:15px;line-height:1;flex:none;cursor:pointer;
+      }
+      .float-close:hover{background:rgba(255,255,255,.28)}
+      .float-body{overflow:auto;padding:16px;min-height:0}
+      .float-profile{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+      .float-profile .avatar{width:54px;height:54px;font-size:22px}
+      .float-profile .float-name{font-weight:800;font-size:16.5px;line-height:1.3;overflow-wrap:anywhere}
+      .float-profile .float-addr{font-size:13px;color:var(--muted);word-break:break-all}
+      .float-meta{font-size:13.5px;color:var(--muted);display:grid;gap:4px;margin-bottom:12px}
+      .float-meta b{color:var(--ink)}
+      .float-meta .row-line{overflow-wrap:anywhere}
+      .float-actions{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
+      .float-msgs h4{margin:0 0 8px;font-size:14.5px}
+      .float-msgs .msg-list{border:1px solid var(--border);border-radius:12px;overflow:hidden}
+      .float-msgs .msg-btn{grid-template-columns:36px 1fr auto;padding:10px 12px;min-height:52px}
+      .float-msgs .avatar{width:36px;height:36px;font-size:15px}
+      .float-msgs .msg-quick{padding:0 12px 10px 60px}
+      .float-empty{font-size:13.5px;color:var(--muted);text-align:center;padding:18px 10px;border:1px dashed var(--border);border-radius:12px}
+      .float-resize{
+        position:absolute;right:0;bottom:0;width:22px;height:22px;cursor:nwse-resize;
+        touch-action:none;
+        background:linear-gradient(135deg,transparent 50%,var(--accent) 50%);
+        border-bottom-right-radius:16px;opacity:.85;
+      }
+
+      /* ---------- Reader: code + confirm in one compact row ---------- */
+      .reader-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch;margin:0 22px}
+      .reader-actions .otp-strip{flex:1 1 200px;margin:14px 0 4px}
+      .reader-actions .confirm-strip{flex:1 1 160px;margin:14px 0 4px;display:none}
+      .reader-actions .confirm-strip.show{display:flex}
+      .reader-actions .confirm-strip .confirm-btn{width:100%;padding:12px 16px;font-size:16px}
+      .confirm-btn.done,.chip-copy.done,.otp-strip button.done{background:#1e9e6a;border-color:#1e9e6a}
+
       /* ---------- Mobile layout: no horizontal overflow on phones ---------- */
       html,body{overflow-x:clip}
       @supports not (overflow-x:clip){ html,body{overflow-x:hidden} }
@@ -379,6 +504,8 @@
         .reader-head h3{font-size:17px}
         .confirm-strip{margin:12px 16px 0}
         .otp-strip{margin:12px 16px 4px}
+        .reader-actions{margin:0 16px}
+        .reader-actions .otp-strip,.reader-actions .confirm-strip{margin:12px 0 4px}
         .reader-body .text-body{padding:14px 16px}
         .error-banner button{margin:8px 0 0}
       }
@@ -398,6 +525,7 @@
         </a>
         <nav>
           <a href="#inbox" data-i18n="navInbox">ប្រអប់សារ</a>
+          <a href="#mailboxesBox" data-i18n="navMailboxes">អ៊ីមែលរក្សាទុក</a>
           <a href="#savedBox" data-i18n="navSaved">សាររក្សាទុក</a>
           <a href="#how" data-i18n="navHow">របៀបប្រើ</a>
           <a href="#faq" data-i18n="navFaq">សំណួរ</a>
@@ -418,8 +546,23 @@
           <span class="addr-text mono loading" id="addrText">កំពុងបង្កើតអ៊ីមែល…</span>
         </div>
 
+        <div class="ip-line" id="ipLine" hidden>
+          <span><span data-i18n="ipLabel">IP</span>៖ <span class="ip-val mono" id="ipValue">—</span></span>
+          <span id="ipLocation">—</span>
+          <span class="ip-note" data-i18n="ipDisplayNote">IP សម្រាប់បង្ហាញតែប៉ុណ្ណោះ</span>
+        </div>
+
         <div class="actions">
-          <button class="btn primary" id="generateBtn" data-i18n="generate">បង្កើតអ៊ីមែល</button>
+          <button class="btn primary pill" id="generateBtn" data-i18n="generate">បង្កើតអ៊ីមែល</button>
+          <button class="btn pill" id="generateIpBtn" data-i18n="generateIp">បង្កើត IP</button>
+          <button class="btn pill" id="saveBtn" disabled>
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10v4z"/></svg>
+            <span data-i18n="saveEmail">រក្សាទុក</span>
+          </button>
+          <button class="btn pill" id="openFloatBtn" disabled>
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+            <span data-i18n="openPanel">បើកផ្ទាំង</span>
+          </button>
           <button class="btn primary" id="copyBtn" disabled>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>
             <span data-i18n="copy">ចម្លងអ៊ីមែល</span>
@@ -479,6 +622,26 @@
           <svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="m3 7 9 6 9-6" stroke-linejoin="round"/></svg>
           <h3 id="emptyTitle">ប្រអប់សាររបស់អ្នកទទេ</h3>
           <p id="emptyText">ចម្លងអ៊ីមែលខាងលើទៅប្រើនៅគេហទំព័រដែលអ្នកចង់ចុះឈ្មោះ — សារ និងលេខកូដ OTP នឹងលេចឡើងនៅទីនេះដោយស្វ័យប្រវត្តិ។</p>
+        </div>
+      </div>
+
+      <!-- ===== Saved mailboxes (named, reusable) ===== -->
+      <div class="mailboxes" id="mailboxesBox">
+        <div class="inbox" style="box-shadow:var(--shadow)">
+          <div class="inbox-head">
+            <h2>
+              <svg viewBox="0 0 24 24"><path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10v4z"/></svg>
+              <span data-i18n="mailboxesTitle">អ៊ីមែលដែលបានរក្សាទុក</span>
+            </h2>
+            <span class="count-badge" id="mailboxCountBadge">0</span>
+          </div>
+          <div style="padding:16px 18px 18px">
+            <div id="mailboxList"></div>
+            <div class="empty-state" id="mailboxEmptyState" style="padding:28px 16px 30px">
+              <h3 id="mailboxEmptyTitle">មិនទាន់មានអ៊ីមែលដែលបានរក្សាទុក</h3>
+              <p id="mailboxEmptyText">ចុច «រក្សាទុក» នៅខាងលើ ដើម្បីរក្សាអ៊ីមែលនេះទុកប្រើម្តងទៀត — វានឹងមានឈ្មោះ និង Logo របស់វា។</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -615,17 +778,69 @@
               </div>
             </div>
           </div>
-          <div class="confirm-strip" id="confirmStrip">
-            <a class="confirm-btn" id="readerConfirmBtn" href="#" target="_blank" rel="noopener" data-i18n="confirmEmail">បញ្ជាក់អ៊ីមែល</a>
-          </div>
-          <div class="otp-strip" id="otpStrip">
-            <span class="lbl" data-i18n="otpLabel">លេខកូដរបស់អ្នក៖</span>
-            <span class="code mono" id="otpCode"></span>
-            <button id="otpCopyBtn" data-i18n="otpCopy">ចម្លងលេខកូដ</button>
+          <div class="reader-actions">
+            <div class="otp-strip" id="otpStrip">
+              <span class="lbl" data-i18n="otpLabel">លេខកូដរបស់អ្នក៖</span>
+              <span class="code mono" id="otpCode"></span>
+              <button id="otpCopyBtn" data-i18n="otpCopy">ចម្លងលេខកូដ</button>
+            </div>
+            <div class="confirm-strip" id="confirmStrip">
+              <a class="confirm-btn" id="readerConfirmBtn" href="#" target="_blank" rel="noopener" data-i18n="confirmEmail">បញ្ជាក់អ៊ីមែល</a>
+            </div>
           </div>
           <div class="reader-body" id="readerBody">
             <p style="padding:16px 22px;color:var(--muted)">កំពុងផ្ទុកសារ…</p>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Floating mailbox panel (draggable / resizable) ===== -->
+    <div class="float-panel" id="floatPanel" role="dialog" aria-modal="false" aria-label="Mailbox">
+      <div class="float-head" id="floatHead">
+        <span class="float-title" id="floatTitle">Mailbox</span>
+        <span class="float-drag-hint" data-i18n="floatDragHint">អូសដើម្បីផ្លាស់ទី</span>
+        <button class="float-close" id="floatClose" aria-label="Close">✕</button>
+      </div>
+      <div class="float-body" id="floatBody"></div>
+      <div class="float-resize" id="floatResize" aria-hidden="true"></div>
+    </div>
+
+    <!-- ===== Save prompt modal ===== -->
+    <div class="mini-overlay" id="savePromptOverlay" role="dialog" aria-modal="true">
+      <div class="mini-modal">
+        <h3 data-i18n="savePromptTitle">រក្សាអ៊ីមែលនេះទុក?</h3>
+        <p data-i18n="savePromptText">ដាក់ឈ្មោះឲ្យអ៊ីមែលនេះ ដើម្បីងាយស្រួលចាំ និងប្រើម្តងទៀត។</p>
+        <label for="saveNameInput" data-i18n="nameLabel">ឈ្មោះ</label>
+        <input type="text" id="saveNameInput" maxlength="40" data-i18n-placeholder="namePlaceholder" placeholder="ឧ. Google, Muse Ai" />
+        <div class="mini-actions">
+          <button class="btn" id="saveSkipBtn" data-i18n="skipBtn">រំលង</button>
+          <button class="btn primary" id="saveConfirmBtn" data-i18n="saveBtn">រក្សាទុក</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Edit mailbox modal ===== -->
+    <div class="mini-overlay" id="editOverlay" role="dialog" aria-modal="true">
+      <div class="mini-modal">
+        <h3 data-i18n="editTitle">កែអ៊ីមែលដែលបានរក្សាទុក</h3>
+        <p data-i18n="editText">ប្តូរឈ្មោះ បង្កើត IP ថ្មី ឬជ្រើសរើស Proxy សម្រាប់អ៊ីមែលនេះ។</p>
+        <label for="editNameInput" data-i18n="nameLabel">ឈ្មោះ</label>
+        <input type="text" id="editNameInput" maxlength="40" />
+        <label data-i18n="ipLabel2">IP / ទីតាំង</label>
+        <div class="ip-preview" id="editIpPreview">—</div>
+        <div class="mini-actions" style="justify-content:flex-start;margin-bottom:14px">
+          <button class="btn" id="editNewIpBtn" data-i18n="newIpBtn">បង្កើត IP ថ្មី</button>
+        </div>
+        <label for="editProxySelect" data-i18n="proxyLabel">Proxy</label>
+        <select id="editProxySelect">
+          <option value="auto" data-i18n="proxyAuto">ស្វ័យប្រវត្តិ</option>
+          <option value="proxy1">Proxy 1</option>
+          <option value="proxy2">Proxy 2</option>
+        </select>
+        <div class="mini-actions">
+          <button class="btn" id="editCancelBtn" data-i18n="cancelBtn">បោះបង់</button>
+          <button class="btn primary" id="editSaveBtn" data-i18n="saveBtn">រក្សាទុក</button>
         </div>
       </div>
     </div>
@@ -761,7 +976,49 @@ var I18N = {
     "savedEmptyText": "សារដែលចូលមកក្នុងប្រអប់សារនឹងត្រូវបានរក្សាទុកដោយស្វ័យប្រវត្តិនៅទីនេះ — ទោះបីជាអ្នកប្តូរអ៊ីមែលថ្មី ឬបិទទំព័រចោលក៏ដោយ។",
     "savedLoading": "កំពុងផ្ទុកសារដែលបានរក្សាទុក…",
     "savedLoadFailed": "ផ្ទុកសារដែលបានរក្សាទុកមិនបានសម្រេច។ សូមព្យាយាមម្តងទៀត។",
-    "savedRefreshLabel": "ធ្វើឱ្យសារដែលបានរក្សាទុកស្រស់"
+    "savedRefreshLabel": "ធ្វើឱ្យសារដែលបានរក្សាទុកស្រស់",
+    "navMailboxes": "អ៊ីមែលរក្សាទុក",
+    "generateIp": "បង្កើត IP",
+    "saveEmail": "រក្សាទុក",
+    "openPanel": "បើកផ្ទាំង",
+    "ipLabel": "IP",
+    "ipLabel2": "IP / ទីតាំង",
+    "ipDisplayNote": "IP សម្រាប់បង្ហាញតែប៉ុណ្ណោះ",
+    "mailboxesTitle": "អ៊ីមែលដែលបានរក្សាទុក",
+    "mailboxEmptyTitle": "មិនទាន់មានអ៊ីមែលដែលបានរក្សាទុក",
+    "mailboxEmptyText": "ចុច «រក្សាទុក» នៅខាងលើ ដើម្បីរក្សាអ៊ីមែលនេះទុកប្រើម្តងទៀត — វានឹងមានឈ្មោះ និង Logo របស់វា។",
+    "savePromptTitle": "រក្សាអ៊ីមែលនេះទុក?",
+    "savePromptText": "ដាក់ឈ្មោះឲ្យអ៊ីមែលនេះ ដើម្បីងាយស្រួលចាំ និងប្រើម្តងទៀត។",
+    "nameLabel": "ឈ្មោះ",
+    "namePlaceholder": "ឧ. Google, Muse Ai",
+    "saveBtn": "រក្សាទុក",
+    "skipBtn": "រំលង",
+    "restoreBtn": "ប្រើវិញ",
+    "editBtn": "កែ",
+    "openBtn": "បើក",
+    "deleteMailbox": "លុប",
+    "deleteConfirm": "លុបអ៊ីមែលនេះជាអចិន្ត្រៃយ៍? សាររបស់វាក៏នឹងបាត់ដែរ។",
+    "deleteYes": "លុប",
+    "deleteNo": "ទេ",
+    "editTitle": "កែអ៊ីមែលដែលបានរក្សាទុក",
+    "editText": "ប្តូរឈ្មោះ បង្កើត IP ថ្មី ឬជ្រើសរើស Proxy សម្រាប់អ៊ីមែលនេះ។",
+    "newIpBtn": "បង្កើត IP ថ្មី",
+    "proxyLabel": "Proxy",
+    "proxyAuto": "ស្វ័យប្រវត្តិ",
+    "cancelBtn": "បោះបង់",
+    "toastSaved": "បានរក្សាអ៊ីមែលទុកហើយ",
+    "toastRestored": "បានយកអ៊ីមែលមកប្រើវិញហើយ",
+    "toastDeletedMailbox": "បានលុបអ៊ីមែលជាអចិន្ត្រៃយ៍",
+    "toastRestoreFailed": "យកអ៊ីមែលមកប្រើវិញមិនបានសម្រេច",
+    "toastIpGenerated": "បានបង្កើត IP ថ្មីហើយ",
+    "toastNameNeeded": "សូមដាក់ឈ្មោះជាមុន",
+    "toastAlreadySaved": "អ៊ីមែលនេះបានរក្សាទុករួចហើយ",
+    "copiedCheck": "✓ បានចម្លង",
+    "confirmDone": "✓",
+    "floatDragHint": "អូសដើម្បីផ្លាស់ទី",
+    "floatMessagesTitle": "សាររបស់អ៊ីមែលនេះ",
+    "floatNoMessages": "មិនទាន់មានសារ",
+    "floatProxyLabel": "Proxy"
   },
   "en": {
     "docTitle": "MovMail.com — Temporary Email",
@@ -867,7 +1124,49 @@ var I18N = {
     "savedEmptyText": "Messages that arrive in the inbox are saved here automatically — even after you change to a new email or close this page.",
     "savedLoading": "Loading saved messages…",
     "savedLoadFailed": "Could not load saved messages. Please try again.",
-    "savedRefreshLabel": "Refresh saved messages"
+    "savedRefreshLabel": "Refresh saved messages",
+    "navMailboxes": "Saved emails",
+    "generateIp": "Generate IP",
+    "saveEmail": "Save",
+    "openPanel": "Open panel",
+    "ipLabel": "IP",
+    "ipLabel2": "IP / Location",
+    "ipDisplayNote": "Display only",
+    "mailboxesTitle": "Saved emails",
+    "mailboxEmptyTitle": "No saved emails yet",
+    "mailboxEmptyText": "Click “Save” above to keep this email for later — it will have a name and its own logo.",
+    "savePromptTitle": "Save this email?",
+    "savePromptText": "Give this email a name so you can find and reuse it later.",
+    "nameLabel": "Name",
+    "namePlaceholder": "e.g. Google, Muse Ai",
+    "saveBtn": "Save",
+    "skipBtn": "Skip",
+    "restoreBtn": "Restore",
+    "editBtn": "Edit",
+    "openBtn": "Open",
+    "deleteMailbox": "Delete",
+    "deleteConfirm": "Delete this email forever? Its messages will be gone too.",
+    "deleteYes": "Delete",
+    "deleteNo": "No",
+    "editTitle": "Edit saved email",
+    "editText": "Change the name, generate a new IP, or pick a proxy for this email.",
+    "newIpBtn": "Generate new IP",
+    "proxyLabel": "Proxy",
+    "proxyAuto": "Auto",
+    "cancelBtn": "Cancel",
+    "toastSaved": "Email saved",
+    "toastRestored": "Email restored",
+    "toastDeletedMailbox": "Email deleted permanently",
+    "toastRestoreFailed": "Could not restore this email",
+    "toastIpGenerated": "New IP generated",
+    "toastNameNeeded": "Please enter a name first",
+    "toastAlreadySaved": "This email is already saved",
+    "copiedCheck": "✓ Copied",
+    "confirmDone": "✓",
+    "floatDragHint": "Drag to move",
+    "floatMessagesTitle": "Messages for this email",
+    "floatNoMessages": "No messages yet",
+    "floatProxyLabel": "Proxy"
   }
 };
         var lang = "km";
@@ -899,6 +1198,8 @@ var I18N = {
           for (var j = 0; j < htmlEls.length; j++) htmlEls[j].innerHTML = expand(t(htmlEls[j].getAttribute("data-i18n-html")));
           var ariaEls = document.querySelectorAll("[data-i18n-aria]");
           for (var k = 0; k < ariaEls.length; k++) ariaEls[k].setAttribute("aria-label", t(ariaEls[k].getAttribute("data-i18n-aria")));
+          var phEls = document.querySelectorAll("[data-i18n-placeholder]");
+          for (var p = 0; p < phEls.length; p++) phEls[p].setAttribute("placeholder", t(phEls[p].getAttribute("data-i18n-placeholder")));
           var kmBtn = $("langKm"), enBtn = $("langEn");
           if (kmBtn && enBtn){
             kmBtn.classList.toggle("active", lang === "km");
@@ -923,6 +1224,8 @@ var I18N = {
           updateCountdown();
           renderMessages();
           renderSavedMessages();
+          renderMailboxes();
+          updateIpLine();
         }
         function setLang(next){ applyLang(next); }
 
@@ -1014,7 +1317,8 @@ var I18N = {
             return !err || !err.status || err.status === 429 || err.status >= 500;
           }
           var order = [];
-          for (var i = 0; i < API_BASES.length; i++) order.push(API_BASES[(apiBaseIdx + i) % API_BASES.length]);
+          var bases = apiOrderOverride || API_BASES;
+          for (var i = 0; i < bases.length; i++) order.push(bases[(apiBaseIdx + i) % bases.length]);
           var attempt = 0;
           function tryNext(lastErr){
             if (attempt >= order.length) throw lastErr;
@@ -1064,7 +1368,7 @@ var I18N = {
           // Only copy/QR/refresh/delete need a live mailbox. Generate,
           // Change and Try again must stay clickable at all times so
           // the user can always retry after a failure.
-          ["copyBtn","qrBtn","refreshBtn","deleteBtn","inboxRefreshBtn"].forEach(function(id){
+          ["copyBtn","qrBtn","refreshBtn","deleteBtn","inboxRefreshBtn","saveBtn","openFloatBtn"].forEach(function(id){
             $(id).disabled = busy || !state.token;
           });
           $("generateBtn").disabled = false;
@@ -1123,6 +1427,8 @@ var I18N = {
             state.retryCount = 0;
             state.failed = false;
             state.retrying = false;
+            if (!currentIp) currentIp = generateIpProfile();
+            updateIpLine();
             addrText.textContent = state.address;
             addrText.classList.remove("loading");
             statusText.textContent = t("statusWaiting");
@@ -1186,12 +1492,10 @@ var I18N = {
         function logoUrl(domain){
           return "https://www.google.com/s2/favicons?domain=" + encodeURIComponent(rootDomain(domain)) + "&sz=128";
         }
-        function makeAvatar(fromAddr, fromName){
+        function avatarForDomain(domain, letter){
           var av = document.createElement("span");
           av.className = "avatar";
-          var letter = ((fromName || "").trim()[0] || "?");
-          var domain = senderDomain(fromAddr);
-          if (!domain){ av.textContent = letter; return av; }
+          if (!domain){ av.textContent = letter || "?"; return av; }
           var root = rootDomain(domain);
           /* Try the real logo: Clearbit first (real brand logo), then
              Google favicons for the root domain, then the initial letter. */
@@ -1205,14 +1509,460 @@ var I18N = {
           img.loading = "lazy";
           img.referrerPolicy = "no-referrer";
           img.dataset.logoIdx = "0";
+          img.dataset.logoDomain = root;
           img.onerror = function(){
             var idx = parseInt(img.dataset.logoIdx || "0", 10) + 1;
             if (idx < sources.length){ img.dataset.logoIdx = String(idx); img.src = sources[idx]; }
-            else { img.remove(); av.textContent = letter; }
+            else { img.remove(); av.textContent = letter || "?"; }
           };
           av.appendChild(img);
           return av;
         }
+        function makeAvatar(fromAddr, fromName){
+          var letter = ((fromName || "").trim()[0] || "?");
+          var domain = senderDomain(fromAddr);
+          return avatarForDomain(domain, letter);
+        }
+
+        /* ---------- brand logos by saved-mailbox name ---------- */
+        /* Common brands, matched case-insensitively and by partial
+           name. The logo is always fetched automatically — the user
+           never supplies one. */
+        var BRAND_DOMAINS = {
+          "google": "google.com", "gmail": "google.com", "youtube": "youtube.com",
+          "facebook": "facebook.com", "fb": "facebook.com", "meta": "meta.com",
+          "instagram": "instagram.com", "tiktok": "tiktok.com",
+          "telegram": "telegram.org", "whatsapp": "whatsapp.com",
+          "supabase": "supabase.com", "github": "github.com",
+          "claude": "claude.com", "muse": "claude.com", "anthropic": "claude.com",
+          "openai": "openai.com", "chatgpt": "openai.com",
+          "apple": "apple.com", "microsoft": "microsoft.com",
+          "amazon": "amazon.com", "netflix": "netflix.com",
+          "spotify": "spotify.com", "x": "x.com", "twitter": "x.com",
+          "linkedin": "linkedin.com", "binance": "binance.com",
+          "paypal": "paypal.com", "stripe": "stripe.com",
+          "zoom": "zoom.us", "discord": "discord.com",
+          "slack": "slack.com", "dropbox": "dropbox.com",
+          "pinterest": "pinterest.com", "reddit": "reddit.com",
+          "twitch": "twitch.tv", "shopify": "shopify.com",
+          "airbnb": "airbnb.com", "booking": "booking.com",
+          "grab": "grab.com", "viber": "viber.com", "line": "line.me",
+          "wechat": "wechat.com", "snapchat": "snapchat.com"
+        };
+        function brandDomainForName(name){
+          var n = String(name || "").toLowerCase().trim();
+          if (!n) return "";
+          /* exact key first, then a key contained in the name
+             ("Muse Ai" -> "muse"), then the name contained in a key */
+          if (BRAND_DOMAINS[n]) return BRAND_DOMAINS[n];
+          var keys = Object.keys(BRAND_DOMAINS);
+          for (var i = 0; i < keys.length; i++){
+            var k = keys[i];
+            /* Very short keys ("x", "fb") only match exactly or at
+               the start of a word — otherwise any name containing
+               an "x" (e.g. "Alex") would wrongly match X. */
+            if (k.length < 3){
+              if (n === k || n.indexOf(k + " ") === 0) return BRAND_DOMAINS[k];
+              continue;
+            }
+            if (n.indexOf(k) !== -1) return BRAND_DOMAINS[k];
+          }
+          for (var j = 0; j < keys.length; j++){
+            if (keys[j].indexOf(n) !== -1) return BRAND_DOMAINS[keys[j]];
+          }
+          /* Unknown brand: guess a domain from the name and let the
+             favicon lookup try it; falls back to the initial letter. */
+          var guess = n.replace(/[^a-z0-9]+/g, "");
+          return guess ? guess + ".com" : "";
+        }
+        function avatarForMailboxName(name){
+          var letter = (String(name || "").trim()[0] || "?");
+          return avatarForDomain(brandDomainForName(name), letter);
+        }
+
+        /* ---------- checkmark feedback ---------- */
+        /* Flash a button to a green "✓" for ~2s, then restore it.
+           Used for Copy code and Confirm Email clicks. */
+        function flashCheck(el, doneText){
+          if (!el) return;
+          if (el._flashTimer) clearTimeout(el._flashTimer);
+          var original = el.textContent;
+          var originalClass = el.className;
+          el.textContent = doneText || t("confirmDone");
+          el.classList.add("done");
+          el._flashTimer = setTimeout(function(){
+            el.textContent = original;
+            el.className = originalClass;
+          }, 2000);
+        }
+
+        /* ---------- IP profiles (display only) ---------- */
+        /* Real allocated public IPv4 prefixes with a matching
+           country/city. This is DISPLAY profile data for the saved
+           email only — it does not route traffic and does not change
+           any network or proxy behaviour. */
+        var IP_POOL = [
+          { prefix: "23.45", flag: "🇺🇸", country: "United States", city: "New York" },
+          { prefix: "104.16", flag: "🇺🇸", country: "United States", city: "San Francisco" },
+          { prefix: "103.86", flag: "🇸🇬", country: "Singapore", city: "Singapore" },
+          { prefix: "128.199", flag: "🇸🇬", country: "Singapore", city: "Singapore" },
+          { prefix: "103.146", flag: "🇰🇭", country: "Cambodia", city: "Phnom Penh" },
+          { prefix: "116.212", flag: "🇰🇭", country: "Cambodia", city: "Phnom Penh" },
+          { prefix: "103.5", flag: "🇯🇵", country: "Japan", city: "Tokyo" },
+          { prefix: "45.88", flag: "🇩🇪", country: "Germany", city: "Frankfurt" },
+          { prefix: "51.89", flag: "🇬🇧", country: "United Kingdom", city: "London" },
+          { prefix: "51.91", flag: "🇫🇷", country: "France", city: "Paris" },
+          { prefix: "192.99", flag: "🇨🇦", country: "Canada", city: "Montreal" },
+          { prefix: "103.233", flag: "🇦🇺", country: "Australia", city: "Sydney" },
+          { prefix: "103.246", flag: "🇹🇭", country: "Thailand", city: "Bangkok" },
+          { prefix: "103.28", flag: "🇻🇳", country: "Vietnam", city: "Ho Chi Minh City" },
+          { prefix: "103.6", flag: "🇲🇾", country: "Malaysia", city: "Kuala Lumpur" },
+          { prefix: "103.147", flag: "🇮🇩", country: "Indonesia", city: "Jakarta" },
+          { prefix: "103.21", flag: "🇮🇳", country: "India", city: "Mumbai" },
+          { prefix: "177.36", flag: "🇧🇷", country: "Brazil", city: "São Paulo" },
+          { prefix: "45.79", flag: "🇳🇱", country: "Netherlands", city: "Amsterdam" },
+          { prefix: "193.32", flag: "🇰🇷", country: "South Korea", city: "Seoul" }
+        ];
+        function generateIpProfile(){
+          var entry = IP_POOL[Math.floor(Math.random() * IP_POOL.length)];
+          function octet(){ return 1 + Math.floor(Math.random() * 253); }
+          return {
+            ip: entry.prefix + "." + octet() + "." + octet(),
+            flag: entry.flag, country: entry.country, city: entry.city
+          };
+        }
+        /* The IP profile shown for the current mailbox. */
+        var currentIp = null;
+        function ipText(p){
+          if (!p) return "—";
+          return (p.flag ? p.flag + " " : "") + p.ip + " · " + p.country + ", " + p.city;
+        }
+        function updateIpLine(){
+          var line = $("ipLine");
+          if (!line) return;
+          if (!currentIp){ line.hidden = true; return; }
+          line.hidden = false;
+          $("ipValue").textContent = currentIp.ip;
+          $("ipLocation").textContent = (currentIp.flag ? currentIp.flag + " " : "") + currentIp.country + ", " + currentIp.city;
+        }
+
+        /* ---------- proxy preference ---------- */
+        /* "auto" = default failover order; "proxy1"/"proxy2" puts that
+           proxy first. Stored per mailbox and applied on restore/edit. */
+        var apiOrderOverride = null;
+        function applyProxyPref(pref){
+          if (pref === "proxy1") apiOrderOverride = [PROXY, PROXY2, DIRECT];
+          else if (pref === "proxy2") apiOrderOverride = [PROXY2, PROXY, DIRECT];
+          else apiOrderOverride = null;
+        }
+
+        /* ---------- named saved mailboxes (localStorage) ---------- */
+        var MAILBOXES_KEY = "movmail-mailboxes";
+        function loadMailboxes(){
+          try {
+            var raw = localStorage.getItem(MAILBOXES_KEY);
+            var list = raw ? JSON.parse(raw) : [];
+            return Array.isArray(list) ? list : [];
+          } catch(e){ return []; }
+        }
+        function saveMailboxes(list){
+          try { localStorage.setItem(MAILBOXES_KEY, JSON.stringify(list)); } catch(e) {}
+        }
+        function findMailbox(address){
+          var list = loadMailboxes();
+          for (var i = 0; i < list.length; i++){
+            if (list[i].address === address) return list[i];
+          }
+          return null;
+        }
+        function saveCurrentMailbox(name){
+          if (!state.address || !state.token) return null;
+          name = String(name || "").trim();
+          if (!name) return null;
+          var list = loadMailboxes();
+          for (var i = 0; i < list.length; i++){
+            if (list[i].address === state.address){
+              list[i].name = name;
+              if (currentIp) list[i].ip = currentIp.ip, list[i].country = currentIp.country, list[i].city = currentIp.city, list[i].flag = currentIp.flag;
+              saveMailboxes(list);
+              renderMailboxes();
+              return list[i];
+            }
+          }
+          var mb = {
+            id: "mb-" + Date.now().toString(36) + randomStr(6),
+            name: name,
+            address: state.address,
+            password: state.password,
+            token: state.token,
+            ip: currentIp ? currentIp.ip : "",
+            country: currentIp ? currentIp.country : "",
+            city: currentIp ? currentIp.city : "",
+            flag: currentIp ? currentIp.flag : "",
+            proxy: "auto",
+            createdAt: new Date().toISOString()
+          };
+          list.unshift(mb);
+          saveMailboxes(list);
+          renderMailboxes();
+          return mb;
+        }
+        function renderMailboxes(){
+          var listEl = $("mailboxList"), empty = $("mailboxEmptyState");
+          if (!listEl || !empty) return;
+          var list = loadMailboxes();
+          $("mailboxCountBadge").textContent = list.length;
+          listEl.innerHTML = "";
+          empty.style.display = list.length ? "none" : "block";
+          if (!list.length){
+            $("mailboxEmptyTitle").textContent = t("mailboxEmptyTitle");
+            $("mailboxEmptyText").textContent = t("mailboxEmptyText");
+            return;
+          }
+          list.forEach(function(mb){
+            var row = document.createElement("div");
+            row.className = "mailbox-row";
+            row.appendChild(avatarForMailboxName(mb.name));
+            var main = document.createElement("div");
+            main.className = "mailbox-main";
+            var nm = document.createElement("div");
+            nm.className = "mailbox-name";
+            nm.textContent = mb.name;
+            var ad = document.createElement("div");
+            ad.className = "mailbox-addr mono";
+            ad.textContent = mb.address;
+            var ip = document.createElement("div");
+            ip.className = "mailbox-ip";
+            ip.innerHTML = "";
+            var ipTxt = document.createElement("span");
+            ipTxt.innerHTML = "<b>" + escapeHtml(mb.ip || "—") + "</b> · " + escapeHtml((mb.flag ? mb.flag + " " : "") + (mb.country || "") + (mb.city ? ", " + mb.city : ""));
+            ip.appendChild(ipTxt);
+            main.appendChild(nm); main.appendChild(ad); main.appendChild(ip);
+            row.appendChild(main);
+            var actions = document.createElement("div");
+            actions.className = "mailbox-actions";
+            function smBtn(label, cls, fn){
+              var b = document.createElement("button");
+              b.type = "button";
+              b.className = "btn-sm" + (cls ? " " + cls : "");
+              b.textContent = label;
+              b.addEventListener("click", fn);
+              actions.appendChild(b);
+              return b;
+            }
+            smBtn(t("restoreBtn"), "primary", function(){ restoreMailbox(mb); });
+            smBtn(t("openBtn"), "", function(){ openFloatPanel(mb); });
+            smBtn(t("editBtn"), "", function(){ openEditModal(mb); });
+            smBtn(t("deleteMailbox"), "danger", function(){ showDeleteConfirm(row, mb); });
+            row.appendChild(actions);
+            var del = document.createElement("div");
+            del.className = "mailbox-del-confirm";
+            var delTxt = document.createElement("span");
+            delTxt.textContent = t("deleteConfirm");
+            var yesBtn = document.createElement("button");
+            yesBtn.type = "button";
+            yesBtn.className = "btn-sm danger";
+            yesBtn.textContent = t("deleteYes");
+            var noBtn = document.createElement("button");
+            noBtn.type = "button";
+            noBtn.className = "btn-sm";
+            noBtn.textContent = t("deleteNo");
+            yesBtn.addEventListener("click", function(){ deleteMailbox(mb); });
+            noBtn.addEventListener("click", function(){ del.classList.remove("show"); });
+            del.appendChild(delTxt); del.appendChild(noBtn); del.appendChild(yesBtn);
+            row.appendChild(del);
+            row._delConfirm = del;
+            listEl.appendChild(row);
+          });
+        }
+        function showDeleteConfirm(row, mb){
+          if (row._delConfirm) row._delConfirm.classList.add("show");
+        }
+        function escapeHtml(s){
+          return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        }
+        function deleteMailbox(mb){
+          /* Permanent delete: the mailbox AND its saved messages for
+             that address (localStorage only — the server database is
+             untouched). No trash, no undo. */
+          var list = loadMailboxes().filter(function(m){ return m.address !== mb.address; });
+          saveMailboxes(list);
+          savedState.messages = savedState.messages.filter(function(m){ return m._accountAddress !== mb.address; });
+          try {
+            var addrs = JSON.parse(localStorage.getItem("movmail-addresses") || "[]") || [];
+            localStorage.setItem("movmail-addresses", JSON.stringify(addrs.filter(function(a){ return a !== mb.address; })));
+          } catch(e) {}
+          renderMailboxes();
+          renderSavedMessages();
+          showToast(t("toastDeletedMailbox"));
+        }
+        function restoreMailbox(mb){
+          if (!mb || !mb.address || !mb.password) return;
+          /* Re-read the freshest copy from storage first — the row's
+             closure may hold a stale token. */
+          mb = findMailbox(mb.address) || mb;
+          /* Keep the current session so we can roll back if the
+             restore fails (e.g. the address is taken). */
+          var old = { address: state.address, password: state.password, token: state.token, accountId: state.accountId, messages: state.messages };
+          function adopt(token, accountId){
+            state.address = mb.address;
+            state.password = mb.password;
+            state.token = token;
+            state.accountId = accountId || "";
+            state.messages = [];
+            state.failed = false; state.retrying = false; state.retryCount = 0;
+            hideError();
+            addrText.textContent = state.address;
+            addrText.classList.remove("loading");
+            statusText.textContent = t("statusWaiting");
+            if (mb.ip) currentIp = { ip: mb.ip, country: mb.country, city: mb.city, flag: mb.flag };
+            updateIpLine();
+            applyProxyPref(mb.proxy || "auto");
+            setBusy(false);
+            buildQr();
+            stopPolling();
+            fetchMessages(true);
+            startPolling();
+            rememberAddress();
+            fetchSavedMessages();
+            renderMailboxes();
+            showToast(t("toastRestored"));
+          }
+          function fail(){
+            state.address = old.address; state.password = old.password;
+            state.token = old.token; state.accountId = old.accountId;
+            state.messages = old.messages;
+            addrText.textContent = state.address || t("addrFailed");
+            renderMessages();
+            showToast(t("toastRestoreFailed"));
+          }
+          /* Try the saved token first. */
+          state.address = mb.address;
+          state.password = mb.password;
+          state.token = mb.token || "";
+          api("/messages?page=1").then(function(){
+            adopt(mb.token, "");
+          }).catch(function(err){
+            if (!err || !err.status || err.status === 401 || err.status === 404){
+              /* Account expired on Mail.tm — re-create it with the SAME
+                 address and password, then take the new token. */
+              function takeToken(tok, accountId){
+                mb.token = tok.token;
+                var list = loadMailboxes();
+                list.forEach(function(m){ if (m.address === mb.address) m.token = tok.token; });
+                saveMailboxes(list);
+                adopt(tok.token, accountId || "");
+              }
+              api("/accounts", { method: "POST", body: { address: mb.address, password: mb.password } }).then(function(acc){
+                return api("/token", { method: "POST", body: { address: mb.address, password: mb.password } }).then(function(tok){
+                  takeToken(tok, (acc && acc.id) || tok.id || "");
+                });
+              }).catch(function(){
+                /* Re-create failed (e.g. the address is still taken
+                   because the account exists) — just get a fresh
+                   token with the saved password instead. */
+                return api("/token", { method: "POST", body: { address: mb.address, password: mb.password } }).then(function(tok){
+                  takeToken(tok, tok.id || "");
+                });
+              }).catch(function(){ fail(); });
+            } else {
+              /* 429 / network: keep the saved token and let the normal
+                 forever auto-retry reconnect the mailbox. */
+              adopt(mb.token, "");
+            }
+          });
+        }
+
+        /* ---------- save prompt (before generating a new email) ---------- */
+        var savePromptAfter = null;
+        function openSavePrompt(after){
+          savePromptAfter = after || null;
+          $("saveNameInput").value = "";
+          $("savePromptOverlay").classList.add("open");
+          setTimeout(function(){ $("saveNameInput").focus(); }, 50);
+        }
+        function closeSavePrompt(){
+          $("savePromptOverlay").classList.remove("open");
+          savePromptAfter = null;
+        }
+        function maybeSaveBeforeGenerate(after){
+          /* If the current address is not saved yet, ask once whether
+             to save it (with a name) before it is replaced. */
+          if (state.address && state.token && !findMailbox(state.address)){
+            openSavePrompt(after);
+          } else if (after){
+            after();
+          }
+        }
+        $("saveConfirmBtn").addEventListener("click", function(){
+          var name = $("saveNameInput").value.trim();
+          if (!name){ showToast(t("toastNameNeeded")); $("saveNameInput").focus(); return; }
+          saveCurrentMailbox(name);
+          showToast(t("toastSaved"));
+          var after = savePromptAfter;
+          closeSavePrompt();
+          if (after) after();
+        });
+        $("saveSkipBtn").addEventListener("click", function(){
+          var after = savePromptAfter;
+          closeSavePrompt();
+          if (after) after();
+        });
+
+        /* ---------- edit mailbox modal ---------- */
+        var editingMailbox = null;
+        var editIpDraft = null;
+        function openEditModal(mb){
+          editingMailbox = mb;
+          editIpDraft = { ip: mb.ip || "", country: mb.country || "", city: mb.city || "", flag: mb.flag || "" };
+          $("editNameInput").value = mb.name || "";
+          $("editProxySelect").value = mb.proxy || "auto";
+          updateEditIpPreview();
+          $("editOverlay").classList.add("open");
+        }
+        function updateEditIpPreview(){
+          var p = editIpDraft;
+          $("editIpPreview").innerHTML = p && p.ip
+            ? "<b>" + escapeHtml(p.ip) + "</b> · " + escapeHtml((p.flag ? p.flag + " " : "") + (p.country || "") + (p.city ? ", " + p.city : ""))
+            : "—";
+        }
+        function closeEditModal(){
+          $("editOverlay").classList.remove("open");
+          editingMailbox = null;
+          editIpDraft = null;
+        }
+        $("editNewIpBtn").addEventListener("click", function(){
+          editIpDraft = generateIpProfile();
+          updateEditIpPreview();
+        });
+        $("editCancelBtn").addEventListener("click", closeEditModal);
+        $("editSaveBtn").addEventListener("click", function(){
+          if (!editingMailbox) return;
+          var name = $("editNameInput").value.trim();
+          if (!name){ showToast(t("toastNameNeeded")); $("editNameInput").focus(); return; }
+          var list = loadMailboxes();
+          list.forEach(function(m){
+            if (m.address === editingMailbox.address){
+              m.name = name;
+              m.proxy = $("editProxySelect").value || "auto";
+              if (editIpDraft && editIpDraft.ip){
+                m.ip = editIpDraft.ip; m.country = editIpDraft.country;
+                m.city = editIpDraft.city; m.flag = editIpDraft.flag;
+              }
+            }
+          });
+          saveMailboxes(list);
+          /* If the edited mailbox is the active one, apply its
+             profile and proxy choice right away. */
+          if (state.address === editingMailbox.address){
+            if (editIpDraft && editIpDraft.ip) currentIp = editIpDraft;
+            updateIpLine();
+            applyProxyPref($("editProxySelect").value || "auto");
+          }
+          closeEditModal();
+          renderMailboxes();
+          showToast(t("toastSaved"));
+        });
 
         /* ---------- confirm-link extraction ---------- */
         function extractConfirmUrl(detail, subject){
@@ -1384,6 +2134,7 @@ var I18N = {
                 copyBtn.addEventListener("click", function(e){
                   e.stopPropagation();
                   e.preventDefault();
+                  flashCheck(copyBtn, t("copiedCheck"));
                   copyText(m._otp, t("toastCopiedCode"));
                 });
                 chip.appendChild(codeEl);
@@ -1397,7 +2148,10 @@ var I18N = {
                 confirmLink.target = "_blank";
                 confirmLink.rel = "noopener";
                 confirmLink.textContent = t("confirmEmail");
-                confirmLink.addEventListener("click", function(e){ e.stopPropagation(); });
+                confirmLink.addEventListener("click", function(e){
+                  e.stopPropagation();
+                  flashCheck(confirmLink, t("confirmDone"));
+                });
                 quick.appendChild(confirmLink);
               }
               li.appendChild(quick);
@@ -1600,10 +2354,153 @@ var I18N = {
         }
         $("readerClose").addEventListener("click", closeMessage);
         overlay.addEventListener("click", function(e){ if (e.target === overlay) closeMessage(); });
-        document.addEventListener("keydown", function(e){ if (e.key === "Escape") closeMessage(); });
+        document.addEventListener("keydown", function(e){ if (e.key === "Escape"){ closeMessage(); closeFloatPanel(); } });
         $("otpCopyBtn").addEventListener("click", function(){
-          if (currentOtp) copyText(currentOtp, t("toastCopiedCode"));
+          if (currentOtp){ flashCheck($("otpCopyBtn"), t("copiedCheck")); copyText(currentOtp, t("toastCopiedCode")); }
         });
+        $("readerConfirmBtn").addEventListener("click", function(){
+          flashCheck($("readerConfirmBtn"), t("confirmDone"));
+        });
+
+        /* ---------- floating mailbox panel ---------- */
+        var floatPanel = $("floatPanel"), floatHead = $("floatHead"),
+            floatBody = $("floatBody"), floatTitle = $("floatTitle");
+        var floatMailbox = null;
+        function currentMailboxObject(){
+          var saved = state.address ? findMailbox(state.address) : null;
+          if (saved) return saved;
+          return {
+            id: "current", name: state.address || "",
+            address: state.address || "", password: state.password || "",
+            token: state.token || "",
+            ip: currentIp ? currentIp.ip : "", country: currentIp ? currentIp.country : "",
+            city: currentIp ? currentIp.city : "", flag: currentIp ? currentIp.flag : "",
+            proxy: "auto", createdAt: ""
+          };
+        }
+        function openFloatPanel(mb){
+          if (!mb) return;
+          floatMailbox = mb;
+          floatTitle.textContent = mb.name || mb.address;
+          floatBody.innerHTML = "";
+          var prof = document.createElement("div");
+          prof.className = "float-profile";
+          prof.appendChild(avatarForMailboxName(mb.name));
+          var ptxt = document.createElement("div");
+          ptxt.style.minWidth = "0";
+          var nm = document.createElement("div");
+          nm.className = "float-name";
+          nm.textContent = mb.name || mb.address;
+          var ad = document.createElement("div");
+          ad.className = "float-addr mono";
+          ad.textContent = mb.address;
+          ptxt.appendChild(nm); ptxt.appendChild(ad);
+          prof.appendChild(ptxt);
+          floatBody.appendChild(prof);
+          var meta = document.createElement("div");
+          meta.className = "float-meta";
+          function metaLine(label, value){
+            var d = document.createElement("div");
+            d.className = "row-line";
+            var b = document.createElement("b");
+            b.textContent = label + "៖ ";
+            d.appendChild(b);
+            d.appendChild(document.createTextNode(value));
+            meta.appendChild(d);
+          }
+          metaLine(t("ipLabel"), ipText({ ip: mb.ip || "—", flag: mb.flag || "", country: mb.country || "", city: mb.city || "" }));
+          metaLine(t("floatProxyLabel"), mb.proxy === "proxy1" ? "Proxy 1" : mb.proxy === "proxy2" ? "Proxy 2" : t("proxyAuto"));
+          floatBody.appendChild(meta);
+          var acts = document.createElement("div");
+          acts.className = "float-actions";
+          function fBtn(label, cls, fn){
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "btn-sm" + (cls ? " " + cls : "");
+            b.textContent = label;
+            b.addEventListener("click", fn);
+            acts.appendChild(b);
+            return b;
+          }
+          fBtn(t("copy"), "", function(){ if (mb.address) copyText(mb.address, t("toastCopiedEmail")); });
+          if (mb.address !== state.address) fBtn(t("restoreBtn"), "primary", function(){ closeFloatPanel(); restoreMailbox(mb); });
+          fBtn(t("editBtn"), "", function(){ openEditModal(mb); });
+          floatBody.appendChild(acts);
+          var msgsWrap = document.createElement("div");
+          msgsWrap.className = "float-msgs";
+          var mh = document.createElement("h4");
+          mh.textContent = t("floatMessagesTitle");
+          msgsWrap.appendChild(mh);
+          var msgs = savedState.messages.filter(function(m){ return m._accountAddress === mb.address; });
+          if (!msgs.length){
+            var em = document.createElement("div");
+            em.className = "float-empty";
+            em.textContent = t("floatNoMessages");
+            msgsWrap.appendChild(em);
+          } else {
+            var ul = document.createElement("ul");
+            ul.className = "msg-list";
+            msgs.slice(0, 20).forEach(function(m){ ul.appendChild(buildMsgItem(m)); });
+            msgsWrap.appendChild(ul);
+          }
+          floatBody.appendChild(msgsWrap);
+          floatPanel.classList.add("open");
+        }
+        function closeFloatPanel(){
+          floatPanel.classList.remove("open");
+          floatMailbox = null;
+        }
+        $("floatClose").addEventListener("click", closeFloatPanel);
+        /* Drag by the header (mouse + touch via pointer events). */
+        (function(){
+          var dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+          floatHead.addEventListener("pointerdown", function(e){
+            if (e.target.closest(".float-close")) return;
+            dragging = true;
+            var rect = floatPanel.getBoundingClientRect();
+            floatPanel.style.left = rect.left + "px";
+            floatPanel.style.top = rect.top + "px";
+            floatPanel.style.right = "auto";
+            startX = e.clientX; startY = e.clientY;
+            startLeft = rect.left; startTop = rect.top;
+            try { floatHead.setPointerCapture(e.pointerId); } catch(err) {}
+            e.preventDefault();
+          });
+          floatHead.addEventListener("pointermove", function(e){
+            if (!dragging) return;
+            var nx = startLeft + (e.clientX - startX);
+            var ny = startTop + (e.clientY - startY);
+            nx = Math.max(-floatPanel.offsetWidth + 80, Math.min(nx, window.innerWidth - 80));
+            ny = Math.max(0, Math.min(ny, window.innerHeight - 60));
+            floatPanel.style.left = nx + "px";
+            floatPanel.style.top = ny + "px";
+          });
+          function endDrag(){ dragging = false; }
+          floatHead.addEventListener("pointerup", endDrag);
+          floatHead.addEventListener("pointercancel", endDrag);
+          /* Resize from the corner handle. */
+          var resizing = false, rStartX = 0, rStartY = 0, rStartW = 0, rStartH = 0;
+          var handle = $("floatResize");
+          handle.addEventListener("pointerdown", function(e){
+            resizing = true;
+            rStartX = e.clientX; rStartY = e.clientY;
+            rStartW = floatPanel.offsetWidth; rStartH = floatPanel.offsetHeight;
+            try { handle.setPointerCapture(e.pointerId); } catch(err) {}
+            e.preventDefault();
+            e.stopPropagation();
+          });
+          handle.addEventListener("pointermove", function(e){
+            if (!resizing) return;
+            var w = Math.max(280, Math.min(rStartW + (e.clientX - rStartX), window.innerWidth * 0.92));
+            var h = Math.max(220, Math.min(rStartH + (e.clientY - rStartY), window.innerHeight * 0.85));
+            floatPanel.style.width = w + "px";
+            floatPanel.style.height = h + "px";
+            floatPanel.style.maxHeight = "none";
+          });
+          function endResize(){ resizing = false; }
+          handle.addEventListener("pointerup", endResize);
+          handle.addEventListener("pointercancel", endResize);
+        })();
 
         /* ---------- polling ---------- */
         function startPolling(){
@@ -1643,8 +2540,36 @@ var I18N = {
 
         /* ---------- buttons ---------- */
         $("generateBtn").addEventListener("click", function(){
-          showToast(t("toastCreatingNew"));
-          createAccount();
+          maybeSaveBeforeGenerate(function(){
+            showToast(t("toastCreatingNew"));
+            createAccount();
+          });
+        });
+        $("generateIpBtn").addEventListener("click", function(){
+          currentIp = generateIpProfile();
+          updateIpLine();
+          /* If the current mailbox is already saved, keep its stored
+             profile in sync with the new IP. */
+          if (state.address){
+            var list = loadMailboxes(), changed = false;
+            list.forEach(function(m){
+              if (m.address === state.address){
+                m.ip = currentIp.ip; m.country = currentIp.country;
+                m.city = currentIp.city; m.flag = currentIp.flag; changed = true;
+              }
+            });
+            if (changed){ saveMailboxes(list); renderMailboxes(); }
+          }
+          showToast(t("toastIpGenerated"));
+        });
+        $("saveBtn").addEventListener("click", function(){
+          if (!state.address) return;
+          var saved = findMailbox(state.address);
+          if (saved){ openEditModal(saved); return; }
+          openSavePrompt(null);
+        });
+        $("openFloatBtn").addEventListener("click", function(){
+          if (state.address) openFloatPanel(currentMailboxObject());
         });
         $("copyBtn").addEventListener("click", function(){
           if (state.address) copyText(state.address, t("toastCopiedEmail"));
@@ -1665,8 +2590,10 @@ var I18N = {
         $("inboxRefreshBtn").addEventListener("click", function(){ manualRefresh($("inboxRefreshIcon")); });
         $("savedRefreshBtn").addEventListener("click", function(){ savedState.lastFetch = 0; fetchSavedMessages(); });
         $("changeBtn").addEventListener("click", function(){
-          showToast(t("toastCreatingNew"));
-          createAccount();
+          maybeSaveBeforeGenerate(function(){
+            showToast(t("toastCreatingNew"));
+            createAccount();
+          });
         });
         $("deleteBtn").addEventListener("click", deleteAndRecreate);
         $("retryBtn").addEventListener("click", createAccount);
@@ -1677,6 +2604,8 @@ var I18N = {
 
         /* ---------- go ---------- */
         applyLang(lang);
+        renderMailboxes();
+        updateIpLine();
         createAccount();
       })();
     </script>
