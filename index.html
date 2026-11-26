@@ -571,16 +571,16 @@
       .upgrade-overlay.open{display:block}
       .upgrade-popup{
         position:fixed;z-index:81;right:14px;bottom:calc(16px + env(safe-area-inset-bottom,0px));
-        width:min(360px,92vw);max-height:70vh;
+        width:min(360px,92vw);max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);
         background:var(--surface);color:var(--ink);border:1px solid var(--border);
         border-radius:16px;box-shadow:var(--shadow-lg);
         display:none;flex-direction:column;overflow:hidden;
       }
       .upgrade-overlay.open .upgrade-popup{display:flex}
-      .upgrade-head{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+      .upgrade-head{display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--surface-2)}
       .upgrade-title{font-weight:800;font-size:16.5px}
       .upgrade-head .spacer{flex:1}
-      .upgrade-body{overflow:auto;padding:16px;display:grid;gap:8px;min-height:0}
+      .upgrade-body{overflow:auto;padding:8px;display:grid;gap:4px;min-height:0}
       .plan-option.best{border:2px solid var(--accent);background:var(--accent-soft)}
       .best-badge{display:inline-block;background:var(--accent);color:#fff;border-radius:999px;padding:1px 8px;font-size:11.5px;font-weight:800;white-space:nowrap}
 
@@ -690,9 +690,11 @@
       .profile-row{display:flex;justify-content:space-between;gap:12px;font-size:14.5px;align-items:center}
       .profile-row>span:first-child{color:var(--muted);flex:none}
       .profile-row b{overflow-wrap:anywhere;text-align:right;font-weight:700}
-      .plan-option{display:block;width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;font-size:14.5px;font-weight:700;color:var(--ink);cursor:pointer;margin-bottom:8px;min-height:44px;text-align:left}
-      .plan-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
-      .plan-feats{display:grid;gap:5px;margin-top:10px;font-size:13.5px;font-weight:400;line-height:1.5;text-align:left}
+      .plan-option{display:flex;flex-direction:column;align-items:stretch;width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:6px 12px;font-size:14.5px;font-weight:700;color:var(--ink);cursor:pointer;margin-bottom:0;min-height:44px;text-align:left}
+      .plan-head{display:flex;justify-content:space-between;align-items:center;gap:6px;row-gap:2px;flex-wrap:wrap}
+      .plan-head>span:first-child{white-space:nowrap}
+      .plan-head .plan-price{margin-left:auto}
+      .plan-feats{display:grid;gap:3px;margin-top:6px;font-size:12px;font-weight:400;line-height:1.25;text-align:left}
       .plan-feat::before{content:"✓ ";color:var(--accent);font-weight:800}
       .old-price{text-decoration:line-through;color:var(--muted);font-weight:400;margin-right:6px}
       .off-badge{display:inline-block;background:var(--accent-soft);color:var(--accent-ink);border:1px solid var(--accent);border-radius:999px;padding:1px 8px;font-size:12px;font-weight:800;margin-left:6px;white-space:nowrap}
@@ -1136,7 +1138,7 @@
             </span>
           </button>
           <button type="button" class="plan-option best" data-plan="pro-yearly">
-            <span class="plan-head"><span data-i18n="planProYearly">Pro — ប្រចាំឆ្នាំ</span><span class="best-badge" data-i18n="bestValue">ល្អបំផុត</span><span class="plan-price"><span class="old-price">$19.99</span>$11.99 / <span data-i18n="perYear">ឆ្នាំ</span><span class="off-badge" data-i18n="off40">បញ្ចុះ 40%</span></span></span>
+            <span class="plan-head"><span data-i18n="planProYearly">ប្រចាំឆ្នាំ</span><span class="best-badge" data-i18n="bestValue">ល្អបំផុត</span><span class="plan-price"><span class="old-price">$19.99</span>$11.99 / <span data-i18n="perYear">ឆ្នាំ</span><span class="off-badge" data-i18n="off40">បញ្ចុះ 40%</span></span></span>
             <span class="plan-feats">
               <span class="plan-feat" data-i18n="featUnlimitedEmails">អ៊ីមែលគ្មានកំណត់</span>
               <span class="plan-feat" data-i18n="featAll48">ប្រទេសទាំង 48</span>
@@ -1512,7 +1514,7 @@ var I18N = {
     "pricingTitle": "តម្លៃ",
     "planFree": "Free",
     "planProMonthly": "Pro — ប្រចាំខែ",
-    "planProYearly": "Pro — ប្រចាំឆ្នាំ",
+    "planProYearly": "ប្រចាំឆ្នាំ",
     "perMonth": "ខែ",
     "perYear": "ឆ្នាំ",
     "languageRow": "ភាសា",
@@ -1767,7 +1769,7 @@ var I18N = {
     "pricingTitle": "Pricing",
     "planFree": "Free",
     "planProMonthly": "Pro — Monthly",
-    "planProYearly": "Pro — Yearly",
+    "planProYearly": "Yearly",
     "perMonth": "month",
     "perYear": "year",
     "languageRow": "Language",
