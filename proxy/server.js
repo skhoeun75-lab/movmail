@@ -440,6 +440,14 @@ const CREATE_API_TABLES_SQL = [
     "  status TEXT NOT NULL DEFAULT 'pending',",
     "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
     ")",
+    "CREATE TABLE IF NOT EXISTS market_reports (",
+    "  order_id INT PRIMARY KEY REFERENCES market_orders(id),",
+    "  buyer_gmail TEXT NOT NULL,",
+    "  status TEXT NOT NULL,",
+    "  reason TEXT DEFAULT '',",
+    "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),",
+    "  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+    ")",
   ].join("\n"),
 ];
 
@@ -491,6 +499,7 @@ const mem = {
   notificationReads: new Set(), // "notificationId|gmail" pairs that read a gift
   listings: new Map(), // market listing id -> listing row
   orders: [], // market order rows
+  reports: new Map(), // order id -> buyer activation report row
   listingSeq: 1,
   orderSeq: 1,
   receiptSeq: 1,
@@ -1113,6 +1122,54 @@ function orderAdminFromRow(r, listingEmail) {
   };
 }
 
+// v1.8: buyer activation report — did the bought email work for
+// them? One report per order (latest wins). The admin sees it next
+// to the delivery evidence below, so Mov can tell a real problem
+// from a false "it doesn't work" claim.
+function reportFromRow(r) {
+  if (!r) return null;
+  return {
+    status: r.status,
+    reason: r.reason || "",
+    reportedAt: toIso(r.updated_at || r.created_at),
+  };
+}
+async function getOrderReport(orderId) {
+  const n = Number(orderId);
+  if (!Number.isInteger(n)) return null;
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query("SELECT * FROM market_reports WHERE order_id = $1 LIMIT 1", [n]);
+    return r.rows[0] || null;
+  }
+  return mem.reports.get(n) || null;
+}
+// v1.8: delivery evidence — the latest message that arrived in this
+// mailbox AFTER the order was placed (the buyer can only use the
+// email once they own it). If a code arrived, the email works, no
+// matter what the buyer claims. Returns {count, lastAt, lastFrom,
+// lastSubject}; count 0 means nothing arrived after the purchase.
+async function getOrderEvidence(listingEmail, orderCreatedAt) {
+  if (!listingEmail || !orderCreatedAt) return null;
+  if (USE_MEMORY_STORE) return null; // memory store keeps no saved messages
+  const r = await dbPool.query(
+    "SELECT COUNT(*)::int AS count FROM saved_messages WHERE account_address = $1 AND created_at >= $2",
+    [listingEmail, orderCreatedAt]
+  );
+  const count = (r.rows[0] && r.rows[0].count) || 0;
+  const r2 = await dbPool.query(
+    "SELECT sender_name, sender_address, subject, created_at FROM saved_messages " +
+      "WHERE account_address = $1 AND created_at >= $2 ORDER BY created_at DESC LIMIT 1",
+    [listingEmail, orderCreatedAt]
+  );
+  const last = r2.rows[0] || null;
+  return {
+    count,
+    lastAt: last ? toIso(last.created_at) : null,
+    lastFrom: last ? last.sender_name || last.sender_address || "" : "",
+    lastSubject: last ? last.subject || "" : "",
+  };
+}
+
 // v1.3 listing extras: logo is a data URI ('' when none), token is a
 // short text ('' when none). Neither is the listing password, which
 // never leaves the server.
@@ -1552,15 +1609,24 @@ async function listBuyerOrders(gmail) {
         " WHERE o.buyer_gmail = $1 ORDER BY o.created_at DESC",
       [gmail]
     );
-    return r.rows.map((x) => orderBuyerFromRow(x, x.listing_email));
+    const out = [];
+    for (const x of r.rows) {
+      const o = orderBuyerFromRow(x, x.listing_email);
+      o.report = reportFromRow(await getOrderReport(o.id));
+      out.push(o);
+    }
+    return out;
   }
-  return mem.orders
+  const out = [];
+  for (const x of mem.orders
     .filter((x) => x.buyer_gmail === gmail)
-    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
-    .map((x) => {
-      const listing = mem.listings.get(x.listing_id);
-      return orderBuyerFromRow(x, listing ? listing.email : null);
-    });
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))) {
+    const listing = mem.listings.get(x.listing_id);
+    const o = orderBuyerFromRow(x, listing ? listing.email : null);
+    o.report = reportFromRow(await getOrderReport(o.id));
+    out.push(o);
+  }
+  return out;
 }
 
 async function listAllOrders() {
@@ -1570,14 +1636,26 @@ async function listAllOrders() {
         " LEFT JOIN market_listings l ON l.id = o.listing_id" +
         " ORDER BY o.created_at DESC"
     );
-    return r.rows.map((x) => orderAdminFromRow(x, x.listing_email));
+    const out = [];
+    for (const x of r.rows) {
+      const o = orderAdminFromRow(x, x.listing_email);
+      o.report = reportFromRow(await getOrderReport(o.id));
+      o.evidence = await getOrderEvidence(x.listing_email, o.createdAt);
+      out.push(o);
+    }
+    return out;
   }
-  return [...mem.orders]
-    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
-    .map((x) => {
-      const listing = mem.listings.get(x.listing_id);
-      return orderAdminFromRow(x, listing ? listing.email : null);
-    });
+  const out = [];
+  for (const x of [...mem.orders].sort((a, b) =>
+    String(b.created_at || "").localeCompare(String(a.created_at || ""))
+  )) {
+    const listing = mem.listings.get(x.listing_id);
+    const o = orderAdminFromRow(x, listing ? listing.email : null);
+    o.report = reportFromRow(await getOrderReport(o.id));
+    o.evidence = await getOrderEvidence(listing ? listing.email : null, o.createdAt);
+    out.push(o);
+  }
+  return out;
 }
 
 async function findApprovedOrder(listingId, gmail) {
@@ -2230,6 +2308,77 @@ async function handleMarketOrdersList(req, res, url) {
   sendJson(res, 200, await listBuyerOrders(gmail));
 }
 
+// v1.8: the buyer reports whether the bought email worked for them.
+// Only the approved buyer of the order can report (gmail must match
+// the order); the latest report wins. Reasons are short keys so the
+// admin can show them in either language: no_code | visa_card |
+// cant_login | other. The admin pairs the report with the delivery
+// evidence (did a code actually arrive in that mailbox after the
+// purchase?) — so a buyer who claims "it doesn't work" while a code
+// DID arrive is visible to Mov at a glance.
+const REPORT_REASONS = ["no_code", "visa_card", "cant_login", "other"];
+async function handleMarketOrderReport(req, res, id) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  const n = Number(id);
+  if (!Number.isInteger(n)) {
+    sendJson(res, 400, { ok: false, error: "invalid order id" });
+    return;
+  }
+  const gmail = String(body.gmail || "").trim().toLowerCase();
+  const status = String(body.status || "").trim().toLowerCase();
+  const reason = String(body.reason || "").trim().slice(0, 120);
+  if (!gmail || (status !== "works" && status !== "failed")) {
+    sendJson(res, 400, { ok: false, error: "gmail and status (works|failed) required" });
+    return;
+  }
+  if (status === "failed" && reason && REPORT_REASONS.indexOf(reason) === -1) {
+    sendJson(res, 400, { ok: false, error: "unknown reason" });
+    return;
+  }
+  let order = null;
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query("SELECT * FROM market_orders WHERE id = $1 LIMIT 1", [n]);
+    order = r.rows[0] || null;
+  } else {
+    order = mem.orders.find((x) => x.id === n) || null;
+  }
+  if (!order) {
+    sendJson(res, 404, { ok: false, error: "order not found" });
+    return;
+  }
+  if (String(order.buyer_gmail || "").toLowerCase() !== gmail) {
+    sendJson(res, 403, { ok: false, error: "only the buyer of this order can report" });
+    return;
+  }
+  if (order.status !== "approved") {
+    sendJson(res, 400, { ok: false, error: "only an approved order can be reported" });
+    return;
+  }
+  const cleanReason = status === "works" ? "" : reason;
+  let row = null;
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "INSERT INTO market_reports (order_id, buyer_gmail, status, reason) VALUES ($1, $2, $3, $4) " +
+        "ON CONFLICT (order_id) DO UPDATE SET status = EXCLUDED.status, reason = EXCLUDED.reason, updated_at = NOW() RETURNING *",
+      [n, gmail, status, cleanReason]
+    );
+    row = r.rows[0] || null;
+  } else {
+    const prev = mem.reports.get(n);
+    row = {
+      order_id: n,
+      buyer_gmail: gmail,
+      status,
+      reason: cleanReason,
+      created_at: prev ? prev.created_at : new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    mem.reports.set(n, row);
+  }
+  sendJson(res, 200, { ok: true, report: reportFromRow(row) });
+}
+
 async function handleMarketRestore(req, res) {
   const body = await readJsonBody(req, res, 64 * 1024);
   if (!body) return;
@@ -2332,6 +2481,57 @@ async function handleAdminMarketListingRemove(req, res, id) {
   sendJson(res, 200, { ok: true, listing: listingAdminFromRow(row) });
 }
 
+// v1.7d: put a SOLD listing back in the shop with one click. The
+// password is the one MovMail generated when the mailbox was created
+// — Mov never set one himself and never needs to type one: the
+// server reuses the stored credentials. The Mail.tm login is re-run
+// first, so a dead mailbox (deleted account) can never be re-listed
+// — it answers 400 with the honest login error instead. On success
+// the listing is 'active' again at the same price / title / token /
+// logo, health 'good', and created_at refreshed so it shows the
+// "New" badge in the shop like a fresh listing.
+async function handleAdminMarketListingRelist(req, res, id) {
+  const listing = await getListing(id);
+  if (!listing) {
+    sendJson(res, 404, { ok: false, error: "listing not found" });
+    return;
+  }
+  if (listing.status !== "sold") {
+    sendJson(res, 400, { ok: false, error: "only a sold listing can be put back in the shop" });
+    return;
+  }
+  const login = await mailTmLogin(listing.email, listing.password);
+  if (!login.ok) {
+    sendJson(res, 400, { ok: false, error: login.error });
+    return;
+  }
+  let updated = null;
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "UPDATE market_listings SET status = 'active', health = 'good', health_reason = '', " +
+        "health_bad_since = NULL, health_checked_at = NOW(), created_at = NOW() WHERE id = $1 RETURNING *",
+      [Number(id)]
+    );
+    updated = r.rows[0] || null;
+  } else {
+    const row = mem.listings.get(Number(id));
+    if (row) {
+      row.status = "active";
+      row.health = "good";
+      row.health_reason = "";
+      row.health_bad_since = null;
+      row.health_checked_at = new Date().toISOString();
+      row.created_at = new Date().toISOString();
+    }
+    updated = row || null;
+  }
+  if (!updated) {
+    sendJson(res, 404, { ok: false, error: "listing not found" });
+    return;
+  }
+  sendJson(res, 200, { ok: true, listing: listingAdminFromRow(updated) });
+}
+
 // v1.3: re-run the Mail.tm login for one listing and apply the
 // result (good on success, bad on wrong credentials, unchanged on
 // upstream outage). Returns the updated listing (admin shape).
@@ -2414,6 +2614,8 @@ async function handleApi(req, res, url) {
     if (req.method === "POST" && p === "/api/market/orders") return handleMarketOrdersCreate(req, res);
     if (req.method === "GET" && p === "/api/market/orders") return handleMarketOrdersList(req, res, url);
     if (req.method === "POST" && p === "/api/market/restore") return handleMarketRestore(req, res);
+    const mMktRep = /^\/api\/market\/orders\/(\d+)\/report$/.exec(p);
+    if (req.method === "POST" && mMktRep) return handleMarketOrderReport(req, res, mMktRep[1]);
     if (p.startsWith("/api/admin/")) {
       if (!requireAdmin(req, res)) return;
       if (req.method === "GET" && p === "/api/admin/users") return handleAdminUsers(req, res);
@@ -2429,6 +2631,8 @@ async function handleApi(req, res, url) {
       if (req.method === "POST" && p === "/api/admin/market/listings") return handleAdminMarketListingsCreate(req, res);
       const mMktList = /^\/api\/admin\/market\/listings\/(\d+)\/remove$/.exec(p);
       if (req.method === "POST" && mMktList) return handleAdminMarketListingRemove(req, res, mMktList[1]);
+      const mMktRelist = /^\/api\/admin\/market\/listings\/(\d+)\/relist$/.exec(p);
+      if (req.method === "POST" && mMktRelist) return handleAdminMarketListingRelist(req, res, mMktRelist[1]);
       const mMktCheck = /^\/api\/admin\/market\/listings\/(\d+)\/check$/.exec(p);
       if (req.method === "POST" && mMktCheck) return handleAdminMarketListingCheck(req, res, mMktCheck[1]);
       const mMktHealth = /^\/api\/admin\/market\/listings\/(\d+)\/health$/.exec(p);

@@ -107,11 +107,18 @@ const I18N = {
     ordersTitle: 'ការបញ្ជាទិញពីហាង', noOrders: 'មិនមានការបញ្ជាទិញទេ', buyer: 'អ្នកទិញ',
     orderNote: 'ការអនុម័តការបញ្ជាទិញនឹងលក់អ៊ីមែលនោះឱ្យអ្នកទិញនោះតែម្នាក់គត់ ហើយដកវាចេញពីហាងសាធារណៈ។ សូមពិនិត្យវិក្កយបត្រដោយខ្លួនឯងថាពិតឬអត់។',
     remove: 'ដកចេញ', confirmRemoveListing: 'តើអ្នកពិតជាចង់ដកបញ្ជីលក់នេះចេញមែនទេ?',
+    relist: 'ដាក់លក់វិញ', confirmRelist: 'ដាក់អាខោននេះលក់វិញក្នុងហាងមែនទេ? តម្លៃ និងព័ត៌មានដដែល។',
+    toastListingRelisted: 'បានដាក់លក់វិញក្នុងហាងហើយ។', errRelist: 'ដាក់លក់វិញមិនបានទេ។',
     sold: 'បានលក់', removed: 'បានដកចេញ', pending: 'រង់ចាំ', approved: 'បានអនុម័ត', rejected: 'បានបដិសេធ',
     errListingFields: 'សូមបំពេញអ៊ីមែល ពាក្យសម្ងាត់ តម្លៃ និងចំណងជើង។',
     errListing: 'បរាជ័យក្នុងការបង្កើតបញ្ជីលក់។', errOrder: 'បរាជ័យក្នុងការដំណើរការការបញ្ជាទិញ។',
     toastListingCreated: 'បានបង្កើតបញ្ជីលក់។', toastListingRemoved: 'បានដកបញ្ជីលក់ចេញ។',
     toastOrderApproved: 'បានអនុម័ត — អ៊ីមែលត្រូវបានលក់ឱ្យអ្នកទិញនេះ។', toastOrderRejected: 'បានបដិសេធការបញ្ជាទិញ។',
+    /* v1.8: buyer activation report + delivery evidence (anti-scam). */
+    reportWorks: '✅ ដំណើរការ', reportFailed: '❌ មិនដំណើរការ', reportNotYet: 'មិនទាន់រាយការណ៍',
+    reportReasonNoCode: 'មិនទទួលបានកូដ', reportReasonVisa: 'ត្រូវដាក់ Visa card', reportReasonCantLogin: 'ចូលមិនបាន', reportReasonOther: 'ផ្សេងៗ',
+    evidenceLast: 'សារចុងក្រោយ', evidenceNone: 'មិនទាន់មានសារមកដល់ក្រោយពេលទិញទេ', evidenceMsgs: 'សារក្រោយពេលទិញ',
+    mismatchFlag: '⚠️ កូដបានមកដល់ហើយ តែអ្នកទិញថាមិនដំណើរការ',
     searchPlaceholder: 'ស្វែងរកតាមឈ្មោះ / Gmail / ប្រទេស…',
     filterAll: 'ទាំងអស់', filterNormal: 'ធម្មតា', filterRisk: 'មានហានិភ័យ', filterBlocked: 'បានបិទ',
     refresh: 'ធ្វើឱ្យថ្មី', country: 'ប្រទេស', city: 'ទីក្រុង', device: 'ឧបករណ៍', connection: 'ការតភ្ជាប់',
@@ -185,11 +192,18 @@ const I18N = {
     ordersTitle: 'Shop orders', noOrders: 'No orders yet', buyer: 'Buyer',
     orderNote: 'Approving an order sells that email to this buyer only and removes it from the public shop. Please judge yourself whether a receipt is genuine.',
     remove: 'Remove', confirmRemoveListing: 'Are you sure you want to remove this listing?',
+    relist: 'Re-list', confirmRelist: 'Put this account back in the shop? Same price and details.',
+    toastListingRelisted: 'Listed in the shop again.', errRelist: 'Could not re-list.',
     sold: 'Sold', removed: 'Removed', pending: 'Pending', approved: 'Approved', rejected: 'Rejected',
     errListingFields: 'Please fill in the email, password, price and title.',
     errListing: 'Failed to create the listing.', errOrder: 'Failed to process the order.',
     toastListingCreated: 'Listing created.', toastListingRemoved: 'Listing removed.',
     toastOrderApproved: 'Approved — the email has been sold to this buyer.', toastOrderRejected: 'Order rejected.',
+    /* v1.8: buyer activation report + delivery evidence (anti-scam). */
+    reportWorks: '✅ It works', reportFailed: '❌ Does not work', reportNotYet: 'Not reported yet',
+    reportReasonNoCode: 'No code received', reportReasonVisa: 'Asked for a Visa card', reportReasonCantLogin: "Can't log in", reportReasonOther: 'Other',
+    evidenceLast: 'Last message', evidenceNone: 'No message arrived after the purchase yet', evidenceMsgs: 'messages after purchase',
+    mismatchFlag: '⚠️ A code arrived, but the buyer says it does not work',
     searchPlaceholder: 'Search by name / Gmail / country…',
     filterAll: 'All', filterNormal: 'Normal', filterRisk: 'At risk', filterBlocked: 'Blocked',
     refresh: 'Refresh', country: 'Country', city: 'City', device: 'Device', connection: 'Connection',
@@ -982,6 +996,11 @@ function renderListings() {
     var removeBtn = (l.status === 'active' || l.status === 'sold')
       ? '<button class="btn btn-danger" type="button" data-listing-remove="' + esc(l.id) + '">' + esc(t('remove')) + '</button>'
       : '';
+    /* v1.7d: a sold listing can go back in the shop with one click —
+       the server reuses the stored password, so Mov never types one. */
+    var relistBtn = l.status === 'sold'
+      ? '<button class="btn btn-primary" type="button" data-listing-relist="' + esc(l.id) + '">' + esc(t('relist')) + '</button>'
+      : '';
     var healthPill = isBad
       ? '<span class="pill pill-red">' + esc(t('healthBad')) + '</span>'
       : '<span class="pill pill-green">' + esc(t('healthGood')) + '</span>';
@@ -1009,10 +1028,18 @@ function renderListings() {
       + '<div class="l-line">' + esc(t('created')) + ': ' + esc(fmtDate(l.createdAt)) + '</div>'
       + '</div>'
       + listingPill(l.status)
-      + '<div class="listing-actions">' + checkBtn + healthToggleBtn + removeBtn + '</div>'
+      + '<div class="listing-actions">' + checkBtn + healthToggleBtn + relistBtn + removeBtn + '</div>'
       + '</div>';
   }).join('');
   show($('listingsEmpty'), listingsCache.length === 0);
+}
+/* v1.8: reason keys (from the buyer's report) → admin language. */
+function reportReasonLabel(key) {
+  if (key === 'no_code') return t('reportReasonNoCode');
+  if (key === 'visa_card') return t('reportReasonVisa');
+  if (key === 'cant_login') return t('reportReasonCantLogin');
+  if (key === 'other') return t('reportReasonOther');
+  return key || '';
 }
 function renderOrders() {
   /* Newest first. */
@@ -1041,6 +1068,35 @@ function renderOrders() {
         + '<button class="btn btn-danger" type="button" data-order-action="reject" data-id="' + esc(o.id) + '">' + esc(t('reject')) + '</button>'
         + '</div>'
       : '';
+    /* v1.8: buyer activation report + delivery evidence. The report is
+       what the buyer says; the evidence is what actually arrived in
+       that mailbox after the purchase. When they disagree (buyer says
+       it failed, but a code DID arrive) the red flag shows — that is
+       Mov's proof against a false "it doesn't work" claim. */
+    var rep = o.report || null;
+    var repLine = '';
+    if (rep && rep.status) {
+      var repReason = (rep.status === 'failed' && rep.reason)
+        ? ' · ' + esc(reportReasonLabel(rep.reason)) : '';
+      repLine = '<div class="r-line">' + (rep.status === 'works'
+        ? '<span class="pill pill-green">' + esc(t('reportWorks')) + '</span>'
+        : '<span class="pill pill-red">' + esc(t('reportFailed')) + '</span>' + repReason)
+        + '</div>';
+    } else {
+      repLine = '<div class="r-line"><span class="pill pill-grey">' + esc(t('reportNotYet')) + '</span></div>';
+    }
+    var ev = o.evidence || null;
+    var evLine = '';
+    if (ev && ev.count > 0) {
+      evLine = '<div class="r-line">📩 ' + esc(t('evidenceLast')) + ': ' + esc(ev.lastFrom || '—')
+        + ' — ' + esc(ev.lastSubject || '—') + ' (' + esc(fmtDate(ev.lastAt)) + ') · '
+        + esc(String(ev.count)) + ' ' + esc(t('evidenceMsgs')) + '</div>';
+    } else {
+      evLine = '<div class="r-line">📩 ' + esc(t('evidenceNone')) + '</div>';
+    }
+    var mismatchLine = (rep && rep.status === 'failed' && ev && ev.count > 0)
+      ? '<div class="r-line"><span class="pill pill-red">' + esc(t('mismatchFlag')) + '</span></div>'
+      : '';
     /* Same row pattern as the receipts panel: thumbnail (tap = lightbox),
        info, approve/reject. */
     return '<div class="receipt-row order-row status-' + esc(o.status) + '" data-order-id="' + esc(o.id) + '">'
@@ -1053,6 +1109,7 @@ function renderOrders() {
       + '<div class="r-line">' + priceLine + '</div>'
       + '<div class="r-line">' + esc(t('method')) + ': ' + esc(o.method || '—') + '</div>'
       + '<div class="r-line">' + esc(fmtDate(o.createdAt)) + '</div>'
+      + repLine + evLine + mismatchLine
       + '</div>'
       + pill
       + actions
@@ -1184,6 +1241,24 @@ async function onListingsClick(e) {
     } catch (err) {
       showError($('listingsError'), err && err.message ? err.message : t('errHealth'));
       healthBtn.disabled = false;
+    }
+    return;
+  }
+  /* v1.7d: Re-list — put a sold account back in the shop. One
+     click; the server reuses the stored password, so Mov never
+     types one. A dead mailbox answers 400 and stays sold. */
+  var relistBtn = e.target.closest('[data-listing-relist]');
+  if (relistBtn) {
+    var relistId = relistBtn.dataset.listingRelist;
+    if (!window.confirm(t('confirmRelist'))) return;
+    relistBtn.disabled = true;
+    try {
+      await api('/api/admin/market/listings/' + encodeURIComponent(relistId) + '/relist', { method: 'POST' });
+      toast(t('toastListingRelisted'));
+      loadListings();
+    } catch (err) {
+      showError($('listingsError'), err && err.message ? err.message : t('errRelist'));
+      relistBtn.disabled = false;
     }
     return;
   }

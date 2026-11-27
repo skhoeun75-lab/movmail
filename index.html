@@ -944,6 +944,16 @@
       .shop-price{font-size:20px;font-weight:800;color:var(--accent-ink);white-space:nowrap}
       .shop-actions{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
       .shop-status{font-size:12.5px;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);color:var(--muted)}
+      /* v1.8: buyer activation report on My Orders rows. */
+      .order-report{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12.5px}
+      .order-report .report-q{color:var(--muted);font-weight:600}
+      .report-btn{padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);color:var(--ink);cursor:pointer;font-size:12.5px;font-weight:700}
+      .report-btn.sel-works{background:#dcfce7;border-color:#16a34a;color:#166534}
+      .report-btn.sel-failed{background:var(--red-bg);border-color:var(--red);color:var(--red)}
+      html[data-theme="dark"] .report-btn.sel-works{background:#14532d;border-color:#22c55e;color:#bbf7d0}
+      .report-reasons{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+      .reason-chip{padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);color:var(--ink);cursor:pointer;font-size:12.5px}
+      .reason-chip.sel{background:var(--red-bg);border-color:var(--red);color:var(--red)}
       .shop-status.pending{color:#b45309;border-color:#f59e0b;background:#fef3c7}
       .shop-status.approved{color:var(--accent-ink);border-color:var(--accent);background:var(--accent-soft)}
       .shop-status.mismatch{color:#b91c1c;border-color:#ef4444;background:#fee2e2}
@@ -2703,6 +2713,17 @@ var I18N = {
     "marketOrderApproved": "បានអនុម័ត",
     "myOrdersTitle": "ការបញ្ជាទិញរបស់ខ្ញុំ",
     "restoreBoughtBtn": "យកមកប្រើ",
+    "reportTitle": "តើអ៊ីមែលនេះប្រើបានទេ?",
+    "reportWorks": "✅ ដំណើរការ",
+    "reportFailed": "❌ មិនដំណើរការ",
+    "reportReasonTitle": "មូលហេតុ៖",
+    "reportNoCode": "មិនទទួលបានកូដ",
+    "reportVisa": "ត្រូវដាក់ Visa card",
+    "reportCantLogin": "ចូលមិនបាន",
+    "reportOther": "ផ្សេងៗ",
+    "reportSaved": "បានរក្សាទុកការរាយការណ៍របស់អ្នក។",
+    "reportFailedSaved": "បានរក្សាទុក។ អ្នកលក់នឹងពិនិត្យមើល។",
+    "reportError": "រាយការណ៍មិនបានទេ សូមសាកម្តងទៀត។",
     "restoreBoughtSuccess": "បានយកអ៊ីមែលដែលទិញមកប្រើហើយ",
     "restoreBoughtFailed": "យកអ៊ីមែលមកប្រើវិញមិនបានសម្រេច",
     "marketRevealing": "កំពុងបង្ហាញអ៊ីមែល…",
@@ -3070,6 +3091,17 @@ var I18N = {
     "marketOrderApproved": "Approved",
     "myOrdersTitle": "My orders",
     "restoreBoughtBtn": "Restore",
+    "reportTitle": "Did this email work for you?",
+    "reportWorks": "✅ It works",
+    "reportFailed": "❌ It doesn't work",
+    "reportReasonTitle": "Reason:",
+    "reportNoCode": "No code received",
+    "reportVisa": "Asked for a Visa card",
+    "reportCantLogin": "Can't log in",
+    "reportOther": "Other",
+    "reportSaved": "Your report was saved.",
+    "reportFailedSaved": "Saved. The seller will check it.",
+    "reportError": "Could not save the report, please try again.",
     "restoreBoughtSuccess": "Bought email restored",
     "restoreBoughtFailed": "Could not restore this email",
     "marketRevealing": "Revealing email…",
@@ -6550,6 +6582,28 @@ var I18N = {
             if (pending) loadMarketOrders();
           }, 30000);
         }
+        /* v1.8: buyer activation report — did this bought email work
+           for them? Only the approved buyer can report (the server
+           checks the gmail); the latest report wins. The admin sees
+           it next to the delivery evidence, so Mov can tell a real
+           problem from a false "it doesn't work" claim. */
+        function reportReasonLabel(key){
+          if (key === "no_code") return t("reportNoCode");
+          if (key === "visa_card") return t("reportVisa");
+          if (key === "cant_login") return t("reportCantLogin");
+          if (key === "other") return t("reportOther");
+          return key || "";
+        }
+        function submitOrderReport(o, status, reason){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p || !p.email){ showToast(t("sellNeedSignin")); return; }
+          apiAdmin("/api/market/orders/" + encodeURIComponent(o.id) + "/report", { method: "POST", body: { gmail: p.email, status: status, reason: reason } }).then(function(data){
+            o.report = (data && data.report) || { status: status, reason: reason };
+            renderMyOrders();
+            showToast(status === "works" ? t("reportSaved") : t("reportFailedSaved"));
+          }).catch(function(){ showToast(t("reportError")); });
+        }
         function renderMyOrders(){
           var box = $("myOrdersBox"), listEl = $("myOrdersList");
           if (!box || !listEl) return;
@@ -6621,6 +6675,48 @@ var I18N = {
               rb.textContent = t("restoreBoughtBtn");
               rb.addEventListener("click", function(){ restoreBoughtMailbox({ id: o.listingId }, o); });
               row.appendChild(rb);
+              /* v1.8: activation report — two taps, plus a reason when
+                 it failed. The reason picker toggles open/closed. */
+              var repBox = document.createElement("div");
+              repBox.className = "order-report";
+              var repQ = document.createElement("span");
+              repQ.className = "report-q";
+              repQ.textContent = t("reportTitle");
+              repBox.appendChild(repQ);
+              var repWorks = document.createElement("button");
+              repWorks.type = "button";
+              repWorks.className = "report-btn" + ((o.report && o.report.status === "works") ? " sel-works" : "");
+              repWorks.textContent = t("reportWorks");
+              repWorks.addEventListener("click", function(){ submitOrderReport(o, "works", ""); });
+              repBox.appendChild(repWorks);
+              var repFailed = document.createElement("button");
+              repFailed.type = "button";
+              repFailed.className = "report-btn" + ((o.report && o.report.status === "failed") ? " sel-failed" : "");
+              repFailed.textContent = t("reportFailed");
+              repFailed.addEventListener("click", function(){
+                var ex = repBox.querySelector(".report-reasons");
+                if (ex){ ex.remove(); repFailed.classList.remove("sel-failed"); return; }
+                repFailed.classList.add("sel-failed");
+                var rs = document.createElement("div");
+                rs.className = "report-reasons";
+                [["no_code","reportNoCode"],["visa_card","reportVisa"],["cant_login","reportCantLogin"],["other","reportOther"]].forEach(function(pair){
+                  var chip = document.createElement("button");
+                  chip.type = "button";
+                  chip.className = "reason-chip";
+                  chip.textContent = t(pair[1]);
+                  chip.addEventListener("click", function(){ submitOrderReport(o, "failed", pair[0]); });
+                  rs.appendChild(chip);
+                });
+                repBox.appendChild(rs);
+              });
+              repBox.appendChild(repFailed);
+              if (o.report && o.report.status === "failed" && o.report.reason){
+                var rn = document.createElement("span");
+                rn.className = "report-q";
+                rn.textContent = reportReasonLabel(o.report.reason);
+                repBox.appendChild(rn);
+              }
+              row.appendChild(repBox);
             }
             listEl.appendChild(row);
           });
