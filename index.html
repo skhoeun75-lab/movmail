@@ -2811,6 +2811,7 @@ var I18N = {
     "errorConnect": "មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេអ៊ីមែលបានទេ។ ({code}) កំពុងព្យាយាមភ្ជាប់ឡើងវិញដោយស្វ័យប្រវត្តិ…",
     "errorDefault": "មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេអ៊ីមែលបានទេ។",
     "retrying": "ម៉ាស៊ីនមេរវល់ — កំពុងព្យាយាមម្តងទៀត (លើកទី {n})…",
+    "retryingWait": "Mail.tm កំពុងកំណត់ — សូមរង់ចាំបន្តិច វានឹងព្យាយាមដោយខ្លួនឯង",
     "relJustNow": "មុននេះបន្តិច",
     "relMinutes": "{n} នាទីមុន",
     "relHours": "{n} ម៉ោងមុន",
@@ -3244,6 +3245,7 @@ var I18N = {
     "errorConnect": "Cannot connect to the email server. ({code}) Reconnecting automatically…",
     "errorDefault": "Cannot connect to the email server.",
     "retrying": "Server is busy — retrying (attempt {n})…",
+    "retryingWait": "Mail.tm is limiting right now — please wait a moment, it retries by itself",
     "relJustNow": "Just now",
     "relMinutes": "{n} minutes ago",
     "relHours": "{n} hours ago",
@@ -3625,7 +3627,7 @@ var I18N = {
           /* re-render dynamic state in the active language */
           if (state.creating || state.retrying){
             addrText.textContent = t("addrGenerating");
-            statusText.textContent = state.retrying ? t("retrying", {n: state.retryCount || 1}) : t("statusConnecting");
+            statusText.textContent = state.retrying ? retryStatusText() : t("statusConnecting");
           } else if (state.address){
             addrText.textContent = state.address;
             statusText.textContent = t("statusWaiting");
@@ -3859,6 +3861,15 @@ var I18N = {
         }
 
         /* ---------- account lifecycle ---------- */
+        /* v1.17: the retry status line. After attempt 3, append a
+           short "just wait" line so the user knows the retry is
+           automatic and there is nothing to tap. Used by the
+           createAccount catch and by applyLang's re-render. */
+        function retryStatusText(){
+          var msg = t("retrying", {n: state.retryCount || 1});
+          if ((state.retryCount || 0) >= 3) msg += " " + t("retryingWait");
+          return msg;
+        }
         function createAccount(){
           if (state.creating) return;
           if (!blockedKnown && loadProfile()){
@@ -3927,11 +3938,34 @@ var I18N = {
             var password = randomStr(16) + "A1!";
             return api("/accounts", { method:"POST", body:{ address: address, password: password } })
               .then(function(acc){
+                return { acc: acc, adopted: false };
+              }, function(accErr){
+                /* v1.17 adopt-after-429: a 429/5xx on create does NOT
+                   prove the account was not created — Mail.tm may have
+                   created it and then limited the response (parent
+                   burst test: token 200 right after a create 429).
+                   Before discarding this address and creating another
+                   one, try ONE login with the just-attempted
+                   credentials. If it succeeds, adopt this mailbox
+                   instead of hammering Mail.tm with a new create. Any
+                   failure here falls through to the normal retry. */
+                var retryableAcc = !accErr || !accErr.status || accErr.status === 429 || accErr.status >= 500;
+                if (!retryableAcc) throw accErr;
+                return api("/token", { method:"POST", body:{ address: address, password: password } })
+                  .then(function(tok){ return { acc: null, tok: tok, adopted: true }; });
+              })
+              .then(function(res){
+                if (res.adopted){
+                  state.address = address; state.password = password;
+                  state.passwordSynced = false;
+                  state.token = res.tok.token; state.accountId = res.tok.id || "";
+                  return;
+                }
                 return api("/token", { method:"POST", body:{ address: address, password: password } })
                   .then(function(tok){
                     state.address = address; state.password = password;
                     state.passwordSynced = false;
-                    state.token = tok.token; state.accountId = (acc && acc.id) || tok.id || "";
+                    state.token = tok.token; state.accountId = (res.acc && res.acc.id) || tok.id || "";
                   });
               });
           }).then(function(){
@@ -3978,8 +4012,9 @@ var I18N = {
           }).catch(function(err){
             state.creating = false;
             /* Auto-reconnect forever: the user must never have to click
-               anything to recover from a dropped connection. Backoff:
-               5s, then 10s, then every 20s. Retryable errors (429/503/
+               anything to recover from a dropped connection. Backoff
+               (v1.17): 5s, 10s, 20s, 30s, then 60s forever.
+               Retryable errors (429/503/
                network) retry silently with the retrying status; other
                errors also retry, with the banner shown only as
                information (its text says reconnecting automatically)
@@ -3996,10 +4031,14 @@ var I18N = {
               recordProblem(cause);
             }
             state.retrying = true;
-            var delay = state.retryCount === 1 ? 5000 : state.retryCount === 2 ? 10000 : 20000;
+            /* v1.17 calmer backoff: 5s, 10s, 20s, 30s, then 60s
+               forever — the old every-20s loop fed Mail.tm's rate
+               limit instead of waiting it out. */
+            var retryDelays = [5000, 10000, 20000, 30000, 60000];
+            var delay = retryDelays[Math.min(state.retryCount - 1, retryDelays.length - 1)];
             addrText.textContent = t("addrGenerating");
             addrText.classList.add("loading");
-            statusText.textContent = t("retrying", {n: state.retryCount});
+            statusText.textContent = retryStatusText();
             setBusy(true);
             if (!retryable){
               state.failed = true;
