@@ -354,6 +354,17 @@
 
 <div id="toast" class="toast" hidden></div>
 
+<!-- Confirm modal (v1.10d) — in-page replacement for window.confirm() on Delete Requests -->
+<div id="confirmModal" class="confirm-modal" hidden>
+  <div class="confirm-card" role="dialog" aria-modal="true">
+    <p id="confirmModalText" class="confirm-text"></p>
+    <div class="confirm-actions">
+      <button id="confirmModalOk" class="btn btn-danger btn-delete-account" type="button"></button>
+      <button id="confirmModalCancel" class="btn btn-secondary" type="button"></button>
+    </div>
+  </div>
+</div>
+
 <script src="admin.js"></script>
 </body>
 </html>

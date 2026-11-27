@@ -307,6 +307,22 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
 }
 .lightbox img { max-width: 100%; max-height: 88vh; border-radius: 8px; }
 .lightbox-close { position: absolute; top: 14px; right: 14px; }
+
+/* ---------- Confirm modal (v1.10d) ----------
+   In-page replacement for window.confirm() on Delete Requests.
+   Same overlay treatment as the lightbox; card fits a 360px phone. */
+.confirm-modal {
+  position: fixed; inset: 0; z-index: 75; background: rgba(0, 0, 0, .55);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.confirm-card {
+  background: var(--card); border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .3);
+  padding: 20px; width: min(420px, 100%);
+  max-height: calc(100vh - 40px); overflow-y: auto;
+}
+.confirm-text { margin: 0 0 18px; font-size: 15px; word-break: break-word; }
+.confirm-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
   background: var(--ink); color: #fff; border-radius: 999px; padding: 10px 20px;

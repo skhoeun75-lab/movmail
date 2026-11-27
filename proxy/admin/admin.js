@@ -153,7 +153,7 @@ const I18N = {
     delReqNote: 'អ្នកប្រើប្រាស់ចុចលុបលើអ៊ីមែលហាង តែអ៊ីមែលមិនត្រូវបានលុបទេ — វារង់ចាំអ្នកអនុម័ត។ បើមិនអនុម័តក្នុង 24 ម៉ោង សំណើនឹងផុតកំណត់ ហើយអ៊ីមែលត្រឡប់ទៅធម្មតាវិញ។',
     noDelReq: 'មិនមានសំណើលុបទេ', delReqRequester: 'អ្នកស្នើសុំ',
     delReqExpiresIn: 'ផុតកំណត់ក្នុង {n} ម៉ោង', delReqExpired: 'ផុតកំណត់ហើយ',
-    delReqApprove: 'អនុម័តលុប', delReqReject: 'បដិសេធ',
+    delReqApprove: 'អនុម័តលុប', delReqReject: 'បដិសេធ', cancelBtn: 'បោះបង់',
     confirmDelReqApprove: 'អនុម័តលុបអ៊ីមែល {email} ជាអចិន្ត្រៃយ៍មែនទេ? អ៊ីមែលនេះនឹងត្រូវលុបចេញពី Mail.tm ហើយមិនអាចយកមកវិញបានទេ។',
     confirmDelReqReject: 'បដិសេធសំណើលុបនេះមែនទេ? អ៊ីមែលនឹងនៅដដែល។',
     toastDelReqApproved: 'បានអនុម័ត — អ៊ីមែលត្រូវបានលុបជាអចិន្ត្រៃយ៍ហើយ។',
@@ -279,7 +279,7 @@ const I18N = {
     delReqNote: 'A user pressed Delete on a shop email, but nothing was deleted — it waits for your approval. If you do not approve within 24 hours, the request expires and the email goes back to normal.',
     noDelReq: 'No delete requests', delReqRequester: 'Requested by',
     delReqExpiresIn: 'Expires in {n}h', delReqExpired: 'Expired',
-    delReqApprove: 'Approve delete', delReqReject: 'Reject',
+    delReqApprove: 'Approve delete', delReqReject: 'Reject', cancelBtn: 'Cancel',
     confirmDelReqApprove: 'Approve deleting {email} forever? The Mail.tm account will be deleted permanently and can never be recovered.',
     confirmDelReqReject: 'Reject this delete request? The email stays as it is.',
     toastDelReqApproved: 'Approved — the email has been deleted forever.',
@@ -1314,6 +1314,27 @@ function renderDelRequests() {
   }).join('');
   show($('delReqEmpty'), sorted.length === 0);
 }
+/* ---------- v1.10d: in-page confirm modal ----------
+   Replaces the native window.confirm() on Delete Requests. The
+   cloud browser auto-cancels native confirms, so Approve/Reject
+   could never be clicked there (and a native dialog is awkward on
+   a phone). showConfirmModal returns a Promise: true = Confirm
+   tapped, false = Cancel / overlay / Escape. The message wording
+   is the same confirmDelReqApprove / confirmDelReqReject text. */
+var confirmModalResolve = null;
+function showConfirmModal(message, okLabel, okDanger) {
+  $('confirmModalText').textContent = message;
+  var ok = $('confirmModalOk');
+  ok.textContent = okLabel;
+  ok.className = 'btn ' + (okDanger ? 'btn-danger btn-delete-account' : 'btn-secondary');
+  $('confirmModalCancel').textContent = t('cancelBtn');
+  show($('confirmModal'), true);
+  return new Promise(function (resolve) { confirmModalResolve = resolve; });
+}
+function closeConfirmModal(result) {
+  show($('confirmModal'), false);
+  if (confirmModalResolve) { var r = confirmModalResolve; confirmModalResolve = null; r(result); }
+}
 async function onDelReqActionClick(e) {
   var btn = e.target && e.target.closest ? e.target.closest('[data-delreq-approve],[data-delreq-reject]') : null;
   if (!btn) return;
@@ -1323,11 +1344,13 @@ async function onDelReqActionClick(e) {
   var row = null;
   delReqCache.forEach(function (r) { if (String(r.id) === String(id)) row = r; });
   var email = (row && (row.listingEmail || row.address)) || '';
+  var ok;
   if (approve) {
-    if (!window.confirm(t('confirmDelReqApprove').replace('{email}', email))) return;
+    ok = await showConfirmModal(t('confirmDelReqApprove').replace('{email}', email), t('delReqApprove'), true);
   } else {
-    if (!window.confirm(t('confirmDelReqReject'))) return;
+    ok = await showConfirmModal(t('confirmDelReqReject'), t('delReqReject'), false);
   }
+  if (!ok) return;
   btn.disabled = true;
   try {
     await api('/api/admin/delete-requests/' + id + '/' + (approve ? 'approve' : 'reject'), { method: 'POST' });
@@ -1801,6 +1824,10 @@ function init() {
   $('markNotifReadBtn').addEventListener('click', onMarkNotifReadClick); /* v1.9 */
   $('notifList').addEventListener('click', onNotifForwardClick); /* v1.9b: Send to buyer */
   $('delReqList').addEventListener('click', onDelReqActionClick); /* v1.10: approve/reject delete requests */
+  $('confirmModalOk').addEventListener('click', function () { closeConfirmModal(true); }); /* v1.10d */
+  $('confirmModalCancel').addEventListener('click', function () { closeConfirmModal(false); }); /* v1.10d */
+  $('confirmModal').addEventListener('click', function (e) { if (e.target === $('confirmModal')) closeConfirmModal(false); }); /* v1.10d: tap overlay = cancel */
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('confirmModal').hidden) closeConfirmModal(false); }); /* v1.10d */
   $('ordersList').addEventListener('click', function (e) {
     if (e.target.closest('[data-order-action]')) onOrderActionClick(e);
     else onReceiptThumbClick(e); /* same lightbox as receipts */
