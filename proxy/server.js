@@ -40,8 +40,8 @@ const UPSTREAM = "https://api.mail.tm";
 // v1.15: the forwarder also refuses Mail.tm-bound calls from any
 // client older than MIN_CLIENT_VERSION (kill-switch, see the gate
 // below the DELETE /accounts block). Bump both strings together.
-const APP_VERSION = "1.21.0";
-const MIN_CLIENT_VERSION = "1.15.0"; // v1.21: stays — 1.15+ clients hold no passwords and never call DIRECT, so no kill-switch bump is needed; the handshake reloads them to 1.21.0.
+const APP_VERSION = "1.22.0";
+const MIN_CLIENT_VERSION = "1.15.0"; // v1.21: stays — 1.15+ clients hold no passwords and never call DIRECT, so no kill-switch bump is needed; the handshake reloads them to 1.22.0.
 // True when a client version string is at least the minimum (numeric
 // per-part compare; missing, malformed or older versions fail).
 function clientVersionOk(v) {
@@ -1271,8 +1271,16 @@ function maskEmail(email) {
 }
 
 // Verify the caller controls a Mail.tm mailbox: POST /token to
-// Mail.tm directly (same UPSTREAM + fetch path the proxy forwards
-// POST /token through). Returns { ok:true, token, id } on success,
+// Mail.tm directly. v1.22: this is the ONE remaining direct call
+// family, and it stays on purpose — Hercules exposes no /token
+// (login) endpoint, so a JWT for an EXISTING mailbox (a restore, a
+// listing health check, the admin delete) can only come from
+// Mail.tm /token. Fresh creates do NOT use it (the forwarded
+// POST /token serves the JWT from the Hercules pending row). These
+// calls are infrequent — one per restore, one per periodic health
+// check — never the 2–10s polling path that Mail.tm rate-limited,
+// and /token was observed answering 200 while /messages was 429.
+// Returns { ok:true, token, id } on success,
 // { ok:false, error } on wrong credentials / upstream failure.
 async function mailTmLogin(address, password) {
   try {
@@ -2876,6 +2884,13 @@ async function handleMarketListingsCreate(req, res) {
   if (!body) return;
   const address = String(body.address || "").trim().toLowerCase();
   let password = String(body.password || "");
+  // v1.22: a mailbox just created through Hercules carries its TRUE
+  // Mail.tm password in the pending record — the website generated a
+  // different one that Hercules never saw. Use the true one, or the
+  // mailTmLogin verification below (and the listing itself) would
+  // fail with the wrong password.
+  const pendingSell = herculesPendingPeek(address);
+  if (pendingSell) password = pendingSell.herculesPassword;
   const price = Number(body.price);
   const title = body.title ? String(body.title) : "";
   const sellerGmail = String(body.sellerGmail || "").trim().toLowerCase();
@@ -3683,7 +3698,12 @@ async function handleAdminMarketListingsCreate(req, res) {
   const body = await readJsonBody(req, res, 6 * 1024 * 1024);
   if (!body) return;
   const email = String(body.email || "").trim().toLowerCase();
-  const password = String(body.password || "");
+  let password = String(body.password || "");
+  // v1.22: same pending-row override as the website Sell path — a
+  // mailbox just created through Hercules carries its true Mail.tm
+  // password in the pending record.
+  const pendingAdmin = herculesPendingPeek(email);
+  if (pendingAdmin) password = pendingAdmin.herculesPassword;
   const price = Number(body.price);
   const title = body.title ? String(body.title) : "";
   const sellerGmail = String(body.sellerGmail || "").trim().toLowerCase() || "admin";
@@ -4719,6 +4739,14 @@ function cleanMailboxInput(mb) {
 }
 async function upsertUserMailbox(gmail, mb) {
   const createdAt = mb.createdAt || new Date().toISOString();
+  // v1.22: a mailbox just created through Hercules (POST /accounts)
+  // carries its TRUE Mail.tm password in the pending record — the
+  // website generated a different password that Hercules never saw.
+  // Store the true one so later restores log in correctly. The
+  // pending row is only peeked (never consumed here) so a retried
+  // sync inside the 10-minute window still gets the true password.
+  const pending = herculesPendingPeek(mb.address);
+  if (pending) mb = { ...mb, password: pending.herculesPassword };
   if (!USE_MEMORY_STORE) {
     const r = await dbPool.query(
       "INSERT INTO user_mailboxes (gmail, address, provider, password, name, logo, ip_country, ip_city, ip_address, bought, listing_id, created_at)" +
@@ -5237,7 +5265,7 @@ function herculesApiKey() {
   }
   return k || null;
 }
-async function herculesCreateMailbox() {
+async function herculesCreateMailbox(opts) {
   const key = herculesApiKey();
   if (!key) return { ok: false, error: "hercules_config", status: 500, transient: false };
   try {
@@ -5246,7 +5274,10 @@ async function herculesCreateMailbox() {
     const r = await fetch(HERCULES_BASE + "/mailboxes", {
       method: "POST",
       headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: "Bearer " + key },
-      body: JSON.stringify({}),
+      // v1.22: the website asks for a specific username+domain — Hercules
+      // honours them (probe 2026-11-28: exact address back). No opts
+      // means a random address, as the v1.21 fallback used.
+      body: JSON.stringify(opts && opts.username ? { username: opts.username, domain: opts.domain || "euploading.com" } : {}),
       signal: ctl.signal,
     });
     clearTimeout(timer);
@@ -5289,6 +5320,424 @@ async function handleHerculesMailboxes(req, res) {
     bought: false, listingId: null, createdAt: new Date().toISOString(),
   });
   sendJson(res, 200, { ok: true, address: address, token: token });
+}
+
+/* --- v1.22: Hercules-ONLY Mail.tm traffic (Mov's direction) -------
+   Mov: STOP calling api.mail.tm directly. ALL Mail.tm traffic goes
+   through HIS Hercules API (his own TempMail, his key, his settings)
+   because Mail.tm does not dare limit Hercules — he has used it a
+   long time and it never gets limited. The proxy forwards every
+   Mail.tm call through the Hercules Convex API
+   (https://wry-roadrunner-179.convex.site/api/v1, Bearer key from
+   process.env.HERCULES_API_KEY, X-Mailbox-Token per mailbox):
+   POST /mailboxes for creates, GET /messages for inbox lists,
+   GET /messages/{id} for full bodies, GET /code for the latest
+   verification code (the fast OTP path, per Mov's official usage
+   2026-11-28 00:50), GET /domains for the domain list. The website
+   keeps calling this proxy exactly as before — the switch is
+   proxy-side; the key never reaches a browser and is never logged.
+   GATE PROBE (live, 2026-11-28, real key — PASSED, so the switch
+   is safe for every existing mailbox):
+   - GET /messages with a DIRECT-created mailbox's Mail.tm JWT ->
+     200 {"messages":[]} in 0.50s (same as a Hercules-created one,
+     0.54s). GET /messages?page=1 -> 200 in 0.50s.
+   - POST /mailboxes {username, domain} -> 201 with the EXACT
+     requested address (v122probe01682@euploading.com) in 1.03s.
+   - GET /code with a DIRECT-created JWT -> 200
+     {"code":null,"messageId":null} in 0.57s (no messages yet);
+     same for a Hercules-created JWT (1.27s).
+   - GET /domains (key only) -> 200 {"domains":["euploading.com"]}
+     in 0.55s. GET /messages/{bogus-id} -> 400 {"error":"Invalid
+     message id"}; missing X-Mailbox-Token -> 400.
+   NOT proven live: a REAL message through Hercules (no test mailbox
+   holds a message — a real sender is needed) — so the list/detail
+   mapping passes Mail.tm-shaped items through field-for-field and
+   normalises defensively (string `from`, text-only items, numeric
+   dates); the detail keeps text + html[] exactly as Mail.tm
+   returns them. If Hercules ever returns an unexpected shape, the
+   emergency fallback below still serves the real Mail.tm data.
+   CREATES: the website generates address+password and POSTs
+   /accounts as before. The proxy passes {username, domain} to
+   Hercules (which honours them — probe above) and records the
+   pending create (address -> Hercules password + JWT + a sha256 of
+   the website's password) in memory. POST /token then serves the
+   JWT to the caller presenting the same password — no Mail.tm call.
+   When the website syncs the mailbox, the pending record's TRUE
+   Hercules password replaces the website's generated one in
+   user_mailboxes (see upsertUserMailbox), so later restores log in
+   correctly. Pending rows live 10 minutes and are pruned on access.
+   READS: per-mailbox list cache (~20s) so tier polling (Free 10s /
+   Monthly 5s / Yearly 2s) does not burn the budget; detail cache
+   (1h — message bodies are immutable); code cache (~30s, the
+   website validates the returned messageId before using the code).
+   RATE BUDGET: their page allows 300 reads/hour per key. Each proxy
+   keeps its own in-memory rolling counter and caps Hercules reads
+   at 240/hour; past the cap the proxy answers 503
+   {error:"hercules_budget"} and the website waits. NOTE: the
+   300/hour limit is per KEY, shared across both proxies.
+   EMERGENCY FALLBACK (disclosed safety net — Mov can veto it):
+   when Hercules itself errors (network/timeout/429/5xx/401-config)
+   the proxy falls back ONCE to direct api.mail.tm for that call
+   and logs it clearly ("hercules emergency fallback"). It NEVER
+   fires in normal operation. Budget exhaustion does NOT trigger
+   it (the website waits instead). GET /code has no direct
+   equivalent, so it never falls back — the website uses its
+   existing detail fetch instead.
+   Errors: Convex 429/5xx/unreachable -> 503 {error:"hercules_busy"}
+   (retryable); Convex 401 naming the API key -> 500
+   {error:"hercules_config"}; Convex 4xx otherwise passes through
+   (a bad mailbox token surfaces as the Mail.tm 401 the website
+   already heals through re-login); other bad responses -> 500
+   {error:"hercules_failed"}. The API key and every JWT are NEVER
+   logged and NEVER returned (except a JWT to its own mailbox's
+   creator via /token, exactly as Mail.tm's /token does). */
+const HERCULES_READ_BUDGET_PER_HOUR = 240;
+const HERCULES_READ_WINDOW_MS = 60 * 60 * 1000;
+const HERCULES_LIST_CACHE_TTL_MS = 20 * 1000;
+const HERCULES_DETAIL_CACHE_TTL_MS = 60 * 60 * 1000;
+const HERCULES_CODE_CACHE_TTL_MS = 30 * 1000;
+const HERCULES_PENDING_TTL_MS = 10 * 60 * 1000;
+let herculesReadStamps = [];
+let herculesBudgetWarnedAt = 0;
+let herculesListCache = new Map();
+let herculesDetailCache = new Map();
+let herculesCodeCache = new Map();
+let herculesPending = new Map();
+function herculesReadBudgetAllow() {
+  const now = Date.now();
+  while (herculesReadStamps.length && herculesReadStamps[0] <= now - HERCULES_READ_WINDOW_MS) herculesReadStamps.shift();
+  return herculesReadStamps.length < HERCULES_READ_BUDGET_PER_HOUR;
+}
+function herculesReadBudgetTake() {
+  const now = Date.now();
+  while (herculesReadStamps.length && herculesReadStamps[0] <= now - HERCULES_READ_WINDOW_MS) herculesReadStamps.shift();
+  if (herculesReadStamps.length >= HERCULES_READ_BUDGET_PER_HOUR) {
+    if (now - herculesBudgetWarnedAt >= HERCULES_READ_WINDOW_MS) {
+      herculesBudgetWarnedAt = now;
+      console.log("hercules: read budget exhausted (" + HERCULES_READ_BUDGET_PER_HOUR + "/hour) — returning hercules_budget until the window rolls");
+    }
+    return false;
+  }
+  herculesReadStamps.push(now);
+  return true;
+}
+function herculesCacheGet(map, key, ttlMs) {
+  const e = map.get(key);
+  if (!e) return null;
+  if (Date.now() - e.at > ttlMs) { map.delete(key); return null; }
+  return e.data;
+}
+function herculesCacheSet(map, key, data, cap) {
+  if (map.size >= cap) { const first = map.keys().next().value; if (first !== undefined) map.delete(first); }
+  map.set(key, { at: Date.now(), data });
+}
+function herculesCacheKey(req, mailboxJwt) {
+  const addr = addressFromRequest(req);
+  if (addr) return "addr:" + addr;
+  return "jwt:" + crypto.createHash("sha256").update(mailboxJwt || "").digest("hex").slice(0, 16);
+}
+function bearerJwt(req) {
+  const m = /^Bearer\s+(.+)$/i.exec(String((req.headers && req.headers.authorization) || ""));
+  return m ? m[1].trim() : "";
+}
+function herculesPendingPrune() {
+  const now = Date.now();
+  for (const [k, v] of herculesPending) if (now - v.at > HERCULES_PENDING_TTL_MS) herculesPending.delete(k);
+  if (herculesPending.size > 1000) { const first = herculesPending.keys().next().value; if (first !== undefined) herculesPending.delete(first); }
+}
+function herculesPendingPut(address, rec) {
+  herculesPendingPrune();
+  herculesPending.set(address, { ...rec, at: Date.now() });
+}
+function herculesPendingPeek(address) {
+  herculesPendingPrune();
+  return herculesPending.get(address) || null;
+}
+function herculesLogEmergency(method, path, reason) {
+  console.error("hercules emergency fallback: " + method + " " + path + " — " + reason + " (direct api.mail.tm, once)");
+}
+async function fetchDirectUpstream(method, pathWithQuery, authHeader, body) {
+  const headers = { Accept: "application/json" };
+  if (authHeader) headers.Authorization = authHeader;
+  if (body && body.length) headers["Content-Type"] = "application/json";
+  const r = await fetch(UPSTREAM + pathWithQuery, {
+    method,
+    headers,
+    body: body && body.length ? body : undefined,
+  });
+  const text = await r.text();
+  let data = null;
+  try { data = JSON.parse(text); } catch (_) {}
+  return { status: r.status, text, data };
+}
+function sendForwarded(res, out) {
+  if (out.data !== null && out.data !== undefined) {
+    sendJson(res, out.status, out.data);
+    return;
+  }
+  res.writeHead(out.status, {
+    ...CORS_HEADERS,
+    "Content-Type": "text/plain",
+    "Content-Length": Buffer.byteLength(out.text || ""),
+  });
+  res.end(out.text || "");
+}
+function herculesErrorFromResponse(r, text) {
+  let data = null;
+  try { data = JSON.parse(text); } catch (_) {}
+  const detail = data && typeof data.error === "string" ? data.error : (data && typeof data.message === "string" ? data.message : "");
+  if (!r.ok) {
+    if (r.status === 401 && /api key/i.test(detail)) return { ok: false, error: "hercules_config", status: 500, transient: false, detail };
+    if (r.status === 401 || r.status === 400 || r.status === 404) return { ok: false, error: "hercules_upstream", status: r.status, transient: false, detail };
+    if (r.status === 429 || r.status >= 500) return { ok: false, error: "hercules_busy", status: 503, transient: true, detail };
+    return { ok: false, error: "hercules_failed", status: 500, transient: false, detail };
+  }
+  return { ok: true, data, detail };
+}
+async function herculesGetMessages(mailboxJwt, search) {
+  const key = herculesApiKey();
+  if (!key) return { ok: false, error: "hercules_config", status: 500, transient: false, detail: "" };
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 15000);
+    const r = await fetch(HERCULES_BASE + "/messages" + (search || ""), {
+      method: "GET",
+      headers: { Accept: "application/json", Authorization: "Bearer " + key, "X-Mailbox-Token": mailboxJwt },
+      signal: ctl.signal,
+    });
+    clearTimeout(timer);
+    const text = await r.text();
+    const mapped = herculesErrorFromResponse(r, text);
+    if (!mapped.ok) return mapped;
+    if (!mapped.data || typeof mapped.data !== "object" || !Array.isArray(mapped.data.messages)) return { ok: false, error: "hercules_failed", status: 500, transient: false, detail: "" };
+    return { ok: true, messages: mapped.data.messages };
+  } catch (err) {
+    return { ok: false, error: "hercules_unreachable", status: 503, transient: true, detail: "" };
+  }
+}
+async function herculesGetMessage(mailboxJwt, id) {
+  const key = herculesApiKey();
+  if (!key) return { ok: false, error: "hercules_config", status: 500, transient: false, detail: "" };
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 15000);
+    const r = await fetch(HERCULES_BASE + "/messages/" + encodeURIComponent(id), {
+      method: "GET",
+      headers: { Accept: "application/json", Authorization: "Bearer " + key, "X-Mailbox-Token": mailboxJwt },
+      signal: ctl.signal,
+    });
+    clearTimeout(timer);
+    const text = await r.text();
+    const mapped = herculesErrorFromResponse(r, text);
+    if (!mapped.ok) return mapped;
+    if (!mapped.data || typeof mapped.data !== "object" || Array.isArray(mapped.data)) return { ok: false, error: "hercules_failed", status: 500, transient: false, detail: "" };
+    return { ok: true, message: mapped.data };
+  } catch (err) {
+    return { ok: false, error: "hercules_unreachable", status: 503, transient: true, detail: "" };
+  }
+}
+async function herculesGetCode(mailboxJwt) {
+  const key = herculesApiKey();
+  if (!key) return { ok: false, error: "hercules_config", status: 500, transient: false, detail: "" };
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 15000);
+    const r = await fetch(HERCULES_BASE + "/code", {
+      method: "GET",
+      headers: { Accept: "application/json", Authorization: "Bearer " + key, "X-Mailbox-Token": mailboxJwt },
+      signal: ctl.signal,
+    });
+    clearTimeout(timer);
+    const text = await r.text();
+    const mapped = herculesErrorFromResponse(r, text);
+    if (!mapped.ok) return mapped;
+    if (!mapped.data || typeof mapped.data !== "object") return { ok: false, error: "hercules_failed", status: 500, transient: false, detail: "" };
+    return { ok: true, code: mapped.data.code != null ? String(mapped.data.code) : null, messageId: mapped.data.messageId != null ? String(mapped.data.messageId) : null };
+  } catch (err) {
+    return { ok: false, error: "hercules_unreachable", status: 503, transient: true, detail: "" };
+  }
+}
+async function herculesGetDomains() {
+  const key = herculesApiKey();
+  if (!key) return { ok: false, error: "hercules_config", status: 500, transient: false, detail: "" };
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 15000);
+    const r = await fetch(HERCULES_BASE + "/domains", {
+      method: "GET",
+      headers: { Accept: "application/json", Authorization: "Bearer " + key },
+      signal: ctl.signal,
+    });
+    clearTimeout(timer);
+    const text = await r.text();
+    const mapped = herculesErrorFromResponse(r, text);
+    if (!mapped.ok) return mapped;
+    if (!mapped.data || !Array.isArray(mapped.data.domains)) return { ok: false, error: "hercules_failed", status: 500, transient: false, detail: "" };
+    const member = mapped.data.domains.map((d) => ({ id: String(d), domain: String(d), isActive: true, isPrivate: false, createdAt: "", updatedAt: "" }));
+    return { ok: true, data: { "hydra:member": member, "hydra:totalItems": member.length } };
+  } catch (err) {
+    return { ok: false, error: "hercules_unreachable", status: 503, transient: true, detail: "" };
+  }
+}
+function herculesIsoDate(v, fallback) {
+  if (v === undefined || v === null || v === "") return fallback || "";
+  if (typeof v === "number") {
+    const ms = v < 1e12 ? v * 1000 : v;
+    const d = new Date(ms);
+    return isNaN(d.getTime()) ? (fallback || "") : d.toISOString();
+  }
+  const s = String(v);
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? s : d.toISOString();
+}
+function herculesMapMessage(m) {
+  if (!m || typeof m !== "object") return null;
+  const id = String(m.id || m.msgid || "");
+  if (!id) return null;
+  let fromAddress = "", fromName = "";
+  if (m.from && typeof m.from === "object") {
+    fromAddress = String(m.from.address || "").trim().toLowerCase();
+    fromName = String(m.from.name || "");
+  } else if (typeof m.from === "string") {
+    fromAddress = m.from.trim().toLowerCase();
+  }
+  const text = String(m.text || m.body || "");
+  let intro = String(m.intro || "");
+  if (!intro && text) intro = text.replace(/\s+/g, " ").trim().slice(0, 200);
+  const createdAt = herculesIsoDate(m.createdAt || m.date || m.timestamp, "");
+  const updatedAt = herculesIsoDate(m.updatedAt, createdAt);
+  return {
+    id: id,
+    msgid: String(m.msgid || id),
+    from: { address: fromAddress, name: fromName },
+    subject: String(m.subject || ""),
+    intro: intro,
+    seen: !!m.seen,
+    isDeleted: !!m.isDeleted,
+    hasAttachments: !!m.hasAttachments,
+    size: Number(m.size) || 0,
+    downloadUrl: String(m.downloadUrl || ""),
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+  };
+}
+function herculesMapDetail(d) {
+  const base = herculesMapMessage(d);
+  if (!base) return null;
+  let html = [];
+  if (Array.isArray(d.html)) html = d.html.map((x) => String(x));
+  else if (typeof d.html === "string" && d.html) html = [d.html];
+  base.text = String(d.text || "");
+  base.html = html;
+  return base;
+}
+async function herculesOrEmergency(r, req, body, method, path) {
+  // Hercules-side failure -> ONE emergency direct call (logged).
+  // Convex 4xx (hercules_upstream) passes through untouched, and a
+  // bad shape (hercules_failed) is treated as a Hercules failure.
+  if (r.ok) return null;
+  if (r.error === "hercules_upstream") return { status: r.status, text: "", data: { message: r.detail || "Bad request" } };
+  herculesLogEmergency(method, path, r.error + (r.detail ? " (" + r.detail + ")" : ""));
+  return fetchDirectUpstream(method, path, req.headers.authorization || "", body);
+}
+async function herculesCreateAccount(body) {
+  let parsed = {};
+  try { parsed = body && body.length ? JSON.parse(body.toString("utf8")) : {}; } catch (_) {}
+  const address = String(parsed.address || "").trim().toLowerCase();
+  const password = String(parsed.password || "");
+  if (!validGmail(address) || !password) return { status: 400, data: { error: "valid address and password required" } };
+  const at = address.indexOf("@");
+  const r = await herculesCreateMailbox({ username: address.slice(0, at), domain: address.slice(at + 1) });
+  if (!r.ok) {
+    if (r.error === "hercules_config") return { status: 500, data: { ok: false, error: "hercules_config" } };
+    if (r.status === 503) return { status: 503, data: { ok: false, error: "hercules_busy" } };
+    return { status: 500, data: { ok: false, error: "hercules_failed" } };
+  }
+  const hAddr = String(r.data.address || "").trim().toLowerCase();
+  const hPass = String(r.data.password || "");
+  const hToken = String(r.data.token || "");
+  const hId = String(r.data.id || "");
+  if (!validGmail(hAddr) || !hPass || !hToken) return { status: 500, data: { ok: false, error: "hercules_failed" } };
+  // Hercules honours the requested username (probe 2026-11-28) — a
+  // different address back means the website would adopt the wrong
+  // mailbox, so fail the create and let it retry with a fresh one.
+  if (hAddr !== address) return { status: 500, data: { ok: false, error: "hercules_failed" } };
+  herculesPendingPut(hAddr, {
+    reqHash: crypto.createHash("sha256").update(password).digest("hex"),
+    jwt: hToken, herculesPassword: hPass, id: hId,
+  });
+  return { status: 201, data: { id: hId, address: hAddr, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } };
+}
+function herculesTokenFromPending(body) {
+  let parsed = {};
+  try { parsed = body && body.length ? JSON.parse(body.toString("utf8")) : {}; } catch (_) {}
+  const address = String(parsed.address || "").trim().toLowerCase();
+  const password = String(parsed.password || "");
+  const p = herculesPendingPeek(address);
+  if (!p) return { status: 401, data: { message: "Invalid credentials." } };
+  const hash = crypto.createHash("sha256").update(password).digest("hex");
+  if (hash !== p.reqHash) return { status: 401, data: { message: "Invalid credentials." } };
+  return { status: 200, data: { token: p.jwt, id: p.id || "" } };
+}
+async function herculesMessages(req) {
+  const jwt = bearerJwt(req);
+  if (!jwt) return { status: 401, text: "", data: { message: "Unauthorized" } };
+  const key = herculesCacheKey(req, jwt);
+  const cached = herculesCacheGet(herculesListCache, key, HERCULES_LIST_CACHE_TTL_MS);
+  if (cached) return { status: 200, text: "", data: cached };
+  if (!herculesReadBudgetTake()) return { status: 503, text: "", data: { ok: false, error: "hercules_budget" } };
+  const search = new URL(req.url || "/", "http://localhost").search || "";
+  const r = await herculesGetMessages(jwt, search);
+  if (r.ok) {
+    const mapped = [];
+    r.messages.forEach((m) => { const x = herculesMapMessage(m); if (x) mapped.push(x); });
+    const data = { "hydra:member": mapped, "hydra:totalItems": mapped.length };
+    herculesCacheSet(herculesListCache, key, data, 500);
+    return { status: 200, text: "", data };
+  }
+  return herculesOrEmergency(r, req, null, "GET", "/messages" + search);
+}
+async function herculesMessageDetail(req, id) {
+  const jwt = bearerJwt(req);
+  if (!jwt) return { status: 401, text: "", data: { message: "Unauthorized" } };
+  const cached = herculesCacheGet(herculesDetailCache, id, HERCULES_DETAIL_CACHE_TTL_MS);
+  if (cached) return { status: 200, text: "", data: cached };
+  if (!herculesReadBudgetTake()) return { status: 503, text: "", data: { ok: false, error: "hercules_budget" } };
+  const r = await herculesGetMessage(jwt, id);
+  if (r.ok) {
+    const mapped = herculesMapDetail(r.message);
+    if (!mapped) return { status: 500, text: "", data: { ok: false, error: "hercules_failed" } };
+    herculesCacheSet(herculesDetailCache, id, mapped, 1000);
+    return { status: 200, text: "", data: mapped };
+  }
+  return herculesOrEmergency(r, req, null, "GET", "/messages/" + id);
+}
+async function herculesCode(req) {
+  const jwt = bearerJwt(req);
+  if (!jwt) return { status: 401, text: "", data: { message: "Unauthorized" } };
+  const key = herculesCacheKey(req, jwt);
+  const cached = herculesCacheGet(herculesCodeCache, key, HERCULES_CODE_CACHE_TTL_MS);
+  if (cached) return { status: 200, text: "", data: cached };
+  if (!herculesReadBudgetTake()) return { status: 503, text: "", data: { ok: false, error: "hercules_budget" } };
+  const r = await herculesGetCode(jwt);
+  if (r.ok) {
+    const data = { code: r.code, messageId: r.messageId };
+    herculesCacheSet(herculesCodeCache, key, data, 500);
+    return { status: 200, text: "", data };
+  }
+  if (r.error === "hercules_upstream") return { status: r.status, text: "", data: { message: r.detail || "Bad request" } };
+  // No direct Mail.tm equivalent for /code — no emergency fallback.
+  // The website falls back to its detail fetch instead.
+  if (r.error === "hercules_config") return { status: 500, text: "", data: { ok: false, error: "hercules_config" } };
+  return { status: 503, text: "", data: { ok: false, error: "hercules_busy" } };
+}
+async function herculesDomains() {
+  if (!herculesReadBudgetTake()) return { status: 503, text: "", data: { ok: false, error: "hercules_budget" } };
+  const r = await herculesGetDomains();
+  if (r.ok) return { status: 200, text: "", data: r.data };
+  if (r.error === "hercules_upstream") return { status: r.status, text: "", data: { message: r.detail || "Bad request" } };
+  herculesLogEmergency("GET", "/domains", r.error);
+  return fetchDirectUpstream("GET", "/domains", "", null);
 }
 
 /* --- admin panel password, server-side (token-gated like all /api/admin/*) --- */
@@ -5470,6 +5919,9 @@ function isAllowed(method, pathname) {
   if (method === "POST" && pathname === "/token") return true;
   if (method === "GET" && pathname === "/messages") return true;
   if (method === "GET" && /^\/messages\/[^/]+$/.test(pathname)) return true;
+  // v1.22: latest-code fast path, forwarded through Hercules (no
+  // direct Mail.tm equivalent exists).
+  if (method === "GET" && pathname === "/code") return true;
   // v1.9c: DELETE is NOT allowed on /accounts/<id> anymore — the
   // explicit guard below refuses it with 403, and this allowlist no
   // longer permits it either, so a delete can never reach Mail.tm.
@@ -5663,57 +6115,65 @@ const server = http.createServer((req, res) => {
         }
       }
 
-      const headers = { Accept: "application/json" };
-      if (req.headers.authorization) headers.Authorization = req.headers.authorization;
-      if (body && body.length) headers["Content-Type"] = "application/json";
-
-      const upstreamRes = await fetch(UPSTREAM + url.pathname + url.search, {
-        method: req.method,
-        headers,
-        body: body && body.length ? body : undefined,
-      });
-
-      const text = await upstreamRes.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch (_) {
-        data = null;
+      // v1.22: Hercules-only routing. Every Mail.tm call goes through
+      // Mov's Hercules API (see the v1.22 block above); direct
+      // api.mail.tm is the emergency fallback only, inside the
+      // hercules* helpers. The website's calls are unchanged.
+      if (req.method === "POST" && url.pathname === "/accounts") {
+        const out = await herculesCreateAccount(body);
+        sendJson(res, out.status, out.data);
+        return;
       }
-
-      if (data !== null) {
-        sendJson(res, upstreamRes.status, data);
-      } else {
-        res.writeHead(upstreamRes.status, {
-          ...CORS_HEADERS,
-          "Content-Type": "text/plain",
-          "Content-Length": Buffer.byteLength(text),
-        });
-        res.end(text);
+      if (req.method === "POST" && url.pathname === "/token") {
+        const out = herculesTokenFromPending(body);
+        sendJson(res, out.status, out.data);
+        return;
       }
-
-      // Cache successful /domains answers for 5 minutes.
-      if (isDomains && data !== null && upstreamRes.status >= 200 && upstreamRes.status < 300) {
-        domainsCache = { at: Date.now(), data };
+      if (isDomains) {
+        const out = await herculesDomains();
+        if (out.data !== null && out.data !== undefined && out.status >= 200 && out.status < 300) {
+          domainsCache = { at: Date.now(), data: out.data };
+        }
+        sendForwarded(res, out);
+        return;
       }
-
-      // Auto-save (fire-and-forget, never delays or fails the reply):
-      // only on a successful upstream response.
-      if (data !== null && upstreamRes.status >= 200 && upstreamRes.status < 300) {
-        const address = addressFromRequest(req);
-        if (req.method === "GET" && url.pathname === "/messages") {
-          const list = Array.isArray(data)
-            ? data
-            : data && Array.isArray(data["hydra:member"])
-              ? data["hydra:member"]
+      if (req.method === "GET" && url.pathname === "/messages") {
+        const out = await herculesMessages(req);
+        sendForwarded(res, out);
+        // Auto-save (fire-and-forget, never delays or fails the
+        // reply): only on a successful response, whether it came
+        // from Hercules or the emergency direct fallback.
+        if (out.data !== null && out.data !== undefined && out.status >= 200 && out.status < 300) {
+          const address = addressFromRequest(req);
+          const list = Array.isArray(out.data)
+            ? out.data
+            : out.data && Array.isArray(out.data["hydra:member"])
+              ? out.data["hydra:member"]
               : [];
           list.forEach((m) => {
             saveMessage(m, address, null);
           });
-        } else if (req.method === "GET" && /^\/messages\/[^/]+$/.test(url.pathname)) {
-          saveMessage(data, address, data);
         }
+        return;
       }
+      if (req.method === "GET" && /^\/messages\/[^/]+$/.test(url.pathname)) {
+        const id = decodeURIComponent(url.pathname.slice("/messages/".length));
+        const out = await herculesMessageDetail(req, id);
+        sendForwarded(res, out);
+        if (out.data !== null && out.data !== undefined && out.status >= 200 && out.status < 300) {
+          const address = addressFromRequest(req);
+          saveMessage(out.data, address, out.data);
+        }
+        return;
+      }
+      if (req.method === "GET" && url.pathname === "/code") {
+        const out = await herculesCode(req);
+        sendForwarded(res, out);
+        return;
+      }
+      // GET /accounts/<id> has no caller and no Hercules equivalent:
+      // never silently forward it direct.
+      sendJson(res, 404, { error: "not found" });
     } catch (err) {
       sendJson(res, 502, { error: "upstream failed", detail: String((err && err.message) || err) });
     }

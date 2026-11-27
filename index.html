@@ -1802,7 +1802,7 @@
            v1.15: the proxy ALSO refuses Mail.tm-bound calls without
            X-MovMail-Version >= 1.15.0 (kill-switch), and the phone
            must never hold a mailbox password again (token endpoint). */
-        var APP_VERSION = "1.21.0";
+        var APP_VERSION = "1.22.0";
         var VERSION_CHECK_MS = 60000;
         /* v1.13: client version handshake. On load and every 60s,
            ask the proxies (never DIRECT — api.mail.tm has no
@@ -5586,9 +5586,44 @@ var I18N = {
           }
           return api("/messages/" + m.id);
         }
+        /* v1.22: fast code path — Mov's Hercules API returns the
+           latest verification code for this mailbox directly
+           (GET /code, his official usage 2026-11-28), so when a
+           message has no code yet the enrich tries it FIRST and
+           only falls back to the full detail fetch when it returns
+           no code (or a code for a different message — the
+           messageId is checked before use, so a stale cached code
+           can never land on the wrong message). A code found here
+           feeds the OTP hero card exactly like a detail-extracted
+           one, and the body fetch is deferred 12s like any other
+           code-first message. Guerrilla mailboxes never take this
+           path (no Hercules). */
+        function fetchLatestCode(m){
+          if (state.provider !== "mailtm" || !state.address) return Promise.reject(new Error("no hercules code path"));
+          return api("/code").then(function(res){
+            if (!res || !res.code) return null;
+            if (res.messageId && String(res.messageId) !== String(m.id)) return null;
+            return String(res.code);
+          });
+        }
         function runEnrich(m){
           m._detailFetching = true;
-          fetchMessageDetail(m).then(function(detail){
+          var codeTried = Promise.resolve(null);
+          if (!m._otp && state.provider === "mailtm"){
+            codeTried = fetchLatestCode(m).catch(function(){ return null; });
+          }
+          codeTried.then(function(code){
+            if (code){
+              var cur = currentMsgById(m.id) || m;
+              cur._detailFetching = false;
+              cur._otp = code;
+              noteExtracted(cur);
+              cur._detailDeferredAt = Date.now() + 12000;
+              renderMessages();
+              enrichActive--; pumpEnrich();
+              return;
+            }
+            fetchMessageDetail(m).then(function(detail){
             var cur = currentMsgById(m.id) || m;
             cur._detailFetching = false;
             cur._detailFetched = true;
@@ -5625,6 +5660,7 @@ var I18N = {
               cur._detailNextTry = Date.now() + 60000;
             }
             enrichActive--; pumpEnrich();
+          });
           });
         }
         function enrichMessage(m){
@@ -5769,7 +5805,10 @@ var I18N = {
           if (state.provider === "guerrilla"){
             return runFetchGuerrilla(first);
           }
-          return api("/messages?page=1").then(function(data){
+          /* v1.22: the poll success handler, shared by the direct
+             Mail.tm read and the Hercules read fallback below — one
+             handler, one render path, no duplicate merge logic. */
+          function applyPollData(data){
             var msgs = memberList(data);
             var hadNew = msgs.length > state.messages.length;
             var oldById = {};
@@ -5836,6 +5875,9 @@ var I18N = {
             fetchSavedMessages();
             if (!first && hadNew) showToast(t("toastNewMsg"));
             return {ok:true, hadNew: hadNew, newCount: newCount, count: msgs.length};
+          }
+          return api("/messages?page=1").then(function(data){
+            return applyPollData(data);
           }).catch(function(err){
             /* Quiet failure: keep the last good state on screen —
                statusText and the inbox are left exactly as they
