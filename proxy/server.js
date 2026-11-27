@@ -40,8 +40,8 @@ const UPSTREAM = "https://api.mail.tm";
 // v1.15: the forwarder also refuses Mail.tm-bound calls from any
 // client older than MIN_CLIENT_VERSION (kill-switch, see the gate
 // below the DELETE /accounts block). Bump both strings together.
-const APP_VERSION = "1.20.0";
-const MIN_CLIENT_VERSION = "1.15.0"; // v1.19: stays — 1.15+ clients hold no passwords and never call DIRECT, so no kill-switch bump is needed; the handshake reloads them to 1.19.0.
+const APP_VERSION = "1.21.0";
+const MIN_CLIENT_VERSION = "1.15.0"; // v1.21: stays — 1.15+ clients hold no passwords and never call DIRECT, so no kill-switch bump is needed; the handshake reloads them to 1.21.0.
 // True when a client version string is at least the minimum (numeric
 // per-part compare; missing, malformed or older versions fail).
 function clientVersionOk(v) {
@@ -5192,6 +5192,105 @@ async function handleGuerrillaMessage(req, res, url) {
   sendJson(res, 200, { ok: true, message: guerrillaMessageToSite(raw) });
 }
 
+/* --- v1.21: Hercules TempMail API as a second create fallback ----
+   Mail.tm rate-limits Render's shared IPs so often that sustained
+   browser use fails even when isolated calls succeed. Guerrilla Mail
+   (v1.18) is the automatic fallback, but it is a 60-minute temporary
+   mailbox. The Hercules TempMail API
+   (https://wry-roadrunner-179.convex.site/api/v1 — a Convex-hosted
+   Mail.tm wrapper at mailtm-api-500886.onhercules.app, footer
+   "Mailboxes powered by Mail.tm") is tried BEFORE Guerrilla because
+   it returns a REAL permanent Mail.tm mailbox: POST /mailboxes
+   answers {id, address, password, token} where token is an ordinary
+   Mail.tm JWT for that address (only domain: euploading.com).
+   The API key is a credential: it is read ONLY from
+   process.env.HERCULES_API_KEY, is NEVER sent to a browser, and is
+   NEVER logged. When the key is unset the Hercules path is silently
+   disabled (one server-side log line, once) and every other flow
+   works unchanged.
+   The mailbox PASSWORD is a credential too: it is stored server-side
+   only (user_mailboxes, via the same upsert as creation sync) so
+   later restores work through POST /api/mailboxes/token (v1.15).
+   The endpoint returns ONLY {ok, address, token} — never the
+   password, never the API key — and the password is never logged.
+   The public Hercules API has NO delete endpoint, so this path can
+   never delete anything.
+   Errors: Convex 429/5xx/unreachable -> 503 {error:"hercules_busy"}
+   (retryable — never read as a dead mailbox). Convex 401 (bad or
+   missing key) -> 500 {error:"hercules_config"} — a config problem,
+   not a retryable limit; the website marks Hercules disabled for
+   the session instead of hammering it. Any other bad response ->
+   500 {error:"hercules_failed"}.
+   Verified live 2026-11-27 from this VM (with the real key):
+   GET /domains -> 200 {"domains":["euploading.com"]} in 0.68s;
+   POST /mailboxes -> 201 in 1.05s; GET /messages -> 200 in 0.54s;
+   GET /code -> 200 in 0.45s. Limits on their Developer API page:
+   60 creates/hour per IP, 300 reads/hour per key, codes expire
+   after 10 minutes, keys never expire. */
+const HERCULES_BASE = "https://wry-roadrunner-179.convex.site/api/v1";
+let herculesKeyWarned = false;
+function herculesApiKey() {
+  const k = String(process.env.HERCULES_API_KEY || "").trim();
+  if (!k && !herculesKeyWarned) {
+    herculesKeyWarned = true;
+    console.log("hercules: HERCULES_API_KEY not set — Hercules fallback disabled");
+  }
+  return k || null;
+}
+async function herculesCreateMailbox() {
+  const key = herculesApiKey();
+  if (!key) return { ok: false, error: "hercules_config", status: 500, transient: false };
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 15000);
+    const r = await fetch(HERCULES_BASE + "/mailboxes", {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: "Bearer " + key },
+      body: JSON.stringify({}),
+      signal: ctl.signal,
+    });
+    clearTimeout(timer);
+    const text = await r.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch (_) {}
+    if (!r.ok) {
+      if (r.status === 401) return { ok: false, error: "hercules_config", status: 500, transient: false };
+      if (r.status === 429 || r.status >= 500) return { ok: false, error: "hercules_busy", status: 503, transient: true };
+      return { ok: false, error: "hercules_failed", status: 500, transient: false };
+    }
+    if (!data || typeof data !== "object") return { ok: false, error: "hercules_failed", status: 500, transient: false };
+    return { ok: true, data: data };
+  } catch (err) {
+    return { ok: false, error: "hercules_unreachable", status: 503, transient: true };
+  }
+}
+async function handleHerculesMailboxes(req, res) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  const sess = await requireSession(req, res, body);
+  if (!sess) return;
+  const r = await herculesCreateMailbox();
+  if (!r.ok) {
+    if (r.error === "hercules_config") { sendJson(res, 500, { ok: false, error: "hercules_config" }); return; }
+    if (r.status === 503) { sendJson(res, 503, { ok: false, error: "hercules_busy" }); return; }
+    sendJson(res, 500, { ok: false, error: "hercules_failed" });
+    return;
+  }
+  const address = String(r.data.address || "").trim().toLowerCase();
+  const password = String(r.data.password || "");
+  const token = String(r.data.token || "");
+  if (!validGmail(address) || !password || !token) { sendJson(res, 500, { ok: false, error: "hercules_failed" }); return; }
+  // Server-side only: store the password so the mailbox restores
+  // through POST /api/mailboxes/token (v1.15). The password is NEVER
+  // sent to a browser and NEVER logged.
+  await upsertUserMailbox(sess.gmail, {
+    address: address, provider: "mailtm", password: password,
+    name: "", logo: "", ipAddress: "", ipCountry: "", ipCity: "",
+    bought: false, listingId: null, createdAt: new Date().toISOString(),
+  });
+  sendJson(res, 200, { ok: true, address: address, token: token });
+}
+
 /* --- admin panel password, server-side (token-gated like all /api/admin/*) --- */
 async function getAdminPasswordHash() {
   if (!USE_MEMORY_STORE) {
@@ -5285,6 +5384,9 @@ async function handleApi(req, res, url) {
     if (req.method === "POST" && p === "/api/guerrilla/address") return handleGuerrillaAddress(req, res);
     if (req.method === "GET" && p === "/api/guerrilla/messages") return handleGuerrillaMessages(req, res, url);
     if (req.method === "GET" && p === "/api/guerrilla/message") return handleGuerrillaMessage(req, res, url);
+    /* v1.21: Hercules TempMail API as a second create fallback
+       (permanent Mail.tm mailbox — tried before Guerrilla). */
+    if (req.method === "POST" && p === "/api/hercules/mailboxes") return handleHerculesMailboxes(req, res);
     if (p.startsWith("/api/admin/")) {
       if (!requireAdmin(req, res)) return;
       if (req.method === "GET" && p === "/api/admin/users") return handleAdminUsers(req, res);

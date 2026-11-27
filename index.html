@@ -1802,7 +1802,7 @@
            v1.15: the proxy ALSO refuses Mail.tm-bound calls without
            X-MovMail-Version >= 1.15.0 (kill-switch), and the phone
            must never hold a mailbox password again (token endpoint). */
-        var APP_VERSION = "1.20.0";
+        var APP_VERSION = "1.21.0";
         var VERSION_CHECK_MS = 60000;
         /* v1.13: client version handshake. On load and every 60s,
            ask the proxies (never DIRECT — api.mail.tm has no
@@ -3772,6 +3772,15 @@ var I18N = {
              lastReauthAttemptAt throttles token-less reauth attempts
              to one per backoff interval (no hammering). */
           inboxReady: false, lastReauthAttemptAt: 0,
+          /* v1.20.1 (auto-restore on limit): true once sign-in has
+             auto-restored the newest saved mailbox because creation
+             was refused by the daily limit — at most once per sign-in. */
+          autoRestoredOnLimit: false,
+          /* v1.21 (Hercules fallback): true once the proxy has
+             answered "hercules_config" (no/bad API key on the
+             server) — later retry cycles skip Hercules instead of
+             hammering a broken config. A page reload clears it. */
+          herculesDisabled: false,
           /* v1.15: true once the current mailbox's password is
              confirmed on the server — only then may the local copy be
              wiped and saved rows store "". */
@@ -3948,15 +3957,21 @@ var I18N = {
           }
         }
         function setBusy(busy){
-          // Only copy/QR/delete need a live mailbox. Generate and
-          // Try again must stay clickable at all times so the user
-          // can always retry after a failure — except when the plan's
+          // Only copy/QR/delete/save need a live mailbox. Refresh
+          // only needs an address on screen: v1.20.1 — a token-less
+          // mailbox can still be refreshed (manualRefresh heals the
+          // token with one reauth attempt), so the button must stay
+          // clickable whenever an address exists instead of being
+          // permanently disabled with no token. Generate and Try
+          // again must stay clickable at all times so the user can
+          // always retry after a failure — except when the plan's
           // daily quota is used up, when Generate is disabled
           // (restoring a saved mailbox still works, and the quota
           // resets at local midnight).
-          ["copyBtn","qrBtn","deleteBtn","inboxRefreshBtn","saveBtn"].forEach(function(id){
+          ["copyBtn","qrBtn","deleteBtn","saveBtn"].forEach(function(id){
             $(id).disabled = busy || !hasLiveMailbox();
           });
+          $("inboxRefreshBtn").disabled = busy || !state.address;
           updateGenerateState();
           $("retryBtn").disabled = false;
         }
@@ -4033,6 +4048,44 @@ var I18N = {
             state.accountId = ""; state.createdAt = res.createdAt || new Date().toISOString();
             showToast(t("guerrillaFallback"));
           }).catch(function(){
+            state.creating = false;
+            throw err;
+          });
+        }
+        /* v1.21: Hercules TempMail API as a second create fallback.
+           Runs ONCE when the Mail.tm create sequence (accounts ->
+           token, incl. the v1.17 adopt step) fails with a retryable
+           error, BEFORE the Guerrilla fallback: Hercules returns a
+           REAL permanent Mail.tm mailbox (address + Mail.tm JWT),
+           so it is tried first and Guerrilla (60-min temporary)
+           stays the last resort. The proxy holds the mailbox
+           password server-side (user_mailboxes) and returns only
+           {address, token} — the browser never sees the password.
+           On success the shared create success handler below runs
+           unchanged with provider "mailtm": an ordinary permanent
+           mailbox — no badge, no countdown, no toast. Any Hercules
+           failure rethrows the ORIGINAL Mail.tm error so Guerrilla
+           still gets its chance. A "hercules_config" answer (no/bad
+           API key on the server) marks Hercules disabled for this
+           session so later retry cycles skip it instead of
+           hammering a broken config. */
+        function tryHerculesFallback(err){
+          if (state.herculesDisabled) throw err;
+          var retryable = !err || !err.status || err.status === 429 || err.status >= 500;
+          if (!retryable) throw err;
+          var s = null;
+          try { s = loadSessionToken(); } catch(e) {}
+          if (!s || !s.token) throw err;
+          state.creating = true;
+          return apiAdmin("/api/hercules/mailboxes", { method: "POST", body: { token: s.token } }).then(function(res){
+            if (!res || !res.address || !res.token) throw err;
+            state.address = res.address;
+            state.provider = "mailtm";
+            state.guerrillaExpiresAt = 0;
+            state.token = res.token; state.password = ""; state.passwordSynced = true;
+            state.accountId = "";
+          }).catch(function(e){
+            if (e && e.data && e.data.error === "hercules_config") state.herculesDisabled = true;
             state.creating = false;
             throw err;
           });
@@ -4136,7 +4189,7 @@ var I18N = {
                     state.passwordSynced = false;
                     state.token = tok.token; state.accountId = (res.acc && res.acc.id) || tok.id || "";
                   });
-              }).catch(tryGuerrillaFallback);
+              }).catch(tryHerculesFallback).catch(tryGuerrillaFallback);
           }).then(function(){
             state.creating = false;
             state.retryCount = 0;
@@ -5264,6 +5317,21 @@ var I18N = {
                        the mailbox is gone forever, so drop the saved
                        row instead of showing a retryable failure. */
                     dropDeletedMailbox(mb);
+                  } else if (res && res.busy){
+                    /* v1.20.1: Mail.tm is limiting (the token-less
+                       probe answers 401 on a healthy proxy IP and
+                       429 on a limited one, so this branch runs
+                       about half the time during a flapping limit)
+                       — same wait-line treatment as the 429 branch,
+                       never a silent fail: keep the address on
+                       screen; the poll loop heals it once per
+                       backoff step. Mark the attempt time so
+                       adopt's own fetchMessages does not fire a
+                       second heal in the same instant. */
+                    state.lastReauthAttemptAt = Date.now();
+                    adopt("", "");
+                    applyPollBackoff({status:503});
+                    renderMessages();
                   } else {
                     fail();
                   }
@@ -5279,6 +5347,15 @@ var I18N = {
                     adopt(res.token, res.accountId || "");
                   } else if (res && res.gone){
                     dropDeletedMailbox(mb);
+                  } else if (res && res.busy){
+                    /* v1.20.1: Mail.tm is limiting — same wait-line
+                       treatment as the 429 branch, never a silent
+                       fail (see the bought branch above for why the
+                       401 branch runs during a limit). */
+                    state.lastReauthAttemptAt = Date.now();
+                    adopt("", "");
+                    applyPollBackoff({status:503});
+                    renderMessages();
                   } else {
                     fail();
                   }
@@ -7529,10 +7606,20 @@ var I18N = {
           else btn.innerHTML = '<span id="authSubmitLabel">' + (authMode === "signin" ? t("signInBtn") : t("createAccountBtn")) + '</span>';
         }
         function finishSignIn(profile, restored){
-          /* v1.20: kill any pre-sign-in auto-create retry loop so it
-             cannot keep cycling (and re-showing the Guerrilla toast)
-             behind the signed-in session. */
-          if (state.createTimer){ clearTimeout(state.createTimer); state.createTimer = null; }
+          /* v1.20.1 (auto-restore on limit): each sign-in gets one
+             chance to auto-restore the newest saved mailbox if
+             creation is refused by the daily limit. */
+          state.autoRestoredOnLimit = false;
+          /* v1.20.1: only kill a pre-sign-in auto-create retry loop
+             when the app ALREADY has a live mailbox. v1.20 cleared
+             it unconditionally — and when the loop was between
+             retries (the likely state) that froze the app with NO
+             mailbox and NO poll timer, so the inbox stayed on
+             "Preparing…" forever and no v1.20 heal path could run.
+             With no live mailbox the loop must survive: it is the
+             only thing that can produce one, and it can now
+             Guerrilla-fallback because a session exists. */
+          if (hasLiveMailbox() && state.createTimer){ clearTimeout(state.createTimer); state.createTimer = null; }
           saveProfile(profile);
           closeAuthModal();
           switchAccountKeepSession(profile.email);
@@ -7547,6 +7634,38 @@ var I18N = {
              my own listings (mine:true) only when the session token
              is sent, so the Edit buttons appear right after login. */
           loadMarketListings(true);
+          /* v1.20.1 belt-and-braces: if sign-in still left the app
+             with no address and no current session mailbox, run the
+             boot restore once so the app always has a mailbox path
+             post-sign-in (it restores the session row, or starts a
+             fresh create when there is none). */
+          if (!state.address){
+            var curMb = null;
+            try { curMb = acctData().currentMailbox || null; } catch(e) {}
+            if (!curMb || !curMb.address) restoreCurrentSessionOrCreate();
+          }
+          /* v1.20.1 (auto-restore on limit): if sign-in still left the
+             app with no address because creation was refused by the
+             daily limit, restore the newest saved mailbox instead of
+             leaving the inbox on "Preparing…" forever. A limit refusal
+             is synchronous (no create in flight, state.creating is
+             false, no retry timer), so this guard is exact — it never
+             fires while a create is running. Restores are never counted
+             or blocked by the limit (createAccount's own comment), and
+             restoreMailbox carries the v1.20/v1.20.1 busy handling, so
+             the wait line shows if Mail.tm is also limiting. At most
+             once per sign-in (flag above). */
+          if (!state.address && !state.creating && !state.blocked && !state.autoRestoredOnLimit && dailyLimitReached()){
+            var savedRows = [];
+            try { savedRows = loadMailboxes() || []; } catch(e) { savedRows = []; }
+            var newestSaved = null;
+            for (var si = 0; si < savedRows.length; si++){
+              var sRow = savedRows[si];
+              if (!sRow || !sRow.address) continue;
+              if (!newestSaved || (sRow.createdAt || "") >= (newestSaved.createdAt || "")) newestSaved = sRow;
+            }
+            if (newestSaved){ state.autoRestoredOnLimit = true; restoreMailbox(newestSaved); }
+          }
         }
         /* Build/refresh the LOCAL account from the server user data.
            Fresh device: creates the local profile (name, plan, id) and
@@ -8029,6 +8148,20 @@ var I18N = {
                 if (mb.listingId) currentBoughtListingId = mb.listingId;
                 reauthBoughtMailbox().then(function(res){
                   if (res && res.ok){ mb.token = res.token; }
+                  else if (res && res.busy){
+                    /* v1.20.1: Mail.tm is limiting — same wait-line
+                       treatment as the 429 branch (the token-less
+                       probe answers 401 on a healthy proxy IP, so
+                       this branch runs about half the time during a
+                       flapping limit). Mark the attempt time so the
+                       adopt's own fetchMessages does not fire a
+                       second heal in the same instant. */
+                    state.lastReauthAttemptAt = Date.now();
+                    adoptRestoredCurrent(mb);
+                    applyPollBackoff({status:503});
+                    renderMessages();
+                    return;
+                  }
                   adoptRestoredCurrent(mb);
                 });
               } else {
@@ -8038,6 +8171,16 @@ var I18N = {
                    password exists to fall back to, by design. */
                 reauthServerMailbox().then(function(res){
                   if (res && res.ok){ mb.token = res.token; adoptRestoredCurrent(mb); }
+                  else if (res && res.busy){
+                    /* v1.20.1: Mail.tm is limiting — never wipe the
+                       session into a fresh create during a limit
+                       (that just loops); keep the address on screen
+                       with the wait line, like the 429 branch. */
+                    state.lastReauthAttemptAt = Date.now();
+                    adoptRestoredCurrent(mb);
+                    applyPollBackoff({status:503});
+                    renderMessages();
+                  }
                   else { clearCurrentSession(); createAccount(); }
                 });
               }
@@ -9154,8 +9297,10 @@ var I18N = {
            queued, never dropped (fetchMessages force flag). Ends with
            a short result toast: "✓ Refreshed — N new", "No new
            messages", or a plain error if it still fails. Never blocked
-           by the failed poll state: setBusy() only disables these
-           buttons while a create is busy or there is no token at all. */
+           by the failed poll state: v1.20.1 — setBusy() gates the
+           Refresh button on an address only, so a token-less mailbox
+           still refreshes (fetchMessages heals the token with one
+           reauth attempt) instead of the button sitting disabled. */
         function manualRefresh(iconEl){
           /* v1.19: was `!state.token` — that made Refresh a no-op on
              Guerrilla mailboxes, which hold no token.
