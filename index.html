@@ -313,9 +313,13 @@
         border-radius:999px;padding:4px 10px;white-space:nowrap;
       }
       .refresh-indicator .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:heroPulse 1.6s ease-in-out infinite}
-      .refresh-indicator.warn .dot{background:#d97706;animation:none}
       .refresh-indicator.err .dot{background:#dc2626;animation:none}
       .refresh-indicator.idle .dot{background:#9ca3af;animation:none}
+      /* v1.20: warn MUST come after idle — same specificity (0,3,0),
+         so the later rule wins; before this move the grey idle dot
+         always beat the amber warn dot whenever both classes were
+         present (i.e. during a limit before the first success). */
+      .refresh-indicator.warn .dot{background:#d97706;animation:none}
       @keyframes heroPulse{0%,100%{opacity:1}50%{opacity:.3}}
       .otp-hero{
         display:none;margin:14px 20px 0;padding:16px 18px 14px;border-radius:16px;
@@ -1798,7 +1802,7 @@
            v1.15: the proxy ALSO refuses Mail.tm-bound calls without
            X-MovMail-Version >= 1.15.0 (kill-switch), and the phone
            must never hold a mailbox password again (token endpoint). */
-        var APP_VERSION = "1.19.0";
+        var APP_VERSION = "1.20.0";
         var VERSION_CHECK_MS = 60000;
         /* v1.13: client version handshake. On load and every 60s,
            ask the proxies (never DIRECT — api.mail.tm has no
@@ -1894,6 +1898,10 @@
              interval stands. */
           if (!isPollRetryable(err)) return false;
           if ((state.pollBackoffStep || 0) < 3) state.pollBackoffStep = (state.pollBackoffStep || 0) + 1;
+          /* v1.20: first backoff of the episode — surface the limit in
+             the bell Problems list (recordProblem dedups per 60 s, so
+             repeats inside the episode are throttled). */
+          if (state.pollBackoffStep === 1) recordProblem("probRateLimit");
           state.pollInterval = pollBackoffSeconds();
           state.countdown = state.pollInterval;
           updateCountdown();
@@ -1904,6 +1912,8 @@
           /* First successful poll after a backoff resumes the plan base. */
           if (!state.pollBackoffStep) return;
           state.pollBackoffStep = 0;
+          /* v1.20: the limit cleared — the bell problem goes away too. */
+          clearProblem("probRateLimit");
           state.pollInterval = pollBaseSeconds();
           state.countdown = state.pollInterval;
           updateCountdown();
@@ -1913,8 +1923,11 @@
           /* Calm status line while the poll is backed off (v1.17
              style). Only while a mailbox is live and no create is in
              flight — the create retry text owns the line while
-             creating. */
-          if (state.creating || state.retrying || !state.address) return;
+             creating. v1.20: state.retrying no longer blocks the wait
+             line — the line only overwrites the create text when a
+             backoff is actually active (step > 0), so a retrying
+             create keeps its own text while the step is 0. */
+          if (state.creating || !state.address) return;
           if (state.pollBackoffStep > 0) statusText.textContent = t("pollBackoffWait");
           else if (statusText.textContent === t("pollBackoffWait")) statusText.textContent = t("statusWaiting");
         }
@@ -3752,6 +3765,13 @@ var I18N = {
           /* v1.19: poll backoff step (0 = plan base interval;
              1 = 20s, 2 = 30s, 3 = 60s cap) during a limit. */
           pollBackoffStep: 0,
+          /* v1.20: true once the first poll of the current mailbox
+             completes with a definitive result (success, or a
+             non-retryable failure) — the empty state shows "Your
+             inbox is empty" instead of "Preparing…" once set.
+             lastReauthAttemptAt throttles token-less reauth attempts
+             to one per backoff interval (no hammering). */
+          inboxReady: false, lastReauthAttemptAt: 0,
           /* v1.15: true once the current mailbox's password is
              confirmed on the server — only then may the local copy be
              wiped and saved rows store "". */
@@ -5061,6 +5081,12 @@ var I18N = {
               var msg = "";
               if (err && err.data && err.data.error) msg = String(err.data.error);
               else if (err && err.message) msg = String(err.message);
+              /* v1.20: surface a limit too — /api/market/restore
+                 answers a Mail.tm 429 as HTTP 400 "Too many requests",
+                 so the busy check must cover the message, not just
+                 the 503 mailtm_busy shape. */
+              var st = (err && err.status) || 0;
+              if (st === 429 || st === 503 || msg === "mailtm_busy" || msg.indexOf("Too many requests") !== -1 || msg.indexOf("429") !== -1) return {ok:false, busy:true};
               return {ok:false, gone: msg.indexOf("no longer exists") !== -1};
             });
           }).then(function(r){
@@ -5259,9 +5285,37 @@ var I18N = {
                 });
               }
             } else {
-              /* 429 / network: keep the saved token and let the normal
-                 forever auto-retry reconnect the mailbox. */
-              adopt(mb.token, "");
+              /* 429 / network: the address itself is still ours. With
+                 a saved token, adopt it and let the normal poll
+                 reconnect. v1.20: with NO usable token, adopting ""
+                 can never poll (dead-poll trap) — heal it once through
+                 the server instead. A bought row heals through its
+                 own server restore, like the 401 branch. */
+              if (mb.token){
+                adopt(mb.token, "");
+              } else {
+                var healRestore = isBoughtMailbox(mb) ? reauthBoughtMailbox() : reauthServerMailbox(mb);
+                healRestore.then(function(res){
+                  if (res && res.ok){
+                    mb.token = res.token;
+                    adopt(res.token, res.accountId || "");
+                  } else if (res && res.gone){
+                    /* The admin deleted this account for real — drop
+                       the saved row instead of retrying forever. */
+                    dropDeletedMailbox(mb);
+                  } else {
+                    /* Busy (or no session): keep the address on
+                       screen; the poll loop heals it once per backoff
+                       step and the wait line shows meanwhile. Mark the
+                       attempt time so adopt's own fetchMessages does
+                       not fire a second heal in the same instant. */
+                    state.lastReauthAttemptAt = Date.now();
+                    adopt("", "");
+                    applyPollBackoff({status:503});
+                    renderMessages();
+                  }
+                });
+              }
             }
           });
         }
@@ -5597,6 +5651,8 @@ var I18N = {
             state.pollInterval = pollBaseSeconds();
             state.countdown = state.pollInterval;
             state.pollEverOk = true;
+            /* v1.20: a definitive poll result — the inbox is ready. */
+            state.inboxReady = true;
             updateCountdown();
             updateProviderBadge();
             renderMessages();
@@ -5614,6 +5670,10 @@ var I18N = {
                 state.pollInterval = pollBaseSeconds();
                 state.countdown = state.pollInterval;
                 updateCountdown();
+                /* v1.20: a non-retryable failure is a definitive
+                   result — the inbox is ready (empty), not "Preparing…"
+                   forever. */
+                state.inboxReady = true;
               }
               updateProviderBadge();
             }
@@ -5690,6 +5750,8 @@ var I18N = {
             state.pollInterval = pollBaseSeconds();
             state.countdown = state.pollInterval;
             state.pollEverOk = true;
+            /* v1.20: a definitive poll result — the inbox is ready. */
+            state.inboxReady = true;
             updateCountdown();
             updateProviderBadge();
             renderMessages();
@@ -5712,6 +5774,10 @@ var I18N = {
                 state.pollInterval = pollBaseSeconds();
                 state.countdown = state.pollInterval;
                 updateCountdown();
+                /* v1.20: a non-retryable failure is a definitive
+                   result — the inbox is ready (empty), not "Preparing…"
+                   forever. */
+                state.inboxReady = true;
               }
               updateProviderBadge();
             }
@@ -5727,7 +5793,15 @@ var I18N = {
                   updateCountdown();
                   return runFetch(first, true);
                 }
-                quietFail();
+                if (res && res.busy){
+                  /* v1.20: the reauth failed because Mail.tm is
+                     limiting — back off instead of treating it as a
+                     dead token. */
+                  applyPollBackoff({status:503});
+                  updateProviderBadge();
+                } else {
+                  quietFail();
+                }
                 return {ok:false, reason:"reauth-failed"};
               });
             }
@@ -5745,7 +5819,15 @@ var I18N = {
                   updateCountdown();
                   return runFetch(first, true);
                 }
-                quietFail();
+                if (res && res.busy){
+                  /* v1.20: the reauth failed because Mail.tm is
+                     limiting — back off instead of treating it as a
+                     dead token. */
+                  applyPollBackoff({status:503});
+                  updateProviderBadge();
+                } else {
+                  quietFail();
+                }
                 return {ok:false, reason:"reauth-failed"};
               });
             }
@@ -5759,11 +5841,60 @@ var I18N = {
            it is queued to run right after the in-flight one finishes,
            and the returned promise resolves with that run's result. */
         function fetchMessages(first, force){
-          if (!hasLiveMailbox()) return Promise.resolve({ok:false, reason:"no-token"});
           if (state.checking){
             if (!force) return Promise.resolve({ok:false, reason:"in-flight"});
             state.refreshQueued = true;
             return new Promise(function(resolve){ pendingRefreshWaiters.push(resolve); });
+          }
+          if (!hasLiveMailbox()){
+            /* v1.20: token-less Mail.tm mailbox with an address — the
+               dead-poll trap. Returning "no-token" here meant no poll
+               ever ran, so the v1.19 backoff never engaged and the
+               inbox sat on "Preparing…" forever. Instead, heal the
+               token once per backoff interval through the server (the
+               password never leaves the server); on busy, back off so
+               the wait line + amber engage. A forced call (manual
+               Refresh) always attempts once. A bought row heals
+               through its own server restore, like the 401 branch. */
+            if (state.provider === "mailtm" && state.address){
+              var nowMs = Date.now();
+              var minGapMs = Math.max(0, pollBackoffSeconds() * 1000 - 2000);
+              if (!force && nowMs - (state.lastReauthAttemptAt || 0) < minGapMs){
+                renderMessages();
+                return Promise.resolve({ok:false, reason:"no-token"});
+              }
+              state.lastReauthAttemptAt = nowMs;
+              state.checking = true;
+              var healNoToken = currentBought ? reauthBoughtMailbox() : reauthServerMailbox();
+              return healNoToken.then(function(res){
+                if (res && res.ok){
+                  state.pollInterval = pollBaseSeconds();
+                  state.countdown = state.pollInterval;
+                  updateCountdown();
+                  return runFetch(first, false);
+                }
+                if (res && res.gone){
+                  var goneMb = findMailbox(state.address);
+                  if (goneMb) dropDeletedMailbox(goneMb);
+                  renderMessages();
+                  return {ok:false, reason:"gone"};
+                }
+                if (res && res.busy) applyPollBackoff({status:503});
+                renderMessages();
+                return {ok:false, reason: res && res.busy ? "reauth-busy" : "reauth-failed"};
+              }).then(function(result){
+                state.checking = false;
+                if (state.refreshQueued){
+                  state.refreshQueued = false;
+                  var waiters = pendingRefreshWaiters.splice(0);
+                  fetchMessages(false, true).then(function(r){
+                    waiters.forEach(function(w){ try { w(r); } catch(e){} });
+                  });
+                }
+                return result;
+              });
+            }
+            return Promise.resolve({ok:false, reason:"no-token"});
           }
           state.checking = true;
           return runFetch(first, false).then(function(result){
@@ -6118,9 +6249,21 @@ var I18N = {
           msgList.innerHTML = "";
           if (!all.length){
             emptyState.style.display = "block";
-            emptyTitle.textContent = state.token ? t("emptyReadyTitle") : t("emptyPreparingTitle");
-            emptyText.textContent = state.token ? t("emptyReadyText") : t("emptyPreparingText");
-            waitingBar.style.display = state.token ? "block" : "none";
+            /* v1.20: the empty state no longer gates on the token
+               alone — a token-less mailbox that has had a definitive
+               poll result is ready, and a Guerrilla mailbox never has
+               a token at all. While the poll is backed off and the
+               inbox is not yet ready, show the calm wait line instead
+               of "Preparing…". */
+            var ready = !!(state.token || state.inboxReady || state.provider === "guerrilla");
+            if (!ready && state.pollBackoffStep > 0){
+              emptyTitle.textContent = t("pollBackoffWait");
+              emptyText.textContent = t("emptyReadyText");
+            } else {
+              emptyTitle.textContent = ready ? t("emptyReadyTitle") : t("emptyPreparingTitle");
+              emptyText.textContent = ready ? t("emptyReadyText") : t("emptyPreparingText");
+            }
+            waitingBar.style.display = ready ? "block" : "none";
             updateHero(all);
             return;
           }
@@ -6941,6 +7084,14 @@ var I18N = {
           d.problems = list;
           saveAcctData(d);
         }
+        /* v1.20: drop every entry of one cause (the limit problem
+           clears the moment a poll succeeds again). */
+        function clearProblem(causeKey){
+          var d = acctData();
+          var list = d.problems || [];
+          var kept = list.filter(function(p){ return p.cause !== causeKey; });
+          if (kept.length !== list.length){ d.problems = kept; saveAcctData(d); }
+        }
         /* Bell badge: remaining emails today (blue), red at 0,
            "∞" for the unlimited Yearly plan. */
         function updateBellBadge(){
@@ -7378,6 +7529,10 @@ var I18N = {
           else btn.innerHTML = '<span id="authSubmitLabel">' + (authMode === "signin" ? t("signInBtn") : t("createAccountBtn")) + '</span>';
         }
         function finishSignIn(profile, restored){
+          /* v1.20: kill any pre-sign-in auto-create retry loop so it
+             cannot keep cycling (and re-showing the Guerrilla toast)
+             behind the signed-in session. */
+          if (state.createTimer){ clearTimeout(state.createTimer); state.createTimer = null; }
           saveProfile(profile);
           closeAuthModal();
           switchAccountKeepSession(profile.email);
@@ -7755,6 +7910,9 @@ var I18N = {
           savedState.loaded = false;
           savedState.lastFetch = 0;
           state.messages = [];
+          /* v1.20: the new mailbox has had no poll yet — its empty
+             state must not inherit the previous mailbox's readiness. */
+          state.inboxReady = false;
           renderMessages();
         }
         function saveCurrentSession(){
@@ -7884,9 +8042,37 @@ var I18N = {
                 });
               }
             } else {
-              /* 429 / network: keep the saved token and let the normal
-                 poll reconnect — the address itself is still ours. */
-              adoptRestoredCurrent(mb);
+              /* 429 / network: the address itself is still ours. With
+                 a saved token, adopt it and let the normal poll
+                 reconnect. v1.20: with NO usable token, adopting ""
+                 can never poll (dead-poll trap) — heal it once through
+                 the server instead. A bought row heals through its
+                 own server restore, like the 401 branch. */
+              if (mb.token){
+                adoptRestoredCurrent(mb);
+              } else {
+                var healSession = isBoughtMailbox(mb) ? reauthBoughtMailbox() : reauthServerMailbox();
+                healSession.then(function(res){
+                  if (res && res.ok){ mb.token = res.token; adoptRestoredCurrent(mb); }
+                  else if (res && res.gone){
+                    /* Dead for real: a bought mailbox stays on screen
+                       (never wipe it); an ordinary one falls back to
+                       a fresh address, like the 401 branch. */
+                    if (isBoughtMailbox(mb)){ adoptRestoredCurrent(mb); }
+                    else { clearCurrentSession(); createAccount(); }
+                  } else {
+                    /* Busy (or no session): keep the address on
+                       screen; the poll loop heals it once per backoff
+                       step and the wait line shows meanwhile. Mark the
+                       attempt time so the adopt's own fetchMessages
+                       does not fire a second heal in the same instant. */
+                    state.lastReauthAttemptAt = Date.now();
+                    adoptRestoredCurrent(mb);
+                    applyPollBackoff({status:503});
+                    renderMessages();
+                  }
+                });
+              }
             }
           });
         }
@@ -8801,10 +8987,9 @@ var I18N = {
           countdownText.textContent = "";
           /* Minimal Auto indicator, inside the inbox header only:
              a small dot + "Auto". Green once a fetch has succeeded;
-             grey while nothing has ever been fetched yet. Failures
-             are silent — the dot keeps the last good state and is
-             never red or amber. The title carries the real
-             interval for anyone who hovers it. */
+             grey while nothing has ever been fetched yet. While the
+             poll is backed off the dot turns amber (v1.19). The title
+             carries the real interval for anyone who hovers it. */
           var ri = $("refreshIndicator");
           if (!ri) return;
           var rit = $("refreshIndicatorText");
@@ -8821,6 +9006,10 @@ var I18N = {
           } else {
             try { ri.title = t("autoRefreshEvery", {n: state.pollInterval || base}); } catch(e) {}
           }
+          /* v1.20: refresh the status line from the 1 s tick too, so
+             it tracks the current backoff step even when the step
+             changed outside a poll outcome. */
+          updatePollStatusLine();
         }
         document.addEventListener("visibilitychange", function(){
           if (!document.hidden && hasLiveMailbox()) fetchMessages(false);
@@ -8969,8 +9158,12 @@ var I18N = {
            buttons while a create is busy or there is no token at all. */
         function manualRefresh(iconEl){
           /* v1.19: was `!state.token` — that made Refresh a no-op on
-             Guerrilla mailboxes, which hold no token. */
-          if (!hasLiveMailbox()) return;
+             Guerrilla mailboxes, which hold no token.
+             v1.20: also allow a token-less Mail.tm mailbox through —
+             fetchMessages heals the token (one reauth attempt) and the
+             wait line shows on busy, instead of Refresh doing
+             nothing at all. Only a missing address stays a no-op. */
+          if (!state.address) return;
           if (iconEl) iconEl.classList.add("spin");
           /* v1.19: never reset a backed-off interval to the plan
              base — this is the ONE attempt; its outcome (via

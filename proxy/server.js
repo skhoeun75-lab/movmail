@@ -40,7 +40,7 @@ const UPSTREAM = "https://api.mail.tm";
 // v1.15: the forwarder also refuses Mail.tm-bound calls from any
 // client older than MIN_CLIENT_VERSION (kill-switch, see the gate
 // below the DELETE /accounts block). Bump both strings together.
-const APP_VERSION = "1.19.0";
+const APP_VERSION = "1.20.0";
 const MIN_CLIENT_VERSION = "1.15.0"; // v1.19: stays — 1.15+ clients hold no passwords and never call DIRECT, so no kill-switch bump is needed; the handshake reloads them to 1.19.0.
 // True when a client version string is at least the minimum (numeric
 // per-part compare; missing, malformed or older versions fail).
