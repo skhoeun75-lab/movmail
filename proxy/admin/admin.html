@@ -407,6 +407,40 @@
   </div>
 </div>
 
+<!-- Edit listing modal (v1.14) — same in-page pattern as the confirm modal: never window.prompt/confirm.
+     Pre-filled with the listing's current price/title/token/logo; saving only sends the fields that changed.
+     Leaving the logo empty keeps the existing logo. Editing display fields only — the Mail.tm account
+     is never touched by an edit. -->
+<div id="editListingModal" class="confirm-modal" hidden>
+  <div class="confirm-card" role="dialog" aria-modal="true">
+    <h3 id="editListingHeading" class="modal-title"></h3>
+    <p id="editListingEmail" class="modal-email"></p>
+    <label class="field">
+      <span data-i18n="listingPrice">តម្លៃ ($)</span>
+      <input id="editListingPrice" type="number" min="0.01" step="0.01" inputmode="decimal">
+    </label>
+    <label class="field">
+      <span data-i18n="listingTitle">ចំណងជើង</span>
+      <input id="editListingTitleInput" type="text" autocomplete="off">
+    </label>
+    <label class="field">
+      <span data-i18n="listingToken">Token</span>
+      <input id="editListingTokenInput" type="text" autocomplete="off">
+    </label>
+    <label class="field field-logo">
+      <span data-i18n="listingLogo">រូបសញ្ញា</span>
+      <input id="editListingLogo" type="file" accept="image/*">
+      <img id="editListingLogoPreview" class="listing-logo-preview" hidden alt="">
+      <span class="muted field-note" data-i18n="editListingLogoKeep">ទុករូបចាស់ចោល បើអត់ជ្រើសរើសរូបថ្មី</span>
+    </label>
+    <p class="error" id="editListingError" hidden></p>
+    <div class="confirm-actions">
+      <button id="editListingSave" class="btn btn-primary" type="button" data-i18n="save">រក្សាទុក</button>
+      <button id="editListingCancel" class="btn btn-secondary" type="button" data-i18n="cancelBtn">បោះបង់</button>
+    </div>
+  </div>
+</div>
+
 <script src="admin.js"></script>
 </body>
 </html>

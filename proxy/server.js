@@ -463,7 +463,8 @@ const CREATE_API_TABLES_SQL = [
     "  flag TEXT DEFAULT '',",
     "  seller_gmail TEXT NOT NULL,",
     "  status TEXT NOT NULL DEFAULT 'active',",
-    "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+    "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),",
+    "  updated_at TIMESTAMPTZ",
     ")",
   ].join("\n"),
   [
@@ -594,6 +595,8 @@ const ALTER_API_TABLES_SQL = [
   "ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS last_code_at TIMESTAMPTZ",
   "ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS last_code_from TEXT DEFAULT ''",
   "ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS last_code_subject TEXT DEFAULT ''",
+  // v1.14: when a listing was last edited (admin Edit modal).
+  "ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ",
   // v1.9: admin listing-code notifications (type 'listing_code').
   // `code` already exists (gift codes) and is reused for the
   // extracted verification code; the new columns name the listing,
@@ -1318,6 +1321,8 @@ function listingAdminFromRow(r) {
     city: r.city || "",
     flag: r.flag || "",
     createdAt: toIso(r.created_at),
+    // v1.14: when the listing was last edited (admin Edit modal).
+    updatedAt: toIso(r.updated_at),
   };
 }
 
@@ -2076,6 +2081,7 @@ async function createListing(address, password, price, title, sellerGmail, logo,
     city: profile.city || "",
     flag: profile.flag || "",
     created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   };
   mem.listings.set(row.id, row);
   return row;
@@ -3694,6 +3700,107 @@ async function handleAdminMarketListingRelist(req, res, id) {
   sendJson(res, 200, { ok: true, listing: listingAdminFromRow(updated) });
 }
 
+// v1.14: EDIT LISTING — change a listing's display fields (price,
+// title, token, logo) after it is listed. Mov sometimes sets the
+// wrong price or wants a new picture, and must be able to fix it
+// without re-creating the listing.
+// MOV'S RULE (permanent): an edit NEVER touches the Mail.tm account.
+// This handler performs NO Mail.tm call at all — no login call, no
+// account-delete call, nothing that could log in to or delete the
+// mailbox. It only UPDATEs the listing row's display fields. Existing
+// orders keep their own locked price (orders carry their own price
+// field — no order row is read or written here), and health is
+// untouched.
+async function handleAdminMarketListingUpdate(req, res, id) {
+  // 6MB body (same as create): a listing logo is a data URI.
+  const body = await readJsonBody(req, res, 6 * 1024 * 1024);
+  if (!body) return;
+  const listing = await getListing(id);
+  if (!listing) {
+    sendJson(res, 404, { ok: false, error: "listing not found" });
+    return;
+  }
+  if (listing.status !== "active") {
+    sendJson(res, 400, { ok: false, error: "only an active listing can be edited" });
+    return;
+  }
+  const hasPrice = Object.prototype.hasOwnProperty.call(body, "price");
+  const hasTitle = Object.prototype.hasOwnProperty.call(body, "title");
+  const hasToken = Object.prototype.hasOwnProperty.call(body, "token");
+  const hasLogo = Object.prototype.hasOwnProperty.call(body, "logo") ||
+    Object.prototype.hasOwnProperty.call(body, "logoDataUrl");
+  if (!hasPrice && !hasTitle && !hasToken && !hasLogo) {
+    sendJson(res, 400, { ok: false, error: "nothing to update" });
+    return;
+  }
+  let price = null, title = null, token = null, logo = null;
+  if (hasPrice) {
+    price = Number(body.price);
+    if (!Number.isFinite(price) || price <= 0) {
+      sendJson(res, 400, { ok: false, error: "price must be a number greater than 0" });
+      return;
+    }
+  }
+  if (hasTitle) {
+    if (typeof body.title !== "string" || body.title.trim() === "") {
+      sendJson(res, 400, { ok: false, error: "title must be a non-empty string" });
+      return;
+    }
+    title = body.title.trim();
+  }
+  if (hasToken) {
+    if (typeof body.token !== "string" || body.token.trim() === "") {
+      sendJson(res, 400, { ok: false, error: "token must be a non-empty string" });
+      return;
+    }
+    token = cleanListingToken(body.token);
+  }
+  if (hasLogo) {
+    const rawLogo = typeof body.logo === "string" ? body.logo
+      : (typeof body.logoDataUrl === "string" ? body.logoDataUrl : "");
+    if (!rawLogo || rawLogo.indexOf("data:image/") !== 0) {
+      sendJson(res, 400, { ok: false, error: "logo must be an image data URI" });
+      return;
+    }
+    if (rawLogo.length > MARKET_IMAGE_MAX_CHARS) {
+      sendJson(res, 413, { ok: false, error: "listing logo too large (max ~5MB)" });
+      return;
+    }
+    logo = cleanListingLogo(rawLogo);
+  }
+  const sets = [];
+  const vals = [];
+  if (price !== null) { vals.push(price); sets.push("price = $" + vals.length); }
+  if (title !== null) { vals.push(title); sets.push("title = $" + vals.length); }
+  if (token !== null) { vals.push(token); sets.push("token = $" + vals.length); }
+  if (logo !== null) { vals.push(logo); sets.push("logo = $" + vals.length); }
+  sets.push("updated_at = NOW()");
+  let updated = null;
+  if (!USE_MEMORY_STORE) {
+    vals.push(Number(id));
+    const r = await dbPool.query(
+      "UPDATE market_listings SET " + sets.join(", ") + " WHERE id = $" + vals.length + " RETURNING *",
+      vals
+    );
+    updated = r.rows[0] || null;
+  } else {
+    const row = mem.listings.get(Number(id));
+    if (row) {
+      if (price !== null) row.price = price;
+      if (title !== null) row.title = title;
+      if (token !== null) row.token = token;
+      if (logo !== null) row.logo = logo;
+      row.updated_at = new Date().toISOString();
+    }
+    updated = row || null;
+  }
+  if (!updated) {
+    sendJson(res, 404, { ok: false, error: "listing not found" });
+    return;
+  }
+  sendJson(res, 200, { ok: true, listing: listingAdminFromRow(updated) });
+}
+
 // Decode the Mail.tm JWT payload (base64, no signature check — we
 // only read the account id claim) as a fallback when POST /token
 // does not return the id directly.
@@ -4677,6 +4784,8 @@ async function handleApi(req, res, url) {
       if (req.method === "POST" && mMktCheck) return handleAdminMarketListingCheck(req, res, mMktCheck[1]);
       const mMktHealth = /^\/api\/admin\/market\/listings\/(\d+)\/health$/.exec(p);
       if (req.method === "POST" && mMktHealth) return handleAdminMarketListingHealth(req, res, mMktHealth[1]);
+      const mMktUpdate = /^\/api\/admin\/market\/listings\/(\d+)\/update$/.exec(p);
+      if (req.method === "POST" && mMktUpdate) return handleAdminMarketListingUpdate(req, res, mMktUpdate[1]);
       if (req.method === "GET" && p === "/api/admin/market/orders") return handleAdminMarketOrdersList(req, res);
       if (req.method === "GET" && p === "/api/admin/delete-requests") return handleAdminDeleteRequestsList(req, res);
       const mDelReq = /^\/api\/admin\/delete-requests\/(\d+)\/(approve|reject)$/.exec(p);

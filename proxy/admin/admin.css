@@ -325,6 +325,10 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
   max-height: calc(100vh - 40px); overflow-y: auto;
 }
 .confirm-text { margin: 0 0 18px; font-size: 15px; word-break: break-word; }
+/* v1.14: edit-listing modal title + email line + logo hint. */
+.modal-title { margin: 0 0 4px; font-size: 17px; }
+.modal-email { margin: 0 0 14px; font-size: 13px; color: var(--muted); word-break: break-all; }
+.field-note { font-weight: 400; font-size: 12px; }
 .confirm-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);

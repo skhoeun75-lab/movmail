@@ -58,6 +58,15 @@ const I18N = {
     toastListingRelisted: 'បានដាក់លក់វិញក្នុងហាងហើយ។', errRelist: 'ដាក់លក់វិញមិនបានទេ។',
     sold: 'បានលក់', removed: 'បានដកចេញ', pending: 'រង់ចាំ', approved: 'បានអនុម័ត', rejected: 'បានបដិសេធ',
     errListingFields: 'សូមបំពេញអ៊ីមែល ពាក្យសម្ងាត់ តម្លៃ និងចំណងជើង។',
+    /* v1.14: edit listing (admin Listings panel). */
+    editListing: 'កែប្រែ', editListingTitle: 'កែប្រែបញ្ជីលក់',
+    editListingLogoKeep: 'ទុករូបចាស់ចោល បើអត់ជ្រើសរើសរូបថ្មី',
+    editListingNoChange: 'មិនមានអ្វីផ្លាស់ប្តូរទេ។',
+    toastListingUpdated: 'បានកែប្រែបញ្ជីលក់រួចហើយ។',
+    errEditListing: 'កែប្រែបញ្ជីលក់មិនបានទេ។',
+    errEditPrice: 'តម្លៃត្រូវតែធំជាង 0។',
+    errEditTitle: 'ចំណងជើងមិនអាចទទេបានទេ។',
+    errEditToken: 'Token មិនអាចទទេបានទេ។',
     errListing: 'បរាជ័យក្នុងការបង្កើតបញ្ជីលក់។', errOrder: 'បរាជ័យក្នុងការដំណើរការការបញ្ជាទិញ។',
     toastListingCreated: 'បានបង្កើតបញ្ជីលក់។', toastListingRemoved: 'បានដកបញ្ជីលក់ចេញ។',
     toastOrderApproved: 'បានអនុម័ត — អ៊ីមែលត្រូវបានលក់ឱ្យអ្នកទិញនេះ។', toastOrderRejected: 'បានបដិសេធការបញ្ជាទិញ។',
@@ -206,6 +215,15 @@ const I18N = {
     toastListingRelisted: 'Listed in the shop again.', errRelist: 'Could not re-list.',
     sold: 'Sold', removed: 'Removed', pending: 'Pending', approved: 'Approved', rejected: 'Rejected',
     errListingFields: 'Please fill in the email, password, price and title.',
+    /* v1.14: edit listing (admin Listings panel). */
+    editListing: 'Edit', editListingTitle: 'Edit listing',
+    editListingLogoKeep: 'Leave empty to keep the current logo',
+    editListingNoChange: 'Nothing changed.',
+    toastListingUpdated: 'Listing updated.',
+    errEditListing: 'Could not update the listing.',
+    errEditPrice: 'Price must be greater than 0.',
+    errEditTitle: 'Title cannot be empty.',
+    errEditToken: 'Token cannot be empty.',
     errListing: 'Failed to create the listing.', errOrder: 'Failed to process the order.',
     toastListingCreated: 'Listing created.', toastListingRemoved: 'Listing removed.',
     toastOrderApproved: 'Approved — the email has been sold to this buyer.', toastOrderRejected: 'Order rejected.',
@@ -995,6 +1013,8 @@ function normListing(l) {
     token: l.token || '',
     status: String(l.status || 'active').toLowerCase(),
     createdAt: l.createdAt || l.created_at || '',
+    /* v1.14: when the listing was last edited. */
+    updatedAt: l.updatedAt || l.updated_at || '',
     /* Health (v1.3): 'good' | 'bad'. Legacy listings have no health field
        — treated as good. healthCheckedAt: last check time ('' = never).
        healthBadSince: when it turned bad ('' = not bad). */
@@ -1675,6 +1695,13 @@ function renderListings() {
       ? '<button class="btn btn-secondary" type="button" data-listing-health="good" data-id="' + esc(l.id) + '">' + esc(t('markGood')) + '</button>'
       : '<button class="btn btn-secondary" type="button" data-listing-health="bad" data-id="' + esc(l.id) + '">' + esc(t('markBad')) + '</button>';
     var checkBtn = '<button class="btn btn-secondary" type="button" data-listing-check="' + esc(l.id) + '">' + esc(t('checkHealth')) + '</button>';
+    /* v1.14: Edit — active listings only. Sold/removed listings are
+       out of the shop; editing them is pointless. The edit changes
+       display fields only (price/title/token/logo) — the Mail.tm
+       account is never touched. */
+    var editBtn = l.status === 'active'
+      ? '<button class="btn btn-secondary" type="button" data-listing-edit="' + esc(l.id) + '">' + esc(t('editListing')) + '</button>'
+      : '';
     var countdownLine = isBad
       ? '<div class="l-line l-auto-delete">' + esc(autoDeleteText(l)) + '</div>'
       : '';
@@ -1696,7 +1723,7 @@ function renderListings() {
       + '<div class="l-line">' + esc(t('created')) + ': ' + esc(fmtDate(l.createdAt)) + '</div>'
       + '</div>'
       + listingPill(l.status)
-      + '<div class="listing-actions">' + checkBtn + healthToggleBtn + relistBtn + removeBtn + deleteAccountBtn + '</div>'
+      + '<div class="listing-actions">' + checkBtn + editBtn + healthToggleBtn + relistBtn + removeBtn + deleteAccountBtn + '</div>'
       + '</div>';
   }).join('');
   show($('listingsEmpty'), listingsCache.length === 0);
@@ -1864,6 +1891,92 @@ async function onListingSubmit(e) {
     showError($('listingError'), err && err.message ? err.message : t('errListing'));
   } finally { btn.disabled = false; }
 }
+/* ---------- v1.14: edit listing ----------
+   Mov sometimes sets the wrong price or wants a new picture — the
+   admin fixes it here without re-creating the listing. The modal
+   reuses the in-page pattern of the Delete Requests confirm modal
+   (never window.prompt/confirm). Only the fields that changed are
+   sent; leaving the logo empty keeps the existing logo. The server
+   endpoint updates display fields only — the Mail.tm account is
+   never touched by an edit, and existing orders keep their locked
+   price. */
+var editListingId = null, editListingOriginal = null, editListingNewLogo = null;
+function openEditListingModal(l) {
+  editListingId = l.id;
+  editListingOriginal = { price: Number(l.price), title: String(l.title || ''), token: String(l.token || '') };
+  editListingNewLogo = null;
+  $('editListingHeading').textContent = t('editListingTitle');
+  $('editListingEmail').textContent = l.email || l.maskedEmail || '';
+  $('editListingPrice').value = (l.price == null || l.price === '') ? '' : String(l.price);
+  $('editListingTitleInput').value = l.title || '';
+  $('editListingTokenInput').value = l.token || '';
+  $('editListingLogo').value = '';
+  var prev = $('editListingLogoPreview');
+  if (l.logoDataUrl) { prev.src = l.logoDataUrl; prev.hidden = false; } else { prev.removeAttribute('src'); prev.hidden = true; }
+  showError($('editListingError'), '');
+  show($('editListingModal'), true);
+}
+function closeEditListingModal() {
+  show($('editListingModal'), false);
+  editListingId = null; editListingOriginal = null; editListingNewLogo = null;
+  $('editListingLogo').value = '';
+}
+function onEditListingLogoChange() {
+  var file = $('editListingLogo').files && $('editListingLogo').files[0];
+  var prev = $('editListingLogoPreview');
+  if (!file) { editListingNewLogo = null; return; }
+  if (file.size > LOGO_MAX_BYTES) {
+    $('editListingLogo').value = '';
+    editListingNewLogo = null;
+    return showError($('editListingError'), t('errLogoTooBig'));
+  }
+  showError($('editListingError'), '');
+  readFileAsDataURL(file).then(function (url) { editListingNewLogo = url; prev.src = url; prev.hidden = false; });
+}
+async function onEditListingSave() {
+  if (!editListingId || !editListingOriginal) return;
+  var priceRaw = $('editListingPrice').value.trim();
+  var price = Number(priceRaw);
+  var title = $('editListingTitleInput').value.trim();
+  var token = $('editListingTokenInput').value.trim();
+  /* Validate only the fields that changed: a token that was already
+     empty stays empty (unchanged, never sent), but clearing a token
+     that had a value is rejected — the server requires a non-empty
+     token when one is sent. */
+  var priceChanged = price !== editListingOriginal.price;
+  var titleChanged = title !== editListingOriginal.title;
+  var tokenChanged = token !== editListingOriginal.token;
+  if (priceChanged && (priceRaw === '' || isNaN(price) || price <= 0)) {
+    return showError($('editListingError'), t('errEditPrice'));
+  }
+  if (titleChanged && !title) {
+    return showError($('editListingError'), t('errEditTitle'));
+  }
+  if (tokenChanged && !token) {
+    return showError($('editListingError'), t('errEditToken'));
+  }
+  var body = {};
+  if (priceChanged) body.price = price;
+  if (titleChanged) body.title = title;
+  if (tokenChanged) body.token = token;
+  if (editListingNewLogo) body.logo = editListingNewLogo;
+  if (Object.keys(body).length === 0) {
+    return showError($('editListingError'), t('editListingNoChange'));
+  }
+  showError($('editListingError'), '');
+  var btn = $('editListingSave');
+  btn.disabled = true;
+  try {
+    await api('/api/admin/market/listings/' + encodeURIComponent(editListingId) + '/update', { method: 'POST', body: body });
+    toast(t('toastListingUpdated'));
+    closeEditListingModal();
+    loadListings();
+  } catch (err) {
+    /* Server error text surfaces here (e.g. 400 bad price) via api()'s
+       thrown message; the modal stays open so Mov can fix it. */
+    showError($('editListingError'), err && err.message ? err.message : t('errEditListing'));
+  } finally { btn.disabled = false; }
+}
 async function removeListing(id) {
   try {
     await api('/api/admin/market/listings/' + encodeURIComponent(id), { method: 'DELETE' });
@@ -1876,6 +1989,19 @@ async function removeListing(id) {
   }
 }
 async function onListingsClick(e) {
+  /* v1.14: Edit — open the edit modal pre-filled with the listing's
+     current price/title/token/logo. The button is only rendered for
+     active listings. */
+  var editBtn = e.target.closest('[data-listing-edit]');
+  if (editBtn) {
+    var editId = editBtn.dataset.listingEdit;
+    var editRow = null;
+    for (var ei = 0; ei < listingsCache.length; ei++) {
+      if (String(listingsCache[ei].id) === String(editId)) { editRow = listingsCache[ei]; break; }
+    }
+    if (editRow) openEditListingModal(editRow);
+    return;
+  }
   /* Per-listing health check: one call per click (button disabled +
      spinner while the check runs, so it can never be hammered). */
   var checkBtn = e.target.closest('[data-listing-check]');
@@ -2071,7 +2197,11 @@ function init() {
   $('confirmModalOk').addEventListener('click', function () { closeConfirmModal(true); }); /* v1.10d */
   $('confirmModalCancel').addEventListener('click', function () { closeConfirmModal(false); }); /* v1.10d */
   $('confirmModal').addEventListener('click', function (e) { if (e.target === $('confirmModal')) closeConfirmModal(false); }); /* v1.10d: tap overlay = cancel */
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('confirmModal').hidden) closeConfirmModal(false); }); /* v1.10d */
+  $('editListingSave').addEventListener('click', onEditListingSave); /* v1.14 */
+  $('editListingCancel').addEventListener('click', closeEditListingModal); /* v1.14 */
+  $('editListingLogo').addEventListener('change', onEditListingLogoChange); /* v1.14 */
+  $('editListingModal').addEventListener('click', function (e) { if (e.target === $('editListingModal')) closeEditListingModal(); }); /* v1.14: tap overlay = cancel */
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('confirmModal').hidden) closeConfirmModal(false); else if (e.key === 'Escape' && !$('editListingModal').hidden) closeEditListingModal(); }); /* v1.10d + v1.14 */
   $('ordersList').addEventListener('click', function (e) {
     if (e.target.closest('[data-order-action]')) onOrderActionClick(e);
     else onReceiptThumbClick(e); /* same lightbox as receipts */
