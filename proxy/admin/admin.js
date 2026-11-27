@@ -1016,6 +1016,7 @@ function updateNotifBadge() {
   b.hidden = !(notifUnread > 0);
 }
 async function loadNotifications(silent) {
+  showError($('notifError'), '');
   try {
     var data = await api('/api/admin/notifications');
     var list = Array.isArray(data) ? data : (data.notifications || []);
