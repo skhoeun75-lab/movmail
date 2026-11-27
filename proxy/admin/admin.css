@@ -433,6 +433,40 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
 .btn-delete-account { background: #7f1d1d; }
 .btn-delete-account:hover { background: #5f1515; }
 
+/* ---------- v1.11: buyer support chat ----------
+   Thread list (one row per order with messages, unread = green
+   left border like notifications) + thread view (buyer messages
+   left, admin replies right) + reply box with optional code. */
+.support-list { display: grid; gap: 10px; }
+.support-row {
+  border: 1px solid var(--border); border-radius: 12px; padding: 12px;
+  background: #fff; cursor: pointer;
+}
+.support-row:hover { border-color: var(--accent); }
+.support-row.support-unread {
+  background: var(--green-bg); border-color: #bfe3d2;
+  border-left: 4px solid var(--accent);
+}
+.support-row .n-title, .support-thread-head .n-title { font-weight: 700; word-break: break-word; }
+.support-row .n-line, .support-thread-head .n-line, .support-evidence .n-line { color: var(--muted); font-size: 13px; word-break: break-word; }
+.support-row .n-line.n-preview { color: var(--ink); }
+.support-row .n-time { font-size: 12px; }
+.support-thread-head { margin: 12px 0 4px; font-size: 14px; }
+.support-evidence { margin-bottom: 12px; font-size: 14px; }
+.support-evidence .pill { margin-top: 4px; display: inline-block; }
+.support-messages { display: grid; gap: 8px; margin-bottom: 12px; max-height: 50vh; overflow-y: auto; }
+.sup-msg { max-width: 85%; padding: 10px 12px; border-radius: 12px; font-size: 14px; word-break: break-word; }
+.sup-msg.buyer { background: #fff; border: 1px solid var(--border); justify-self: start; }
+.sup-msg.admin { background: var(--green-bg); border: 1px solid #bfe3d2; justify-self: end; }
+.sup-msg .sup-who { font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 4px; }
+.sup-msg .sup-code { margin-top: 6px; font-weight: 700; }
+.sup-msg .sup-code code { font-size: 16px; font-weight: 800; letter-spacing: 2px; }
+#supportReplyForm textarea {
+  width: 100%; resize: vertical; font: inherit; padding: 10px 12px; font-size: 15px;
+  border: 1px solid var(--border); border-radius: 10px; background: #fff; color: var(--ink);
+}
+#supportReplyForm textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+
 /* ---------- Mobile ---------- */
 @media (max-width: 640px) {
   .container { padding: 12px; }

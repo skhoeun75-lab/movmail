@@ -107,6 +107,21 @@ const I18N = {
     toastDelReqRejected: 'បានបដិសេធសំណើលុប។', errDelReq: 'ដំណើរការសំណើលុបមិនបានទេ។',
     delReqStatusPending: 'រង់ចាំ', delReqStatusApproved: 'បានអនុម័ត',
     delReqStatusRejected: 'បានបដិសេធ', delReqStatusExpired: 'ផុតកំណត់',
+    /* v1.11: buyer support chat (admin side) — after a successful
+       purchase the buyer gets a chat in My Orders; the admin
+       verifies against the delivery evidence and replies, and the
+       reply lands in the buyer's bell (with an optional code). */
+    support: 'ជំនួយ', supportTitle: 'ជំនួយអ្នកទិញ',
+    supportNote: 'មានតែការបញ្ជាទិញដែលបានអនុម័តទេទើបមានកន្លែងជជែក។ អ្នកទិញផ្ញើបញ្ហាមក អ្នកពិនិត្យភស្តុតាងថាកូដពិតជាមកដល់ឬអត់ រួចឆ្លើយទៅវិញ — ចម្លើយទៅដល់កណ្ដឹងអ្នកទិញ។',
+    noSupport: 'មិនមានសារជំនួយទេ', supportBack: '← ត្រឡប់ទៅបញ្ជី',
+    supportReplyLabel: 'ចម្លើយរបស់អ្នក', supportReplyPh: 'វាយចម្លើយទៅអ្នកទិញ…',
+    supportCodeLabel: 'កូដ (បើមាន)', supportCodePh: 'ឧ. 123456',
+    supportSend: 'ផ្ញើចម្លើយ', supportYou: 'អ្នក', supportAdmin: 'អ្នកគ្រប់គ្រង',
+    supportOrderNo: 'ការបញ្ជាទិញ #{id}', supportMsgs: '{n} សារ',
+    supportEmptyThread: 'មិនទាន់មានសារទេ',
+    supportSendFailed: 'ផ្ញើចម្លើយមិនបានទេ។',
+    toastSupportSent: 'បានផ្ញើចម្លើយទៅអ្នកទិញហើយ។',
+    toastSupportNew: '💬 សារជំនួយថ្មីពី {buyer} — ការបញ្ជាទិញ #{order}',
     searchPlaceholder: 'ស្វែងរកតាមឈ្មោះ / Gmail / ប្រទេស…',
     filterAll: 'ទាំងអស់', filterNormal: 'ធម្មតា', filterRisk: 'មានហានិភ័យ', filterBlocked: 'បានបិទ',
     refresh: 'ធ្វើឱ្យថ្មី', country: 'ប្រទេស', city: 'ទីក្រុង', device: 'ឧបករណ៍', connection: 'ការតភ្ជាប់',
@@ -233,6 +248,18 @@ const I18N = {
     toastDelReqRejected: 'Delete request rejected.', errDelReq: 'Could not process the delete request.',
     delReqStatusPending: 'Pending', delReqStatusApproved: 'Approved',
     delReqStatusRejected: 'Rejected', delReqStatusExpired: 'Expired',
+    /* v1.11: buyer support chat (admin side). */
+    support: 'Support', supportTitle: 'Buyer support',
+    supportNote: 'Only approved orders have a chat. The buyer sends their problem, you check the delivery evidence, then reply — your reply reaches the buyer\'s bell.',
+    noSupport: 'No support messages yet', supportBack: '← Back to list',
+    supportReplyLabel: 'Your reply', supportReplyPh: 'Type your reply to the buyer…',
+    supportCodeLabel: 'Code (if any)', supportCodePh: 'e.g. 123456',
+    supportSend: 'Send reply', supportYou: 'You', supportAdmin: 'Admin',
+    supportOrderNo: 'Order #{id}', supportMsgs: '{n} messages',
+    supportEmptyThread: 'No messages yet',
+    supportSendFailed: 'Could not send the reply.',
+    toastSupportSent: 'Reply sent to the buyer.',
+    toastSupportNew: '💬 New support message from {buyer} — order #{order}',
     searchPlaceholder: 'Search by name / Gmail / country…',
     filterAll: 'All', filterNormal: 'Normal', filterRisk: 'At risk', filterBlocked: 'Blocked',
     refresh: 'Refresh', country: 'Country', city: 'City', device: 'Device', connection: 'Connection',
@@ -487,7 +514,7 @@ function adminBadgeHtml(u) {
   return isAdminGmail(u.gmail) ? ' <span class="admin-badge-user">Admin</span>' : '';
 }
 
-function loadAll() { loadUsers(); loadCodes(); loadReceipts(); loadListings(); loadOrders(); loadNotifications(); loadDelRequests(); }
+function loadAll() { loadUsers(); loadCodes(); loadReceipts(); loadListings(); loadOrders(); loadNotifications(); loadDelRequests(); loadSupport(); }
 
 async function loadUsers() {
   showError($('usersError'), '');
@@ -1203,7 +1230,7 @@ async function onNotifForwardClick(e) {
 function startNotifPolling() {
   if (notifTimer) return;
   notifTimer = setInterval(function () {
-    if (isLoggedIn()) { loadNotifications(true); loadDelRequests(true); }
+    if (isLoggedIn()) { loadNotifications(true); loadDelRequests(true); loadSupport(true); }
   }, 30000);
 }
 /* ---------- v1.10: delete requests (BLOCKED) ----------
@@ -1341,6 +1368,207 @@ async function onDelReqActionClick(e) {
     showError($('delReqError'), msg);
     toast(msg);
     btn.disabled = false;
+  }
+}
+/* ---------- v1.11: buyer support chat (admin side) ----------
+   After a successful purchase (paid + approved) the buyer gets a
+   support chat in My Orders. The buyer sends the problem, Mov
+   verifies it against the delivery evidence (did a code really
+   arrive in that mailbox after the purchase?) and replies — the
+   reply lands in the buyer's bell, with an optional copyable code.
+   Before purchase there is no chat at all. Threads poll every 30s
+   with the notifications poll; opening a thread marks it read. */
+var supportCache = [], supportThreadId = null, supportThreadCache = null;
+var supportSeenMaxId = 0, supportPrimed = false;
+function normSupportThread(x) {
+  x = x || {};
+  return {
+    orderId: x.orderId || x.order_id || '',
+    listingId: x.listingId || x.listing_id || '',
+    listingTitle: x.listingTitle || x.listing_title || '',
+    maskedEmail: x.maskedEmail || x.masked_email || '',
+    buyerGmail: x.buyerGmail || x.buyer_gmail || '',
+    buyerName: x.buyerName || x.buyer_name || '',
+    lastMessage: x.lastMessage || x.last_message || '',
+    lastCode: x.lastCode || x.last_code || '',
+    lastSenderRole: x.lastSenderRole || x.last_sender_role || '',
+    lastMessageId: Number(x.lastMessageId || x.last_message_id) || 0,
+    lastAt: x.lastAt || x.last_at || '',
+    unread: Number(x.unread) || 0,
+    messageCount: Number(x.messageCount || x.message_count) || 0,
+    evidence: x.evidence || null
+  };
+}
+function normSupportMessage(m) {
+  m = m || {};
+  return {
+    id: m.id,
+    senderRole: m.senderRole || m.sender_role || '',
+    senderGmail: m.senderGmail || m.sender_gmail || '',
+    message: m.message || '',
+    code: m.code || '',
+    createdAt: m.createdAt || m.created_at || ''
+  };
+}
+function supportUnreadCount() {
+  var n = 0;
+  supportCache.forEach(function (x) { n += x.unread || 0; });
+  return n;
+}
+function updateSupportBadge() {
+  var b = $('supportTabBadge');
+  if (!b) return;
+  var n = supportUnreadCount();
+  b.textContent = n > 99 ? '99+' : String(n);
+  b.hidden = !(n > 0);
+}
+async function loadSupport(silent) {
+  showError($('supportError'), '');
+  try {
+    var data = await api('/api/admin/support');
+    var list = Array.isArray(data) ? data : (data.threads || []);
+    var maxId = 0, newestBuyer = null;
+    list.forEach(function (x) {
+      var id = Number(x.lastMessageId || x.last_message_id) || 0;
+      if (id > maxId) maxId = id;
+      var role = x.lastSenderRole || x.last_sender_role || '';
+      if (role === 'buyer' && (!newestBuyer || id > Number(newestBuyer.lastMessageId || newestBuyer.last_message_id || 0))) newestBuyer = x;
+    });
+    /* Toast only when the newest message overall is a buyer message —
+       an admin reply (even from another tab) must not toast. */
+    var isNew = supportPrimed && maxId > supportSeenMaxId && !!newestBuyer
+      && Number(newestBuyer.lastMessageId || newestBuyer.last_message_id || 0) === maxId;
+    supportCache = list.map(normSupportThread);
+    if (maxId > supportSeenMaxId) supportSeenMaxId = maxId;
+    supportPrimed = true;
+    renderSupport();
+    updateSupportBadge();
+    if (isNew && isLoggedIn()) {
+      var who = newestBuyer.buyerName || newestBuyer.buyer_name || newestBuyer.buyerGmail || newestBuyer.buyer_gmail || '—';
+      toast(t('toastSupportNew').replace('{buyer}', who).replace('{order}', String(newestBuyer.orderId || newestBuyer.order_id || '')));
+    }
+    /* An open thread refreshes with the poll, so a buyer's reply
+       appears while Mov is looking at it. */
+    if (supportThreadId) loadSupportThread(supportThreadId, true);
+  } catch (e) {
+    if (!silent) showError($('supportError'), t('errLoad'));
+  }
+}
+function renderSupport() {
+  var sorted = supportCache.slice().sort(function (a, b) {
+    return new Date(b.lastAt || 0) - new Date(a.lastAt || 0);
+  });
+  $('supportList').innerHTML = sorted.map(function (x) {
+    var preview = x.lastMessage ? String(x.lastMessage).slice(0, 120) : '';
+    var who = x.lastSenderRole === 'admin' ? t('supportYou') : (x.buyerName || x.buyerGmail || '—');
+    return '<div class="support-row' + (x.unread > 0 ? ' support-unread' : '') + '" data-support-thread="' + esc(x.orderId) + '">'
+      + '<div class="support-info">'
+      + '<div class="n-title">' + (x.unread > 0 ? '<span class="pill pill-red">' + esc(t('notifNew')) + '</span> ' : '')
+      + esc(x.listingTitle || x.maskedEmail) + '</div>'
+      + '<div class="n-line">' + esc(x.maskedEmail) + '</div>'
+      + '<div class="n-line">👤 ' + esc(t('buyer')) + ': ' + esc(x.buyerName ? x.buyerName + ' (' + x.buyerGmail + ')' : (x.buyerGmail || '—')) + '</div>'
+      + (preview ? '<div class="n-line n-preview">' + esc(who) + ': ' + esc(preview) + '</div>' : '')
+      + '<div class="n-line n-time">' + esc(t('supportOrderNo').replace('{id}', String(x.orderId))) + ' · ' + esc(t('supportMsgs').replace('{n}', String(x.messageCount))) + ' · ' + esc(fmtDate(x.lastAt)) + '</div>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+  show($('supportEmpty'), sorted.length === 0);
+}
+async function openSupportThread(orderId) {
+  supportThreadId = Number(orderId);
+  show($('supportList'), false); show($('supportEmpty'), false);
+  show($('supportThread'), true);
+  await loadSupportThread(supportThreadId);
+}
+function closeSupportThread() {
+  supportThreadId = null; supportThreadCache = null;
+  show($('supportThread'), false);
+  show($('supportList'), true);
+  renderSupport();
+  loadSupport();
+}
+async function loadSupportThread(orderId, silent) {
+  showError($('supportError'), '');
+  try {
+    var data = await api('/api/admin/support/' + orderId + '/messages');
+    supportThreadCache = data;
+    renderSupportThread(data);
+    /* Opening a thread marks the buyer's messages read — drop the
+       unread count for it at once. */
+    supportCache.forEach(function (x) { if (String(x.orderId) === String(orderId)) x.unread = 0; });
+    updateSupportBadge();
+    renderSupport();
+  } catch (e) {
+    if (!silent) showError($('supportError'), t('errLoad'));
+  }
+}
+function renderSupportThread(data) {
+  var d = data || {};
+  var msgs = Array.isArray(d.messages) ? d.messages.map(normSupportMessage) : [];
+  var buyerName = d.buyerName || d.buyer_name || '';
+  var buyerGmail = d.buyerGmail || d.buyer_gmail || '';
+  var orderId = d.orderId || d.order_id || '';
+  $('supportThreadHead').innerHTML = '<div class="n-title">' + esc(d.listingTitle || d.listing_title || d.maskedEmail || d.masked_email || '') + '</div>'
+    + '<div class="n-line">' + esc(d.maskedEmail || d.masked_email || '') + '</div>'
+    + '<div class="n-line">👤 ' + esc(t('buyer')) + ': ' + esc(buyerName ? buyerName + ' (' + buyerGmail + ')' : (buyerGmail || '—')) + '</div>'
+    + '<div class="n-line">' + esc(t('supportOrderNo').replace('{id}', String(orderId))) + '</div>';
+  /* Delivery evidence — what actually arrived in that mailbox after
+     the purchase. The buyer's claim is checked against this before
+     replying. */
+  var ev = d.evidence || null;
+  var evHtml = '';
+  if (ev && ev.count > 0) {
+    evHtml = '<div class="n-line">📩 ' + esc(t('evidenceLast')) + ': ' + esc(ev.lastFrom || '—')
+      + ' — ' + esc(ev.lastSubject || '—') + ' (' + esc(fmtDate(ev.lastAt)) + ') · '
+      + esc(String(ev.count)) + ' ' + esc(t('evidenceMsgs')) + '</div>';
+  } else {
+    evHtml = '<div class="n-line">📩 ' + esc(t('evidenceNone')) + '</div>';
+  }
+  /* Mismatch flag: the buyer filed a failed report on this order but
+     a code DID arrive after the purchase — same rule as Orders. */
+  var rep = null;
+  ordersCache.forEach(function (o) { if (String(o.id) === String(orderId)) rep = o.report || null; });
+  if (rep && rep.status === 'failed' && ev && ev.count > 0) {
+    evHtml += '<div class="n-line"><span class="pill pill-red">' + esc(t('mismatchFlag')) + '</span></div>';
+  }
+  $('supportThreadEvidence').innerHTML = evHtml;
+  $('supportMessages').innerHTML = msgs.length ? msgs.map(function (m) {
+    var who = m.senderRole === 'admin' ? t('supportAdmin') : (buyerName || buyerGmail || '—');
+    var codeLine = m.code ? '<div class="sup-code">' + esc(t('notifCode')) + ': <code>' + esc(m.code) + '</code></div>' : '';
+    return '<div class="sup-msg ' + (m.senderRole === 'admin' ? 'admin' : 'buyer') + '">'
+      + '<div class="sup-who">' + esc(who) + ' · ' + esc(fmtDate(m.createdAt)) + '</div>'
+      + '<div class="sup-text">' + esc(m.message) + '</div>'
+      + codeLine
+      + '</div>';
+  }).join('') : '<p class="muted empty-note">' + esc(t('supportEmptyThread')) + '</p>';
+  var box = $('supportMessages');
+  box.scrollTop = box.scrollHeight;
+}
+function onSupportListClick(e) {
+  var row = e.target && e.target.closest ? e.target.closest('[data-support-thread]') : null;
+  if (!row) return;
+  openSupportThread(row.getAttribute('data-support-thread'));
+}
+async function onSupportReplySubmit(e) {
+  e.preventDefault();
+  if (!supportThreadId) return;
+  var msgEl = $('supportReplyText'), codeEl = $('supportReplyCode');
+  var message = (msgEl.value || '').trim();
+  var code = (codeEl.value || '').trim();
+  if (!message) { showError($('supportReplyError'), t('supportSendFailed')); return; }
+  showError($('supportReplyError'), '');
+  var btn = e.target.querySelector('button[type="submit"]');
+  if (btn) btn.disabled = true;
+  try {
+    await api('/api/admin/support/' + supportThreadId + '/reply', { method: 'POST', body: { message: message, code: code } });
+    msgEl.value = ''; codeEl.value = '';
+    toast(t('toastSupportSent'));
+    await loadSupportThread(supportThreadId);
+    loadSupport(true);
+  } catch (err) {
+    showError($('supportReplyError'), (err && err.message) || t('supportSendFailed'));
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 function listingPill(st) {
@@ -1739,6 +1967,7 @@ function switchTab(name) {
   if (name === 'orders') loadOrders();
   if (name === 'delrequests') loadDelRequests();
   if (name === 'notifications') loadNotifications();
+  if (name === 'support') loadSupport();
 }
 function onSaveToken() {
   localStorage.setItem(LS_TOKEN, $('tokenInput').value.trim());
@@ -1755,7 +1984,7 @@ function init() {
     localStorage.setItem(LS_LANG, LANG);
     applyI18n();
     renderExpirySeg();
-    if (isLoggedIn()) { renderUsers(); renderCodes(); renderReceipts(); renderListings(); renderOrders(); renderNotifications(); renderDelRequests(); updateNotifBadge(); updateDelReqBadge(); updateStats(); renderRecipientList(); renderSendResults(lastSendResults); }
+    if (isLoggedIn()) { renderUsers(); renderCodes(); renderReceipts(); renderListings(); renderOrders(); renderNotifications(); renderDelRequests(); renderSupport(); if (supportThreadCache) renderSupportThread(supportThreadCache); updateNotifBadge(); updateDelReqBadge(); updateSupportBadge(); updateStats(); renderRecipientList(); renderSendResults(lastSendResults); }
   });
   $('setupForm').addEventListener('submit', onSetupSubmit);
   $('loginForm').addEventListener('submit', onLoginSubmit);
@@ -1804,6 +2033,9 @@ function init() {
   $('markNotifReadBtn').addEventListener('click', onMarkNotifReadClick); /* v1.9 */
   $('notifList').addEventListener('click', onNotifForwardClick); /* v1.9b: Send to buyer */
   $('delReqList').addEventListener('click', onDelReqActionClick); /* v1.10: approve/reject delete requests */
+  $('supportList').addEventListener('click', onSupportListClick); /* v1.11: open a support thread */
+  $('supportBackBtn').addEventListener('click', closeSupportThread); /* v1.11 */
+  $('supportReplyForm').addEventListener('submit', onSupportReplySubmit); /* v1.11: reply + optional code */
   $('confirmModalOk').addEventListener('click', function () { closeConfirmModal(true); }); /* v1.10d */
   $('confirmModalCancel').addEventListener('click', function () { closeConfirmModal(false); }); /* v1.10d */
   $('confirmModal').addEventListener('click', function (e) { if (e.target === $('confirmModal')) closeConfirmModal(false); }); /* v1.10d: tap overlay = cancel */

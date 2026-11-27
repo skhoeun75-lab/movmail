@@ -106,6 +106,7 @@
       <button class="tab" type="button" data-tab="receipts" role="tab" data-i18n="receipts">វិក្កយបត្រ</button>
       <button class="tab" type="button" data-tab="listings" role="tab" data-i18n="listings">បញ្ជីលក់</button>
       <button class="tab" type="button" data-tab="orders" role="tab" data-i18n="orders">ការបញ្ជាទិញ</button>
+      <button class="tab" type="button" data-tab="support" role="tab"><span data-i18n="support">ជំនួយ</span><span class="tab-badge" id="supportTabBadge" hidden>0</span></button>
       <button class="tab" type="button" data-tab="delrequests" role="tab"><span data-i18n="delRequests">សំណើលុប</span><span class="tab-badge" id="delReqTabBadge" hidden>0</span></button>
       <button class="tab" type="button" data-tab="notifications" role="tab"><span data-i18n="notifications">ការជូនដំណឹង</span><span class="tab-badge" id="notifTabBadge" hidden>0</span></button>
       <button class="tab" type="button" data-tab="settings" role="tab" data-i18n="settings">ការកំណត់</button>
@@ -271,6 +272,35 @@
         <p class="error" id="ordersError" hidden></p>
         <div id="ordersList" class="receipts-list"></div>
         <p class="muted empty-note" id="ordersEmpty" hidden data-i18n="noOrders">មិនមានការបញ្ជាទិញទេ</p>
+      </div>
+    </div>
+
+    <!-- BUYER SUPPORT CHAT (v1.11) -->
+    <div class="tab-panel" id="panel-support" hidden>
+      <div class="card">
+        <h2 data-i18n="supportTitle">ជំនួយអ្នកទិញ</h2>
+        <p class="muted" data-i18n="supportNote">មានតែការបញ្ជាទិញដែលបានអនុម័តទេទើបមានកន្លែងជជែក។ អ្នកទិញផ្ញើបញ្ហាមក អ្នកពិនិត្យភស្តុតាងថាកូដពិតជាមកដល់ឬអត់ រួចឆ្លើយទៅវិញ — ចម្លើយទៅដល់កណ្ដឹងអ្នកទិញ។</p>
+        <p class="error" id="supportError" hidden></p>
+        <div id="supportList" class="support-list"></div>
+        <p class="muted empty-note" id="supportEmpty" hidden data-i18n="noSupport">មិនមានសារជំនួយទេ</p>
+        <div id="supportThread" hidden>
+          <button id="supportBackBtn" class="btn btn-secondary" type="button" data-i18n="supportBack">← ត្រឡប់ទៅបញ្ជី</button>
+          <div id="supportThreadHead" class="support-thread-head"></div>
+          <div id="supportThreadEvidence" class="support-evidence"></div>
+          <div id="supportMessages" class="support-messages"></div>
+          <form id="supportReplyForm" novalidate>
+            <label class="field">
+              <span data-i18n="supportReplyLabel">ចម្លើយរបស់អ្នក</span>
+              <textarea id="supportReplyText" rows="3" data-i18n-ph="supportReplyPh" placeholder="វាយចម្លើយទៅអ្នកទិញ…"></textarea>
+            </label>
+            <label class="field">
+              <span data-i18n="supportCodeLabel">កូដ (បើមាន)</span>
+              <input id="supportReplyCode" type="text" autocomplete="off" data-i18n-ph="supportCodePh" placeholder="ឧ. 123456">
+            </label>
+            <p class="error" id="supportReplyError" hidden></p>
+            <button class="btn btn-primary" type="submit" data-i18n="supportSend">ផ្ញើចម្លើយ</button>
+          </form>
+        </div>
       </div>
     </div>
 
