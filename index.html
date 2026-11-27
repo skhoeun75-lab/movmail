@@ -794,6 +794,12 @@
       /* Admin gift row: tappable, unmistakably a gift. */
       .gift-row{width:100%;text-align:left;background:var(--accent-soft);border:1px solid var(--accent);border-radius:10px;padding:8px 10px;margin-bottom:6px;cursor:pointer;color:var(--ink);font:inherit}
       .gift-row:hover{filter:brightness(.97)}
+      /* v1.10c: delete-attempt alarm row in the bell (admin accounts
+         only) — red, distinct from gift rows. Tapping it only marks
+         it read; there is no code to copy. */
+      .del-row{width:100%;text-align:left;background:#fef2f2;border:1px solid #dc2626;border-radius:10px;padding:8px 10px;margin-bottom:6px;cursor:pointer;color:#991b1b;font:inherit}
+      .del-row:hover{filter:brightness(.97)}
+      .del-row .notif-time{color:#b91c1c}
       .gift-code{font-size:26px;font-weight:800;letter-spacing:2px;text-align:center;background:var(--surface-2);border:1px dashed var(--faint);border-radius:12px;padding:14px 10px;margin:12px 0;overflow-wrap:anywhere;word-break:break-all}
       .accent-pick{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0 4px}
       .accent-dot{width:30px;height:30px;border-radius:50%;border:2px solid transparent;padding:0;min-height:30px;cursor:pointer;flex:none}
@@ -2642,6 +2648,11 @@ var I18N = {
     "giftAmount": "+{n} ដងក្នុងមួយថ្ងៃ",
     "codeForwardTitle": "កូដពី {sender}",
     "codeForwardFrom": "ពី {sender} · {email}",
+    /* v1.10c: delete-attempt alarm in the website bell (admin accounts
+       only) — something tried to DELETE an account; the block refused
+       it. Tap the row only marks it read; there is no code to copy. */
+    "delAttemptBellTitle": "🛡️ ការប៉ុនប៉ងលុបត្រូវបានបដិសេធ",
+    "delAttemptBellDetail": "{path} · {proxy} · {n} ដង",
     "avatarRow": "រូបភាព",
     "avatarNone": "មិនទាន់ជ្រើសរើសរូបភាព",
     "payPlanLabel": "កញ្ចប់",
@@ -3030,6 +3041,11 @@ var I18N = {
     "giftAmount": "+{n} extra uses per day",
     "codeForwardTitle": "Code from {sender}",
     "codeForwardFrom": "From {sender} · {email}",
+    /* v1.10c: delete-attempt alarm in the website bell (admin accounts
+       only) — something tried to DELETE an account; the block refused
+       it. Tap the row only marks it read; there is no code to copy. */
+    "delAttemptBellTitle": "🛡️ Delete attempt blocked",
+    "delAttemptBellDetail": "{path} · {proxy} · {n} attempts",
     "avatarRow": "Avatar",
     "avatarNone": "No avatar chosen",
     "payPlanLabel": "Plan",
@@ -6124,6 +6140,21 @@ var I18N = {
           gifts.forEach(function(g){
             var grow = document.createElement("button");
             grow.type = "button";
+            /* v1.10c: a delete-attempt alarm is a red row, not a gift —
+               tapping it only marks it read (no popup, no code). The
+               server only ever sends these rows to admin accounts. */
+            if (g.type === "delete_attempt_blocked") {
+              grow.className = "notif-item del-row";
+              var dtx = document.createElement("span");
+              dtx.textContent = t("delAttemptBellTitle") + " — " + t("delAttemptBellDetail", {path: g.attemptPath || "—", proxy: g.proxyHost || "—", n: (g.attempts > 0 ? g.attempts : 1)});
+              var dtm = document.createElement("span");
+              dtm.className = "notif-time";
+              dtm.textContent = g.created_at ? relTime(g.created_at) : "";
+              grow.appendChild(dtx); grow.appendChild(dtm);
+              grow.addEventListener("click", function(){ markGiftRead(g); });
+              nl.appendChild(grow);
+              return;
+            }
             grow.className = "notif-item gift-row";
             var gtx = document.createElement("span");
             /* v1.9b: forwarded codes show "Code from <sender> · <email>"
@@ -6222,7 +6253,11 @@ var I18N = {
               known[id] = true;
               /* v1.9b: forwarded codes carry their origin (sender +
                  listing email) so the bell can show "code from X". */
-              gifts.push({ id: id, code: String(item.code || ""), amountPerDay: (typeof item.amountPerDay === "number" ? item.amountPerDay : 0), created_at: item.created_at || new Date().toISOString(), type: item.type || "gift", sender: item.sender || "", listingEmail: item.listingEmail || "", listingTitle: item.listingTitle || "", subject: item.subject || "" });
+              gifts.push({ id: id, code: String(item.code || ""), amountPerDay: (typeof item.amountPerDay === "number" ? item.amountPerDay : 0), created_at: item.created_at || new Date().toISOString(), type: item.type || "gift", sender: item.sender || "", listingEmail: item.listingEmail || "", listingTitle: item.listingTitle || "", subject: item.subject || "",
+                /* v1.10c: delete-attempt alarm rows (admin accounts
+                   only) carry the attempted path, which proxy blocked
+                   it, and the attempt count. */
+                attemptPath: item.attemptPath || "", proxyHost: item.proxyHost || "", attempts: (typeof item.attempts === "number" ? item.attempts : 0) });
             });
             d.giftNotifications = gifts;
             saveAcctData(d);

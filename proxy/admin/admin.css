@@ -385,6 +385,12 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
 .notif-row.notif-sys.notif-unread { background: #fef3c7; }
 .notif-info .n-line.n-sys-title { color: #92400e; font-weight: 700; }
 
+/* v1.10c: delete-attempt alarm — red, distinct from code (green) and
+   system-request (amber) rows. The delete never succeeded. */
+.notif-row.notif-del { border-left: 4px solid #dc2626; background: #fef2f2; }
+.notif-row.notif-del.notif-unread { background: #fee2e2; }
+.notif-info .n-line.n-del-title { color: #991b1b; font-weight: 700; }
+
 /* ---------- v1.10: delete requests (BLOCKED) ---------- */
 .delreq-list { display: grid; gap: 10px; }
 .delreq-row {

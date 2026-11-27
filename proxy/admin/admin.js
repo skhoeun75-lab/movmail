@@ -136,6 +136,13 @@ const I18N = {
     notifSysTitle: '⚠️ ប្រព័ន្ធស្នើសុំលុបអ៊ីមែលនេះ',
     notifSysReason: 'មូលហេតុ', notifSysRedSince: 'ក្រហមតាំងពី',
     toastNotifSysNew: '⚠️ ប្រព័ន្ធស្នើសុំលុប {email} — មូលហេតុ៖ {reason}',
+    /* v1.10c: delete-attempt alarm — something tried to DELETE a
+       Mail.tm account through a proxy; the block refused it AND
+       Mov is told at once. Red row, no code, no forward button. */
+    notifDelTitle: '🛡️ មានការប៉ុនប៉ងលុបអ៊ីមែល — ត្រូវបានបដិសេធ',
+    notifDelPath: 'ផ្លូវដែលស្នើលុប', notifDelProxy: 'Proxy ដែលបដិសេធ',
+    notifDelAttempts: 'ចំនួនដងដែលស្នើ', notifDelLast: 'លើកចុងក្រោយ',
+    toastNotifDelNew: '🛡️ មានការប៉ុនប៉ងលុប {path} — ត្រូវបានបដិសេធដោយ {proxy}',
     /* v1.9d: admin-only permanent delete of a listed mailbox. */
     deleteAccount: 'លុបជាអចិន្ត្រៃយ៍',
     confirmDeleteAccount: 'លុបអ៊ីមែល {email} ជាអចិន្ត្រៃយ៍មែនទេ? អ៊ីមែលនេះនឹងត្រូវលុបចេញពី Mail.tm ហើយមិនអាចយកមកវិញបានទេ។ មានតែអ្នកគ្រប់គ្រងទេដែលអាចលុបបាន។',
@@ -255,6 +262,13 @@ const I18N = {
     notifSysTitle: '⚠️ System asks to delete this email',
     notifSysReason: 'Reason', notifSysRedSince: 'Red since',
     toastNotifSysNew: '⚠️ System asks to delete {email} — reason: {reason}',
+    /* v1.10c: delete-attempt alarm — something tried to DELETE a
+       Mail.tm account through a proxy; the block refused it AND
+       Mov is told at once. Red row, no code, no forward button. */
+    notifDelTitle: '🛡️ Delete attempt blocked',
+    notifDelPath: 'Attempted path', notifDelProxy: 'Blocked by proxy',
+    notifDelAttempts: 'Attempts', notifDelLast: 'Last attempt',
+    toastNotifDelNew: '🛡️ Delete attempt blocked: {path} — refused by {proxy}',
     /* v1.9d: admin-only permanent delete of a listed mailbox. */
     deleteAccount: 'Delete forever',
     confirmDeleteAccount: 'Delete {email} forever? The Mail.tm account will be deleted permanently and can never be recovered. Only the admin can delete it.',
@@ -1042,6 +1056,11 @@ function normNotif(n) {
     /* v1.10b: system delete request — the reason + red-since. */
     reason: n.reason || '',
     redSince: n.redSince || n.red_since || '',
+    /* v1.10c: delete-attempt alarm — the attempted path, which proxy
+       blocked it, and how many times it was tried in the window. */
+    attemptPath: n.attemptPath || n.attempt_path || '',
+    proxyHost: n.proxyHost || n.proxy_host || '',
+    attempts: Number(n.attempts) || 0,
     /* v1.9b: who bought it + whether the code was forwarded. */
     buyerGmail: n.buyerGmail || n.buyer_gmail || '',
     buyerName: n.buyerName || n.buyer_name || '',
@@ -1081,7 +1100,13 @@ async function loadNotifications(silent) {
       list.forEach(function (x) { if (!newest || Number(x.id) > Number(newest.id)) newest = x; });
       if (newest) {
         var nn = normNotif(newest);
-        if (nn.type === 'system_delete_request') {
+        if (nn.type === 'delete_attempt_blocked') {
+          /* v1.10c: something tried to delete an account — the block
+             refused it, and Mov must know at once. */
+          toast(t('toastNotifDelNew')
+            .replace('{path}', nn.attemptPath || '—')
+            .replace('{proxy}', nn.proxyHost || '—'));
+        } else if (nn.type === 'system_delete_request') {
           /* v1.10b: the system asks, it never deletes — toast the
              reason so the admin knows why at a glance. */
           toast(t('toastNotifSysNew')
@@ -1109,38 +1134,51 @@ function renderNotifications() {
        no forward button — it shows the reason + red-since clearly,
        in an amber row. */
     var isSys = n.type === 'system_delete_request';
-    var codeLine = (!isSys && n.code)
+    var isDel = n.type === 'delete_attempt_blocked';
+    var codeLine = (!isSys && !isDel && n.code)
       ? '<div class="n-line n-code">' + esc(t('notifCode')) + ': <code>' + esc(n.code) + '</code></div>'
       : '';
     /* v1.9b: who bought it (name + gmail, or "no buyer yet") and the
        forward button — only when a code + a known buyer exist. Once
-       forwarded it becomes a "sent ✓" state and the button is gone. */
-    var buyerLine = '<div class="n-line">👤 ' + esc(t('notifBuyer')) + ': '
+       forwarded it becomes a "sent ✓" state and the button is gone.
+       Delete-attempt rows have no buyer and no forward. */
+    var buyerLine = isDel ? '' : '<div class="n-line">👤 ' + esc(t('notifBuyer')) + ': '
       + (n.buyerGmail
         ? esc(n.buyerName ? n.buyerName + ' (' + n.buyerGmail + ')' : n.buyerGmail)
         : esc(t('notifNoBuyer')))
       + '</div>';
-    var msgLine = isSys ? ''
+    var msgLine = (isSys || isDel) ? ''
       : '<div class="n-line">📩 ' + esc(n.sender || '—') + ' — ' + esc(n.subject || '—') + '</div>';
     var sysBlock = isSys
       ? '<div class="n-line n-sys-title">' + esc(t('notifSysTitle')) + '</div>'
         + '<div class="n-line">' + esc(t('notifSysReason')) + ': ' + esc(n.reason || '—') + '</div>'
         + '<div class="n-line">' + esc(t('notifSysRedSince')) + ': ' + esc(fmtDate(n.redSince)) + '</div>'
       : '';
+    /* v1.10c: a delete attempt has no code, no sender line and no
+       forward button — it shows the attempted path, which proxy
+       blocked it, the attempt count and the last-attempt time, in a
+       red row. The delete itself never succeeded (v1.9c). */
+    var delBlock = isDel
+      ? '<div class="n-line n-del-title">' + esc(t('notifDelTitle')) + '</div>'
+        + '<div class="n-line">' + esc(t('notifDelPath')) + ': <code>' + esc(n.attemptPath || '—') + '</code></div>'
+        + '<div class="n-line">' + esc(t('notifDelProxy')) + ': ' + esc(n.proxyHost || '—') + '</div>'
+        + '<div class="n-line">' + esc(t('notifDelAttempts')) + ': ' + esc(n.attempts > 0 ? String(n.attempts) : '1') + ' · ' + esc(t('notifDelLast')) + ': ' + esc(fmtDate(n.createdAt)) + '</div>'
+      : '';
     var fwd = '';
-    if (!isSys && n.code && n.buyerGmail) {
+    if (!isSys && !isDel && n.code && n.buyerGmail) {
       fwd = n.forwarded
         ? '<div class="n-line n-sent">' + esc(t('notifSent')) + '</div>'
         : '<button class="btn btn-primary notif-forward-btn" data-forward-id="' + esc(n.id) + '">' + esc(t('sendToBuyer')) + '</button>';
     }
-    return '<div class="notif-row' + (n.isRead ? '' : ' notif-unread') + (isSys ? ' notif-sys' : '') + '" data-notif-id="' + esc(n.id) + '">'
+    return '<div class="notif-row' + (n.isRead ? '' : ' notif-unread') + (isSys ? ' notif-sys' : '') + (isDel ? ' notif-del' : '') + '" data-notif-id="' + esc(n.id) + '">'
       + '<div class="notif-info">'
       + '<div class="n-title">' + (n.isRead ? '' : '<span class="pill pill-red">' + esc(t('notifNew')) + '</span> ')
-      + esc(n.listingTitle || n.listingEmail) + '</div>'
-      + '<div class="n-line">' + esc(n.listingEmail) + '</div>'
+      + esc(isDel ? n.attemptPath : (n.listingTitle || n.listingEmail)) + '</div>'
+      + (isDel ? '' : '<div class="n-line">' + esc(n.listingEmail) + '</div>')
       + buyerLine
       + msgLine
       + sysBlock
+      + delBlock
       + codeLine
       + fwd
       + '<div class="n-line n-time">' + esc(fmtDate(n.createdAt)) + '</div>'

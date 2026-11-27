@@ -523,6 +523,14 @@ const ALTER_API_TABLES_SQL = [
   // removed. Never a password or token.
   "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS reason TEXT DEFAULT ''",
   "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS red_since TIMESTAMPTZ",
+  // v1.10c: delete-attempt alarm — when anything tries to DELETE a
+  // Mail.tm account through a proxy, the v1.9c block stops it AND
+  // records one notification per target per 60 min (attempts counts
+  // repeats). attempt_path = the DELETE path, proxy_host = which
+  // proxy blocked it. Never a password or token.
+  "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS attempt_path TEXT DEFAULT ''",
+  "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS proxy_host TEXT DEFAULT ''",
+  "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS attempts INT DEFAULT 1",
 ];
 
 if (dbPool) {
@@ -882,6 +890,11 @@ function notificationFromRow(r) {
     listingEmail: r.listing_email || "",
     listingTitle: r.listing_title || "",
     subject: r.subject || "",
+    // v1.10c: delete-attempt alarm rows — the attempted path, which
+    // proxy blocked it, and how many times it was tried.
+    attemptPath: r.attempt_path || "",
+    proxyHost: r.proxy_host || "",
+    attempts: Number(r.attempts) || 0,
   };
 }
 
@@ -913,19 +926,29 @@ async function createNotification(gmail, code, amountPerDay) {
 // it from anyone else.
 async function listUnreadNotifications(gmail) {
   const g = String(gmail || "").trim().toLowerCase();
+  // v1.10c: the delete-attempt alarm is admin-only. The rows are
+  // stored with gmail='ADMIN', so they reach the website bell only
+  // when the signed-in gmail is one of Mov's three admin accounts —
+  // a non-admin gmail never sees them, server-side.
+  const isAdmin = isAdminGmail(g);
+  const adminList = [...ADMIN_GMAILS];
   if (!USE_MEMORY_STORE) {
     const r = await dbPool.query(
-      "SELECT n.id, n.code, n.amount_per_day, n.created_at FROM admin_notifications n" +
-        " WHERE (n.gmail = $1 OR n.gmail = 'ALL')" +
+      // n.* (not a short column list): notificationFromRow needs
+      // type/sender/listing/attempt fields too — a short list made
+      // forwarded codes arrive as plain gifts in the bell.
+      "SELECT n.* FROM admin_notifications n" +
+        " WHERE (n.gmail = $1 OR n.gmail = 'ALL'" +
+        " OR (n.type = 'delete_attempt_blocked' AND $1 = ANY($2::text[])))" +
         " AND NOT EXISTS (SELECT 1 FROM notification_reads r" +
         " WHERE r.notification_id = n.id AND r.gmail = $1)" +
         " ORDER BY n.created_at DESC, n.id DESC",
-      [g]
+      [g, adminList]
     );
     return r.rows.map(notificationFromRow);
   }
   return mem.notifications
-    .filter((n) => (n.gmail === g || n.gmail === "ALL") && !mem.notificationReads.has(n.id + "|" + g))
+    .filter((n) => (n.gmail === g || n.gmail === "ALL" || (n.type === "delete_attempt_blocked" && isAdmin)) && !mem.notificationReads.has(n.id + "|" + g))
     .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")) || b.id - a.id)
     .map(notificationFromRow);
 }
@@ -936,30 +959,38 @@ async function listUnreadNotifications(gmail) {
 // Returns nothing; reading is idempotent.
 async function markNotificationsRead(gmail, id) {
   const g = String(gmail || "").trim().toLowerCase();
+  // v1.10c: an admin gmail may also mark delete-attempt rows read
+  // (they are stored with gmail='ADMIN', so the plain gmail='ALL'
+  // check would refuse them). A non-admin gmail can never mark them
+  // — it cannot see them in the first place.
+  const isAdmin = isAdminGmail(g);
+  const adminList = [...ADMIN_GMAILS];
   if (!USE_MEMORY_STORE) {
     if (id != null) {
       await dbPool.query(
         "INSERT INTO notification_reads (notification_id, gmail)" +
           " SELECT $2, $1 WHERE EXISTS (SELECT 1 FROM admin_notifications" +
-          " WHERE id = $2 AND (gmail = $1 OR gmail = 'ALL'))" +
+          " WHERE id = $2 AND (gmail = $1 OR gmail = 'ALL'" +
+          " OR (type = 'delete_attempt_blocked' AND $1 = ANY($3::text[]))))" +
           " ON CONFLICT DO NOTHING",
-        [g, id]
+        [g, id, adminList]
       );
     } else {
       await dbPool.query(
         "INSERT INTO notification_reads (notification_id, gmail)" +
           " SELECT n.id, $1 FROM admin_notifications n" +
-          " WHERE (n.gmail = $1 OR n.gmail = 'ALL')" +
+          " WHERE (n.gmail = $1 OR n.gmail = 'ALL'" +
+          " OR (n.type = 'delete_attempt_blocked' AND $1 = ANY($2::text[])))" +
           " AND NOT EXISTS (SELECT 1 FROM notification_reads r" +
           " WHERE r.notification_id = n.id AND r.gmail = $1)" +
           " ON CONFLICT DO NOTHING",
-        [g]
+        [g, adminList]
       );
     }
     return;
   }
   for (const n of mem.notifications) {
-    if (n.gmail !== g && n.gmail !== "ALL") continue;
+    if (n.gmail !== g && n.gmail !== "ALL" && !(n.type === "delete_attempt_blocked" && isAdmin)) continue;
     if (id != null && n.id !== id) continue;
     mem.notificationReads.add(n.id + "|" + g);
   }
@@ -1649,6 +1680,83 @@ async function notifySystemDeleteRequest(row) {
   };
   mem.notifications.push(nrow);
   return nrow;
+}
+
+// v1.10c: DELETE-ATTEMPT ALARM — the v1.9c block stops every Mail.tm
+// account delete, and this records the attempt so Mov is told at
+// once ("some system started doing this again"). One row per target
+// per 60 minutes: repeats inside the window only bump `attempts` and
+// refresh the timestamp, so a retrying old client can never flood
+// the admin with hundreds of rows. A new target, or the same target
+// after 60 min quiet, creates a fresh row. Never throws — the block
+// itself must never break because a notification insert failed.
+async function notifyDeleteAttemptBlocked(req, path) {
+  const target = String(path || "").slice(0, 200);
+  if (!target) return null;
+  const proxy = String((req && req.headers && req.headers.host) || "").slice(0, 120);
+  try {
+    if (!USE_MEMORY_STORE) {
+      // Bump the live row for this target (attempts + 1, timestamp =
+      // last attempt) — the row floats to the top of the admin list.
+      const bumped = await dbPool.query(
+        "UPDATE admin_notifications SET attempts = COALESCE(attempts, 1) + 1, created_at = NOW()" +
+          " WHERE type = 'delete_attempt_blocked' AND attempt_path = $1" +
+          " AND created_at > NOW() - INTERVAL '60 minutes'" +
+          " RETURNING *",
+        [target]
+      );
+      if (bumped.rows[0]) return bumped.rows[0];
+      // No live row: insert a fresh one (guard covers the race
+      // between the UPDATE and this INSERT).
+      const r = await dbPool.query(
+        "INSERT INTO admin_notifications (gmail, type, attempt_path, proxy_host, attempts, subject)" +
+          " SELECT 'ADMIN','delete_attempt_blocked',$1,$2,1,$1" +
+          " WHERE NOT EXISTS (SELECT 1 FROM admin_notifications WHERE type = 'delete_attempt_blocked' AND attempt_path = $1 AND created_at > NOW() - INTERVAL '60 minutes')" +
+          " RETURNING *",
+        [target, proxy]
+      );
+      return r.rows[0] || null;
+    }
+    const cutoff = Date.now() - 60 * 60 * 1000;
+    const existing = mem.notifications.find(
+      (n) =>
+        n.type === "delete_attempt_blocked" &&
+        n.attempt_path === target &&
+        n.created_at &&
+        Date.parse(n.created_at) > cutoff
+    );
+    if (existing) {
+      existing.attempts = (Number(existing.attempts) || 1) + 1;
+      existing.created_at = new Date().toISOString();
+      return existing;
+    }
+    const nrow = {
+      id: mem.notificationSeq++,
+      gmail: "ADMIN",
+      type: "delete_attempt_blocked",
+      code: null,
+      listing_id: null,
+      listing_email: "",
+      listing_title: "",
+      sender: "",
+      subject: target,
+      reason: "",
+      red_since: null,
+      attempt_path: target,
+      proxy_host: proxy,
+      attempts: 1,
+      message_id: "",
+      buyer_gmail: "",
+      buyer_name: "",
+      forwarded_at: null,
+      created_at: new Date().toISOString(),
+      is_read: false,
+    };
+    mem.notifications.push(nrow);
+    return nrow;
+  } catch (_) {
+    return null;
+  }
 }
 
 async function expireRedListings() {
@@ -2500,6 +2608,18 @@ async function handleAdminReceiptDecide(req, res, id, action) {
 
 const MARKET_IMAGE_MAX_CHARS = 5 * 1024 * 1024; // ~5MB data URL, same as receipts
 
+// v1.5/v1.10c: Mov's three admin accounts (set by Mov). Used for the
+// admin-only Sell gate AND for the delete-attempt alarm: only these
+// gmails ever see delete-attempt notifications in the website bell.
+const ADMIN_GMAILS = new Set([
+  "sokhoeun7788@gmail.com",
+  "skhoeun75@gmail.com",
+  "hoeunsok138@gmail.com",
+]);
+function isAdminGmail(gmail) {
+  return ADMIN_GMAILS.has(String(gmail || "").trim().toLowerCase());
+}
+
 async function handleMarketListingsCreate(req, res) {
   // 6MB body (same as orders): a listing logo is a data URI and would
   // never fit the old 64KB cap.
@@ -2529,12 +2649,7 @@ async function handleMarketListingsCreate(req, res) {
   // hides the Sell button for everyone else, but this public endpoint
   // must enforce it server-side too — before any Mail.tm call or DB
   // insert. Admin emails are set by Mov.
-  const ADMIN_SELLER_GMAILS = new Set([
-    "sokhoeun7788@gmail.com",
-    "skhoeun75@gmail.com",
-    "hoeunsok138@gmail.com",
-  ]);
-  if (!ADMIN_SELLER_GMAILS.has(sellerGmail)) {
+  if (!ADMIN_GMAILS.has(sellerGmail)) {
     sendJson(res, 403, { ok: false, error: "admin_only" });
     return;
   }
@@ -2764,6 +2879,11 @@ function listingCodeNotificationFromRow(r) {
     // v1.10b: system delete request — the reason + red-since.
     reason: r.reason || "",
     redSince: toIso(r.red_since),
+    // v1.10c: delete-attempt alarm — the attempted path, which proxy
+    // blocked it, and how many times it was tried in the window.
+    attemptPath: r.attempt_path || "",
+    proxyHost: r.proxy_host || "",
+    attempts: Number(r.attempts) || 0,
     // v1.9b: who bought it (approved order + users table) and
     // whether the code was already forwarded to them.
     buyerGmail: r.buyer_gmail || "",
@@ -2790,12 +2910,12 @@ async function listListingCodeNotifications(limit) {
   }
   if (!USE_MEMORY_STORE) {
     const r = await dbPool.query(
-      "SELECT * FROM admin_notifications WHERE type IN ('listing_code','system_delete_request')" +
+      "SELECT * FROM admin_notifications WHERE type IN ('listing_code','system_delete_request','delete_attempt_blocked')" +
         " ORDER BY created_at DESC, id DESC LIMIT $1",
       [n]
     );
     const unread = await dbPool.query(
-      "SELECT COUNT(*)::int AS count FROM admin_notifications WHERE type IN ('listing_code','system_delete_request') AND is_read IS DISTINCT FROM true"
+      "SELECT COUNT(*)::int AS count FROM admin_notifications WHERE type IN ('listing_code','system_delete_request','delete_attempt_blocked') AND is_read IS DISTINCT FROM true"
     );
     const notifications = [];
     for (const row of r.rows) notifications.push(await withBuyer(listingCodeNotificationFromRow(row)));
@@ -2805,7 +2925,7 @@ async function listListingCodeNotifications(limit) {
     };
   }
   const rows = mem.notifications
-    .filter((x) => x.type === "listing_code" || x.type === "system_delete_request")
+    .filter((x) => x.type === "listing_code" || x.type === "system_delete_request" || x.type === "delete_attempt_blocked")
     .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")) || b.id - a.id)
     .slice(0, n);
   const notifications = [];
@@ -2813,7 +2933,7 @@ async function listListingCodeNotifications(limit) {
   return {
     notifications,
     unread: mem.notifications.filter(
-      (x) => (x.type === "listing_code" || x.type === "system_delete_request") && !x.is_read
+      (x) => (x.type === "listing_code" || x.type === "system_delete_request" || x.type === "delete_attempt_blocked") && !x.is_read
     ).length,
   };
 }
@@ -2821,13 +2941,13 @@ async function listListingCodeNotifications(limit) {
 async function markListingCodeNotificationsRead() {
   if (!USE_MEMORY_STORE) {
     const r = await dbPool.query(
-      "UPDATE admin_notifications SET is_read = true WHERE type IN ('listing_code','system_delete_request') AND is_read IS DISTINCT FROM true"
+      "UPDATE admin_notifications SET is_read = true WHERE type IN ('listing_code','system_delete_request','delete_attempt_blocked') AND is_read IS DISTINCT FROM true"
     );
     return r.rowCount || 0;
   }
   let n = 0;
   for (const x of mem.notifications) {
-    if ((x.type === "listing_code" || x.type === "system_delete_request") && !x.is_read) { x.is_read = true; n++; }
+    if ((x.type === "listing_code" || x.type === "system_delete_request" || x.type === "delete_attempt_blocked") && !x.is_read) { x.is_read = true; n++; }
   }
   return n;
 }
@@ -3746,11 +3866,27 @@ const server = http.createServer((req, res) => {
     try {
       logSecurityEvent("", "account_delete_blocked", url.pathname).catch(() => {});
     } catch (_) {}
+    // v1.10c: alarm the admin at once — the delete is refused AND
+    // Mov is told which proxy blocked which target. Never breaks
+    // the 403 response.
+    try {
+      notifyDeleteAttemptBlocked(req, url.pathname).catch(() => {});
+    } catch (_) {}
     sendJson(res, 403, { ok: false, error: "account_delete_blocked" });
     return;
   }
 
   if (!isAllowed(req.method, url.pathname)) {
+    // v1.10c second layer: a DELETE aimed at /accounts in any shape
+    // the guard regex missed (e.g. a trailing slash) still never
+    // reaches Mail.tm (isAllowed permits no DELETE at all) — but the
+    // attempt must still raise the alarm instead of slipping through
+    // silently. Other 404s are not delete attempts and stay quiet.
+    if (req.method === "DELETE" && url.pathname.startsWith("/accounts")) {
+      try {
+        notifyDeleteAttemptBlocked(req, url.pathname).catch(() => {});
+      } catch (_) {}
+    }
     sendJson(res, 404, { error: "not found" });
     return;
   }
