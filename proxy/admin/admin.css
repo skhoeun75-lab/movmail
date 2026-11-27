@@ -108,6 +108,9 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
   background: var(--accent-soft); border: 1px solid #bfe3d2;
   color: var(--accent-ink); border-radius: 10px; padding: 10px 12px; font-size: 14px;
 }
+/* v1.12: token row on the auth view (fresh browser, no token stored yet) */
+.auth-token-row { margin: 12px 0 4px; }
+.auth-token-row .btn { margin-top: 8px; }
 
 /* ---------- Stats ---------- */
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }

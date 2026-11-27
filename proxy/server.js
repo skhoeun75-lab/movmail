@@ -477,6 +477,70 @@ const CREATE_API_TABLES_SQL = [
     "  decided_at TIMESTAMPTZ",
     ")",
   ].join("\n"),
+  [
+    // v1.11: buyer support chat — only AFTER a successful purchase
+    // (paid + approved). One thread per approved order; before
+    // purchase there is no connection at all. The buyer sends
+    // messages; the admin replies (optionally with the code).
+    // read_by_admin tracks unread buyer messages for the admin badge.
+    // Never a password or token.
+    "CREATE TABLE IF NOT EXISTS market_support_messages (",
+    "  id SERIAL PRIMARY KEY,",
+    "  order_id INT NOT NULL REFERENCES market_orders(id),",
+    "  listing_id INT NOT NULL,",
+    "  sender_role TEXT NOT NULL,",
+    "  sender_gmail TEXT NOT NULL DEFAULT '',",
+    "  message TEXT NOT NULL DEFAULT '',",
+    "  code TEXT DEFAULT '',",
+    "  read_by_admin BOOLEAN DEFAULT false,",
+    "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+    ")",
+  ].join("\n"),
+  [
+    // v1.12: server accounts — the website account (salted scrypt hash)
+    // and the saved mailboxes live on the server, so Gmail + password
+    // signs in from ANY device and everything comes back. Sessions are
+    // random 32-byte tokens with a 30-day expiry.
+    "CREATE TABLE IF NOT EXISTS sessions (",
+    "  token TEXT PRIMARY KEY,",
+    "  gmail TEXT NOT NULL,",
+    "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),",
+    "  expires_at TIMESTAMPTZ NOT NULL",
+    ")",
+  ].join("\n"),
+  [
+    // v1.12: one row per (gmail, mailbox). `password` is the Mail.tm
+    // mailbox password, stored server-side exactly like listing
+    // passwords — it is NEVER sent to a browser; a fresh device
+    // restores through POST /api/mailboxes/restore, which logs in
+    // server-side and returns only a fresh Mail.tm token.
+    "CREATE TABLE IF NOT EXISTS user_mailboxes (",
+    "  id SERIAL PRIMARY KEY,",
+    "  gmail TEXT NOT NULL,",
+    "  address TEXT NOT NULL,",
+    "  password TEXT NOT NULL DEFAULT '',",
+    "  name TEXT DEFAULT '',",
+    "  logo TEXT DEFAULT '',",
+    "  ip_country TEXT DEFAULT '',",
+    "  ip_city TEXT DEFAULT '',",
+    "  ip_address TEXT DEFAULT '',",
+    "  bought BOOLEAN NOT NULL DEFAULT false,",
+    "  listing_id INT,",
+    "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),",
+    "  UNIQUE(gmail, address)",
+    ")",
+  ].join("\n"),
+  [
+    // v1.12: admin panel password, server-side (single row, id=1).
+    // The ADMIN_TOKEN holder can always set/reset it, so clearing
+    // browser data just means re-entering the password.
+    "CREATE TABLE IF NOT EXISTS admin_auth (",
+    "  id INT PRIMARY KEY,",
+    "  password_hash TEXT NOT NULL,",
+    "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),",
+    "  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+    ")",
+  ].join("\n"),
 ];
 
 // v1.3 columns added to tables that already exist on Render: CREATE
@@ -531,6 +595,16 @@ const ALTER_API_TABLES_SQL = [
   "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS attempt_path TEXT DEFAULT ''",
   "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS proxy_host TEXT DEFAULT ''",
   "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS attempts INT DEFAULT 1",
+  // v1.11: an admin support reply arrives in the BUYER'S bell (type
+  // 'support_reply') carrying the admin's message + the optional code
+  // + the order it belongs to. `code` is reused from the gift-code
+  // column; `message` is the reply text.
+  "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS message TEXT DEFAULT ''",
+  "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS order_id INT",
+  // v1.12: server accounts — the website password hash lives on the
+  // users row (NULL for legacy rows that never set a server password;
+  // those rows are claimed on first signup with the same gmail).
+  "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT",
 ];
 
 if (dbPool) {
@@ -566,9 +640,15 @@ const mem = {
   orders: [], // market order rows
   reports: new Map(), // order id -> buyer activation report row
   deleteRequests: [], // v1.10 delete request rows
+  supportMessages: [], // v1.11 buyer support chat rows
+  sessions: new Map(), // v1.12: session token -> {token, gmail, created_at, expires_at}
+  userMailboxes: [], // v1.12: server mailbox rows (per gmail)
+  adminAuth: null, // v1.12: {password_hash} single-row admin password
   listingSeq: 1,
   orderSeq: 1,
   deleteRequestSeq: 1,
+  supportSeq: 1,
+  mailboxSeq: 1,
   receiptSeq: 1,
   eventSeq: 1,
   notificationSeq: 1,
@@ -895,6 +975,10 @@ function notificationFromRow(r) {
     attemptPath: r.attempt_path || "",
     proxyHost: r.proxy_host || "",
     attempts: Number(r.attempts) || 0,
+    // v1.11: admin support replies — the admin's message + the order
+    // it belongs to (the code rides in `code`, like a forwarded code).
+    message: r.message || "",
+    orderId: r.order_id != null ? Number(r.order_id) : null,
   };
 }
 
@@ -2805,6 +2889,255 @@ async function handleMarketOrderReport(req, res, id) {
   sendJson(res, 200, { ok: true, report: reportFromRow(row) });
 }
 
+// v1.11: buyer support chat. A thread exists only for an APPROVED
+// order — before purchase there is no connection at all. The buyer
+// writes ("I don't see the code"); the admin reads, verifies against
+// reality (the v1.8 delivery evidence on the thread) and replies.
+// An admin reply also drops a 'support_reply' notification into the
+// BUYER'S bell, so the buyer sees it without reopening My Orders;
+// when the reply carries a code, the bell shows it with a Copy
+// button. Never a password or token.
+const SUPPORT_MESSAGE_MAX = 2000;
+const SUPPORT_CODE_MAX = 64;
+function supportMessageFromRow(r) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    orderId: r.order_id,
+    listingId: r.listing_id,
+    senderRole: r.sender_role,
+    senderGmail: r.sender_gmail || "",
+    message: r.message || "",
+    code: r.code || "",
+    readByAdmin: !!r.read_by_admin,
+    createdAt: toIso(r.created_at),
+  };
+}
+async function getOrderById(id) {
+  const n = Number(id);
+  if (!Number.isInteger(n)) return null;
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query("SELECT * FROM market_orders WHERE id = $1 LIMIT 1", [n]);
+    return r.rows[0] || null;
+  }
+  return mem.orders.find((x) => x.id === n) || null;
+}
+async function listSupportMessages(orderId) {
+  const n = Number(orderId);
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "SELECT * FROM market_support_messages WHERE order_id = $1 ORDER BY created_at ASC, id ASC",
+      [n]
+    );
+    return r.rows.map(supportMessageFromRow);
+  }
+  return mem.supportMessages
+    .filter((x) => x.order_id === n)
+    .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")) || a.id - b.id)
+    .map(supportMessageFromRow);
+}
+async function createSupportMessage(orderId, listingId, senderRole, senderGmail, message, code) {
+  const cleanCode = String(code || "").trim().slice(0, SUPPORT_CODE_MAX);
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "INSERT INTO market_support_messages (order_id, listing_id, sender_role, sender_gmail, message, code, read_by_admin)" +
+        " VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *",
+      [orderId, listingId, senderRole, senderGmail, message, cleanCode, senderRole === "admin"]
+    );
+    return supportMessageFromRow(r.rows[0]);
+  }
+  const row = {
+    id: mem.supportSeq++,
+    order_id: orderId,
+    listing_id: listingId,
+    sender_role: senderRole,
+    sender_gmail: senderGmail,
+    message,
+    code: cleanCode,
+    read_by_admin: senderRole === "admin",
+    created_at: new Date().toISOString(),
+  };
+  mem.supportMessages.push(row);
+  return supportMessageFromRow(row);
+}
+async function markSupportThreadRead(orderId) {
+  const n = Number(orderId);
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "UPDATE market_support_messages SET read_by_admin = true WHERE order_id = $1 AND sender_role = 'buyer' AND read_by_admin IS DISTINCT FROM true",
+      [n]
+    );
+    return r.rowCount || 0;
+  }
+  let c = 0;
+  for (const x of mem.supportMessages) {
+    if (x.order_id === n && x.sender_role === "buyer" && !x.read_by_admin) { x.read_by_admin = true; c++; }
+  }
+  return c;
+}
+// Buyer check shared by the two buyer endpoints: the order must exist
+// (404), belong to this gmail (403) and be approved (403 — before
+// purchase there is no support chat at all).
+async function getApprovedOrderForBuyer(orderId, gmail) {
+  const order = await getOrderById(orderId);
+  if (!order) return { error: "order not found", status: 404 };
+  if (String(order.buyer_gmail || "").toLowerCase() !== String(gmail || "").toLowerCase()) {
+    return { error: "only the buyer of this order can use support", status: 403 };
+  }
+  if (order.status !== "approved") {
+    return { error: "support is available only after the purchase is approved", status: 403 };
+  }
+  return { order };
+}
+async function handleMarketSupportMessageCreate(req, res, id) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  const gmail = String(body.gmail || "").trim().toLowerCase();
+  const message = String(body.message || "").trim();
+  if (!gmail) { sendJson(res, 400, { ok: false, error: "gmail required" }); return; }
+  if (!message) { sendJson(res, 400, { ok: false, error: "message required" }); return; }
+  if (message.length > SUPPORT_MESSAGE_MAX) { sendJson(res, 400, { ok: false, error: "message too long" }); return; }
+  const chk = await getApprovedOrderForBuyer(id, gmail);
+  if (chk.error) { sendJson(res, chk.status, { ok: false, error: chk.error }); return; }
+  const row = await createSupportMessage(chk.order.id, chk.order.listing_id, "buyer", gmail, message, "");
+  sendJson(res, 200, { ok: true, message: row });
+}
+async function handleMarketSupportMessagesList(req, res, id, url) {
+  const gmail = (url.searchParams.get("gmail") || "").trim().toLowerCase();
+  if (!gmail) { sendJson(res, 400, { ok: false, error: "gmail query param required" }); return; }
+  const chk = await getApprovedOrderForBuyer(id, gmail);
+  if (chk.error) { sendJson(res, chk.status, { ok: false, error: chk.error }); return; }
+  sendJson(res, 200, { ok: true, messages: await listSupportMessages(chk.order.id) });
+}
+// Admin: every support thread (an approved order with >= 1 message),
+// newest activity first, with the buyer, the listing, the delivery
+// evidence (did a code actually arrive after the purchase?) and the
+// unread buyer-message count. The evidence is what lets Mov verify a
+// buyer's "no code" claim against reality before replying.
+async function listSupportThreads() {
+  let rows;
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "SELECT m.order_id, MAX(m.created_at) AS last_at, MAX(m.id) AS last_id FROM market_support_messages m GROUP BY m.order_id ORDER BY last_at DESC, last_id DESC"
+    );
+    rows = r.rows;
+  } else {
+    const byOrder = new Map();
+    for (const m of mem.supportMessages) {
+      const cur = byOrder.get(m.order_id);
+      if (!cur || String(m.created_at) >= String(cur.last_at)) byOrder.set(m.order_id, { order_id: m.order_id, last_at: m.created_at, last_id: m.id });
+    }
+    rows = [...byOrder.values()].sort((a, b) => String(b.last_at || "").localeCompare(String(a.last_at || "")) || b.last_id - a.last_id);
+  }
+  const out = [];
+  for (const x of rows) {
+    const order = await getOrderById(x.order_id);
+    if (!order || order.status !== "approved") continue;
+    const listing = await getListing(order.listing_id);
+    const msgs = await listSupportMessages(order.id);
+    const last = msgs[msgs.length - 1] || null;
+    const unread = msgs.filter((m) => m.senderRole === "buyer" && !m.readByAdmin).length;
+    let buyerName = "";
+    try { const u = await getUser(order.buyer_gmail); buyerName = (u && u.name) || ""; } catch (_) {}
+    let evidence = null;
+    try { evidence = await getOrderEvidence(listing ? listing.email : null, order.created_at); } catch (_) { evidence = null; }
+    out.push({
+      orderId: order.id,
+      listingId: order.listing_id,
+      listingTitle: (listing && listing.title) || "",
+      maskedEmail: maskEmail((listing && listing.email) || ""),
+      buyerGmail: order.buyer_gmail,
+      buyerName,
+      lastMessage: last ? last.message : "",
+      lastCode: last ? last.code : "",
+      lastSenderRole: last ? last.senderRole : "",
+      lastMessageId: last ? last.id : 0,
+      lastAt: last ? last.createdAt : toIso(order.created_at),
+      unread,
+      messageCount: msgs.length,
+      evidence,
+    });
+  }
+  return out;
+}
+async function handleAdminSupportThreads(req, res) {
+  sendJson(res, 200, { ok: true, threads: await listSupportThreads() });
+}
+async function handleAdminSupportThread(req, res, id) {
+  const order = await getOrderById(id);
+  if (!order) { sendJson(res, 404, { ok: false, error: "order not found" }); return; }
+  // Opening a thread marks the buyer's messages read — the admin has seen them.
+  await markSupportThreadRead(order.id);
+  const listing = await getListing(order.listing_id);
+  let buyerName = "";
+  try { const u = await getUser(order.buyer_gmail); buyerName = (u && u.name) || ""; } catch (_) {}
+  let evidence = null;
+  try { evidence = await getOrderEvidence(listing ? listing.email : null, order.created_at); } catch (_) { evidence = null; }
+  sendJson(res, 200, {
+    ok: true,
+    orderId: order.id,
+    listingId: order.listing_id,
+    listingTitle: (listing && listing.title) || "",
+    maskedEmail: maskEmail((listing && listing.email) || ""),
+    buyerGmail: order.buyer_gmail,
+    buyerName,
+    evidence,
+    messages: await listSupportMessages(order.id),
+  });
+}
+async function handleAdminSupportRead(req, res, id) {
+  const order = await getOrderById(id);
+  if (!order) { sendJson(res, 404, { ok: false, error: "order not found" }); return; }
+  const n = await markSupportThreadRead(order.id);
+  sendJson(res, 200, { ok: true, marked: n });
+}
+async function handleAdminSupportReply(req, res, id) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  const message = String(body.message || "").trim();
+  const code = String(body.code || "").trim().slice(0, SUPPORT_CODE_MAX);
+  if (!message) { sendJson(res, 400, { ok: false, error: "message required" }); return; }
+  if (message.length > SUPPORT_MESSAGE_MAX) { sendJson(res, 400, { ok: false, error: "message too long" }); return; }
+  const order = await getOrderById(id);
+  if (!order) { sendJson(res, 404, { ok: false, error: "order not found" }); return; }
+  const listing = await getListing(order.listing_id);
+  const row = await createSupportMessage(order.id, order.listing_id, "admin", "admin", message, code);
+  await markSupportThreadRead(order.id);
+  // The reply also lands in the BUYER'S bell (type 'support_reply')
+  // so they see it without reopening My Orders. The code (when the
+  // admin included one) rides along and the bell shows it with a
+  // Copy button. A bell failure must never fail the reply itself.
+  try {
+    if (!USE_MEMORY_STORE) {
+      await dbPool.query(
+        "INSERT INTO admin_notifications (gmail, type, code, listing_id, listing_email, listing_title, sender, subject, message, order_id)" +
+          " VALUES ($1,'support_reply',$2,$3,$4,$5,'Admin','',$6,$7)",
+        [String(order.buyer_gmail || "").toLowerCase(), code, order.listing_id, listing ? listing.email : "", listing ? listing.title : "", message, order.id]
+      );
+    } else {
+      mem.notifications.push({
+        id: mem.notificationSeq++,
+        gmail: String(order.buyer_gmail || "").toLowerCase(),
+        type: "support_reply",
+        code,
+        amount_per_day: 0,
+        listing_id: order.listing_id,
+        listing_email: listing ? listing.email : "",
+        listing_title: listing ? listing.title : "",
+        sender: "Admin",
+        subject: "",
+        message,
+        order_id: order.id,
+        created_at: new Date().toISOString(),
+        is_read: false,
+      });
+    }
+  } catch (err) {
+    console.error("movmail-proxy: support reply bell failed:", err.message);
+  }
+  sendJson(res, 200, { ok: true, message: row });
+}
+
 async function handleMarketRestore(req, res) {
   const body = await readJsonBody(req, res, 64 * 1024);
   if (!body) return;
@@ -3671,6 +4004,433 @@ async function handleAdminMarketOrderDecide(req, res, id, action) {
   sendJson(res, 200, { ok: true });
 }
 
+/* ==========================================================================
+   v1.12: SERVER ACCOUNTS — Gmail + password sign-in from ANY device.
+   Before this, a website account lived ONLY in the phone's localStorage:
+   clear browser data / uninstall / reinstall -> "no account yet" and a
+   re-sign-up made a brand-new EMPTY account. Now the account (salted
+   scrypt password hash) and the saved mailboxes live on the server:
+   sign in with Gmail + password anywhere and everything comes back.
+   - Passwords are NEVER stored or logged in plaintext: scrypt with a
+     random salt, stored as `scrypt$<salt-hex>$<hash-hex>`.
+   - Sessions: random 32-byte tokens, 30-day expiry.
+   - user_mailboxes holds the Mail.tm mailbox password server-side
+     (exactly like listing passwords): it is NEVER sent to a browser —
+     a fresh device restores a mailbox through POST /api/mailboxes/restore,
+     which logs in server-side and returns only a fresh Mail.tm token.
+   - DELETE /api/mailboxes removes ONLY the server row. It NEVER calls
+     Mail.tm (the v1.9c rule stands: no Mail.tm account is ever deleted
+     by a mailbox-row delete).
+   - Admin panel password is server-side too (admin_auth, id=1): the
+     ADMIN_TOKEN holder can always set/reset it, so clearing browser
+     data just means re-entering the password.
+   ========================================================================== */
+const AUTH_MIN_PASSWORD = 4;
+const ADMIN_MIN_PASSWORD = 8;
+const SESSION_TTL_MS = 30 * 24 * 3600 * 1000;
+const AUTH_FAIL_WINDOW_MS = 10 * 60 * 1000;
+const AUTH_FAIL_MAX = 10;
+const MAILBOX_BODY_MAX = 6 * 1024 * 1024;
+const MAILBOX_SINGLE_MAX = 2 * 1024 * 1024;
+
+function hashPasswordScrypt(password) {
+  const salt = crypto.randomBytes(16);
+  const hash = crypto.scryptSync(String(password), salt, 64, { N: 16384, r: 8, p: 1 });
+  return "scrypt$" + salt.toString("hex") + "$" + hash.toString("hex");
+}
+function verifyPasswordScrypt(password, stored) {
+  try {
+    const parts = String(stored || "").split("$");
+    if (parts.length !== 3 || parts[0] !== "scrypt") return false;
+    const salt = Buffer.from(parts[1], "hex");
+    const want = Buffer.from(parts[2], "hex");
+    if (!salt.length || !want.length) return false;
+    const got = crypto.scryptSync(String(password), salt, 64, { N: 16384, r: 8, p: 1 });
+    return got.length === want.length && crypto.timingSafeEqual(got, want);
+  } catch (_) { return false; }
+}
+function validGmail(gmail) {
+  return typeof gmail === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(gmail);
+}
+/* Brute-force guard: max 10 FAILED password checks per gmail per 10
+   minutes -> 429. A success clears the counter. In-memory only (a
+   proxy restart resets it — acceptable for a login guard). */
+const authFailures = new Map();
+function authFailBlocked(gmail) {
+  const e = authFailures.get(gmail);
+  if (!e) return false;
+  if (Date.now() - e.firstAt > AUTH_FAIL_WINDOW_MS) { authFailures.delete(gmail); return false; }
+  return e.count >= AUTH_FAIL_MAX;
+}
+function authFailRecord(gmail) {
+  const now = Date.now();
+  const e = authFailures.get(gmail);
+  if (!e || now - e.firstAt > AUTH_FAIL_WINDOW_MS) { authFailures.set(gmail, { count: 1, firstAt: now }); return; }
+  e.count++;
+}
+function authFailReset(gmail) { authFailures.delete(gmail); }
+
+/* --- users password hash (kept OUT of userFromRow — never leaves the server) --- */
+async function getUserAuthRow(gmail) {
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query("SELECT gmail, password_hash FROM users WHERE gmail = $1", [gmail]);
+    return r.rows[0] || null;
+  }
+  const row = mem.users.get(gmail);
+  return row ? { gmail: row.gmail, password_hash: row.password_hash || null } : null;
+}
+async function setUserPasswordHash(gmail, hash) {
+  if (!USE_MEMORY_STORE) {
+    await dbPool.query("UPDATE users SET password_hash = $2, updated_at = NOW() WHERE gmail = $1", [gmail, hash]);
+    return;
+  }
+  const row = mem.users.get(gmail);
+  if (row) row.password_hash = hash;
+}
+
+/* --- sessions --- */
+async function createSession(gmail) {
+  const token = crypto.randomBytes(32).toString("hex");
+  const now = new Date();
+  const expires = new Date(now.getTime() + SESSION_TTL_MS);
+  if (!USE_MEMORY_STORE) {
+    await dbPool.query(
+      "INSERT INTO sessions (token, gmail, created_at, expires_at) VALUES ($1,$2,$3,$4)",
+      [token, gmail, now.toISOString(), expires.toISOString()]
+    );
+  } else {
+    mem.sessions.set(token, { token, gmail, created_at: now.toISOString(), expires_at: expires.toISOString() });
+  }
+  return token;
+}
+async function getSessionGmail(token) {
+  if (!token) return null;
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query("SELECT gmail, expires_at FROM sessions WHERE token = $1", [token]);
+    const row = r.rows[0];
+    if (!row) return null;
+    if (Date.parse(row.expires_at) <= Date.now()) {
+      try { await dbPool.query("DELETE FROM sessions WHERE token = $1", [token]); } catch (_) {}
+      return null;
+    }
+    return row.gmail;
+  }
+  const s = mem.sessions.get(token);
+  if (!s) return null;
+  if (Date.parse(s.expires_at) <= Date.now()) { mem.sessions.delete(token); return null; }
+  return s.gmail;
+}
+async function deleteSession(token) {
+  if (!token) return;
+  if (!USE_MEMORY_STORE) {
+    try { await dbPool.query("DELETE FROM sessions WHERE token = $1", [token]); } catch (_) {}
+    return;
+  }
+  mem.sessions.delete(token);
+}
+async function deleteOtherSessions(gmail, keepToken) {
+  if (!USE_MEMORY_STORE) {
+    try { await dbPool.query("DELETE FROM sessions WHERE gmail = $1 AND token <> $2", [gmail, keepToken || ""]); } catch (_) {}
+    return;
+  }
+  for (const [tok, s] of mem.sessions) {
+    if (s.gmail === gmail && tok !== keepToken) mem.sessions.delete(tok);
+  }
+}
+function extractSessionToken(req, body) {
+  const h = String(req.headers["authorization"] || "");
+  const m = /^Bearer\s+(.+)$/.exec(h);
+  if (m) return m[1].trim();
+  if (body && body.token) return String(body.token).trim();
+  return "";
+}
+async function requireSession(req, res, body) {
+  const token = extractSessionToken(req, body);
+  const gmail = await getSessionGmail(token);
+  if (!gmail) { sendJson(res, 401, { ok: false, error: "invalid or expired session" }); return null; }
+  return { token, gmail };
+}
+
+async function handleAuthSignup(req, res) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  const gmail = String(body.gmail || "").trim().toLowerCase();
+  const password = String(body.password || "");
+  const firstName = String(body.firstName || "").trim();
+  const lastName = String(body.lastName || "").trim();
+  if (!validGmail(gmail)) { sendJson(res, 400, { ok: false, error: "valid gmail required" }); return; }
+  if (!firstName || !lastName) { sendJson(res, 400, { ok: false, error: "first and last name required" }); return; }
+  if (password.length < AUTH_MIN_PASSWORD) { sendJson(res, 400, { ok: false, error: "password too short" }); return; }
+  const existing = await getUserAuthRow(gmail);
+  if (existing && existing.password_hash) {
+    sendJson(res, 409, { ok: false, error: "account exists, sign in" });
+    return;
+  }
+  // No row -> brand-new server account. A row WITHOUT a hash is a
+  // legacy upsert from before server passwords: first claim wins and
+  // sets the password (a stranger who knows the gmail could claim an
+  // unclaimed legacy row — accepted limitation, see the v1.12 report).
+  await upsertUser({ gmail, name: (firstName + " " + lastName).trim() });
+  await setUserPasswordHash(gmail, hashPasswordScrypt(password));
+  const token = await createSession(gmail);
+  sendJson(res, 200, { ok: true, token, user: await getUser(gmail) });
+}
+async function handleAuthSignin(req, res) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  const gmail = String(body.gmail || "").trim().toLowerCase();
+  const password = String(body.password || "");
+  if (!validGmail(gmail) || !password) { sendJson(res, 400, { ok: false, error: "gmail and password required" }); return; }
+  if (authFailBlocked(gmail)) { sendJson(res, 429, { ok: false, error: "too many failed attempts, try again in a few minutes" }); return; }
+  const row = await getUserAuthRow(gmail);
+  if (!row || !row.password_hash) {
+    // Unknown gmail AND legacy rows that never set a server password
+    // both answer 404 — the website claims/links via signup instead.
+    sendJson(res, 404, { ok: false, error: "no account with this email yet" });
+    return;
+  }
+  if (!verifyPasswordScrypt(password, row.password_hash)) {
+    authFailRecord(gmail);
+    sendJson(res, 401, { ok: false, error: "wrong password" });
+    return;
+  }
+  authFailReset(gmail);
+  const token = await createSession(gmail);
+  try { await upsertUser({ gmail }); } catch (_) {}
+  sendJson(res, 200, { ok: true, token, user: await getUser(gmail) });
+}
+async function handleAuthSignout(req, res) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  await deleteSession(extractSessionToken(req, body));
+  sendJson(res, 200, { ok: true });
+}
+async function handleAuthMe(req, res, url) {
+  const q = (url.searchParams.get("token") || "").trim();
+  const token = q || extractSessionToken(req, null);
+  const gmail = await getSessionGmail(token);
+  if (!gmail) { sendJson(res, 401, { ok: false, error: "invalid or expired session" }); return; }
+  sendJson(res, 200, { ok: true, user: await getUser(gmail) });
+}
+async function handleAuthChangePassword(req, res) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  const sess = await requireSession(req, res, body);
+  if (!sess) return;
+  const oldPassword = String(body.oldPassword || "");
+  const newPassword = String(body.newPassword || "");
+  if (authFailBlocked(sess.gmail)) { sendJson(res, 429, { ok: false, error: "too many failed attempts, try again in a few minutes" }); return; }
+  if (newPassword.length < AUTH_MIN_PASSWORD) { sendJson(res, 400, { ok: false, error: "password too short" }); return; }
+  const row = await getUserAuthRow(sess.gmail);
+  if (!row || !row.password_hash || !verifyPasswordScrypt(oldPassword, row.password_hash)) {
+    authFailRecord(sess.gmail);
+    sendJson(res, 401, { ok: false, error: "wrong password" });
+    return;
+  }
+  authFailReset(sess.gmail);
+  await setUserPasswordHash(sess.gmail, hashPasswordScrypt(newPassword));
+  await deleteOtherSessions(sess.gmail, sess.token);
+  sendJson(res, 200, { ok: true });
+}
+
+/* --- user mailboxes (server copy of the saved-mailbox list) --- */
+function mailboxFromRow(r) {
+  if (!r) return null;
+  return {
+    address: r.address,
+    name: r.name || "",
+    logo: r.logo || "",
+    ipAddress: r.ip_address || "",
+    ipCountry: r.ip_country || "",
+    ipCity: r.ip_city || "",
+    bought: !!r.bought,
+    listingId: r.listing_id || "",
+    createdAt: toIso(r.created_at),
+  };
+}
+function cleanMailboxInput(mb) {
+  if (!mb || typeof mb !== "object") return null;
+  const address = String(mb.address || "").trim().toLowerCase();
+  if (!validGmail(address)) return null;
+  const createdAt = mb.createdAt ? new Date(mb.createdAt) : null;
+  return {
+    address,
+    password: String(mb.password || ""),
+    name: String(mb.name || "").slice(0, 200),
+    logo: String(mb.logo || "").slice(0, 1500000),
+    ipAddress: String(mb.ipAddress || mb.ip || "").slice(0, 64),
+    ipCountry: String(mb.ipCountry || mb.country || "").slice(0, 64),
+    ipCity: String(mb.ipCity || mb.city || "").slice(0, 64),
+    bought: !!mb.bought,
+    listingId: Number(mb.listingId) || null,
+    createdAt: createdAt && !isNaN(createdAt.getTime()) ? createdAt.toISOString() : null,
+  };
+}
+async function upsertUserMailbox(gmail, mb) {
+  const createdAt = mb.createdAt || new Date().toISOString();
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "INSERT INTO user_mailboxes (gmail, address, password, name, logo, ip_country, ip_city, ip_address, bought, listing_id, created_at)" +
+      " VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)" +
+      " ON CONFLICT (gmail, address) DO UPDATE SET" +
+      "  password = CASE WHEN EXCLUDED.password <> '' THEN EXCLUDED.password ELSE user_mailboxes.password END," +
+      "  name = EXCLUDED.name, logo = EXCLUDED.logo," +
+      "  ip_country = EXCLUDED.ip_country, ip_city = EXCLUDED.ip_city, ip_address = EXCLUDED.ip_address," +
+      "  bought = EXCLUDED.bought, listing_id = EXCLUDED.listing_id" +
+      " RETURNING *",
+      [gmail, mb.address, mb.password, mb.name, mb.logo, mb.ipCountry, mb.ipCity, mb.ipAddress, mb.bought, mb.listingId, createdAt]
+    );
+    return mailboxFromRow(r.rows[0]);
+  }
+  const prev = mem.userMailboxes.find((x) => x.gmail === gmail && x.address === mb.address);
+  if (prev) {
+    if (mb.password) prev.password = mb.password;
+    prev.name = mb.name; prev.logo = mb.logo;
+    prev.ip_country = mb.ipCountry; prev.ip_city = mb.ipCity; prev.ip_address = mb.ipAddress;
+    prev.bought = mb.bought; prev.listing_id = mb.listingId;
+    return mailboxFromRow(prev);
+  }
+  const row = {
+    id: mem.mailboxSeq++, gmail, address: mb.address, password: mb.password,
+    name: mb.name, logo: mb.logo, ip_country: mb.ipCountry, ip_city: mb.ipCity,
+    ip_address: mb.ipAddress, bought: mb.bought, listing_id: mb.listingId, created_at: createdAt,
+  };
+  mem.userMailboxes.push(row);
+  return mailboxFromRow(row);
+}
+async function listUserMailboxes(gmail) {
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query("SELECT * FROM user_mailboxes WHERE gmail = $1 ORDER BY created_at ASC, id ASC", [gmail]);
+    return r.rows.map(mailboxFromRow);
+  }
+  return mem.userMailboxes
+    .filter((x) => x.gmail === gmail)
+    .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")) || a.id - b.id)
+    .map(mailboxFromRow);
+}
+async function getUserMailboxRow(gmail, address) {
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query("SELECT * FROM user_mailboxes WHERE gmail = $1 AND address = $2", [gmail, address]);
+    return r.rows[0] || null;
+  }
+  return mem.userMailboxes.find((x) => x.gmail === gmail && x.address === address) || null;
+}
+async function deleteUserMailbox(gmail, address) {
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query("DELETE FROM user_mailboxes WHERE gmail = $1 AND address = $2", [gmail, address]);
+    return (r.rowCount || 0) > 0;
+  }
+  const before = mem.userMailboxes.length;
+  mem.userMailboxes = mem.userMailboxes.filter((x) => !(x.gmail === gmail && x.address === address));
+  return mem.userMailboxes.length < before;
+}
+async function handleMailboxesList(req, res, url) {
+  const token = (url.searchParams.get("token") || "").trim() || extractSessionToken(req, null);
+  const gmail = await getSessionGmail(token);
+  if (!gmail) { sendJson(res, 401, { ok: false, error: "invalid or expired session" }); return; }
+  sendJson(res, 200, { ok: true, mailboxes: await listUserMailboxes(gmail) });
+}
+async function handleMailboxUpsert(req, res) {
+  const body = await readJsonBody(req, res, MAILBOX_SINGLE_MAX);
+  if (!body) return;
+  const sess = await requireSession(req, res, body);
+  if (!sess) return;
+  const mb = cleanMailboxInput(body.mailbox || body);
+  if (!mb) { sendJson(res, 400, { ok: false, error: "valid mailbox address required" }); return; }
+  sendJson(res, 200, { ok: true, mailbox: await upsertUserMailbox(sess.gmail, mb) });
+}
+async function handleMailboxesSync(req, res) {
+  const body = await readJsonBody(req, res, MAILBOX_BODY_MAX);
+  if (!body) return;
+  const sess = await requireSession(req, res, body);
+  if (!sess) return;
+  const list = Array.isArray(body.mailboxes) ? body.mailboxes : [];
+  // Dedupe by address inside the batch — last occurrence wins.
+  const byAddr = new Map();
+  for (const raw of list) {
+    const mb = cleanMailboxInput(raw);
+    if (mb) byAddr.set(mb.address, mb);
+  }
+  const out = [];
+  for (const mb of byAddr.values()) out.push(await upsertUserMailbox(sess.gmail, mb));
+  sendJson(res, 200, { ok: true, mailboxes: out, count: out.length });
+}
+async function handleMailboxDelete(req, res, url) {
+  const token = (url.searchParams.get("token") || "").trim() || extractSessionToken(req, null);
+  const gmail = await getSessionGmail(token);
+  if (!gmail) { sendJson(res, 401, { ok: false, error: "invalid or expired session" }); return; }
+  const address = String(url.searchParams.get("address") || "").trim().toLowerCase();
+  if (!address) { sendJson(res, 400, { ok: false, error: "address required" }); return; }
+  // Server row only — the Mail.tm account itself is NEVER touched here (v1.9c).
+  const deleted = await deleteUserMailbox(gmail, address);
+  sendJson(res, 200, { ok: true, deleted });
+}
+async function handleMailboxRestore(req, res) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  const sess = await requireSession(req, res, body);
+  if (!sess) return;
+  const address = String(body.address || "").trim().toLowerCase();
+  if (!validGmail(address)) { sendJson(res, 400, { ok: false, error: "valid address required" }); return; }
+  const row = await getUserMailboxRow(sess.gmail, address);
+  if (!row) { sendJson(res, 404, { ok: false, error: "mailbox not found" }); return; }
+  if (!row.password) { sendJson(res, 400, { ok: false, error: "no stored credentials for this mailbox" }); return; }
+  // Log in with the stored password server-side; only the fresh Mail.tm
+  // token (never the password) goes back to the browser. A deleted
+  // Mail.tm account can never be brought back (422) — the login fails
+  // honestly and the website drops the row.
+  const login = await mailTmLogin(row.address, row.password);
+  if (!login.ok) { sendJson(res, 400, { ok: false, error: login.error }); return; }
+  sendJson(res, 200, {
+    ok: true, token: login.token, accountId: login.id || "", address: row.address,
+    logo: row.logo || "", ip: row.ip_address || "", country: row.ip_country || "",
+    city: row.ip_city || "", flag: "",
+  });
+}
+
+/* --- admin panel password, server-side (token-gated like all /api/admin/*) --- */
+async function getAdminPasswordHash() {
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query("SELECT password_hash FROM admin_auth WHERE id = 1");
+    return r.rows[0] ? r.rows[0].password_hash : null;
+  }
+  return mem.adminAuth ? mem.adminAuth.password_hash : null;
+}
+async function setAdminPasswordHash(hash) {
+  const now = new Date().toISOString();
+  if (!USE_MEMORY_STORE) {
+    await dbPool.query(
+      "INSERT INTO admin_auth (id, password_hash, created_at, updated_at) VALUES (1,$1,$2,$2)" +
+      " ON CONFLICT (id) DO UPDATE SET password_hash = EXCLUDED.password_hash, updated_at = EXCLUDED.updated_at",
+      [hash, now]
+    );
+    return;
+  }
+  mem.adminAuth = { password_hash: hash, created_at: mem.adminAuth ? mem.adminAuth.created_at : now, updated_at: now };
+}
+async function handleAdminAuthStatus(req, res) {
+  const hash = await getAdminPasswordHash();
+  sendJson(res, 200, { ok: true, hasPassword: !!hash });
+}
+async function handleAdminSetPassword(req, res) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  const password = String(body.password || "");
+  if (password.length < ADMIN_MIN_PASSWORD) { sendJson(res, 400, { ok: false, error: "password too short" }); return; }
+  // The ADMIN_TOKEN holder can always set/reset — never lock them out.
+  await setAdminPasswordHash(hashPasswordScrypt(password));
+  sendJson(res, 200, { ok: true });
+}
+async function handleAdminLogin(req, res) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  const password = String(body.password || "");
+  const hash = await getAdminPasswordHash();
+  if (!hash) { sendJson(res, 404, { ok: false, error: "no password set" }); return; }
+  if (!verifyPasswordScrypt(password, hash)) { sendJson(res, 401, { ok: false, error: "wrong password" }); return; }
+  sendJson(res, 200, { ok: true });
+}
+
 async function handleApi(req, res, url) {
   const p = url.pathname;
   try {
@@ -3692,9 +4452,28 @@ async function handleApi(req, res, url) {
     if (req.method === "GET" && p === "/api/market/listings/by-address") return handleMarketListingByAddress(req, res, url);
     const mMktRep = /^\/api\/market\/orders\/(\d+)\/report$/.exec(p);
     if (req.method === "POST" && mMktRep) return handleMarketOrderReport(req, res, mMktRep[1]);
+    /* v1.11: buyer support chat (approved orders only). */
+    const mSupMsg = /^\/api\/market\/orders\/(\d+)\/support\/messages$/.exec(p);
+    if (req.method === "POST" && mSupMsg) return handleMarketSupportMessageCreate(req, res, mSupMsg[1]);
+    if (req.method === "GET" && mSupMsg) return handleMarketSupportMessagesList(req, res, mSupMsg[1], url);
+    /* v1.12: server accounts + server mailboxes. */
+    if (req.method === "POST" && p === "/api/auth/signup") return handleAuthSignup(req, res);
+    if (req.method === "POST" && p === "/api/auth/signin") return handleAuthSignin(req, res);
+    if (req.method === "POST" && p === "/api/auth/signout") return handleAuthSignout(req, res);
+    if (req.method === "GET" && p === "/api/auth/me") return handleAuthMe(req, res, url);
+    if (req.method === "POST" && p === "/api/auth/change-password") return handleAuthChangePassword(req, res);
+    if (req.method === "GET" && p === "/api/mailboxes") return handleMailboxesList(req, res, url);
+    if (req.method === "POST" && p === "/api/mailboxes") return handleMailboxUpsert(req, res);
+    if (req.method === "POST" && p === "/api/mailboxes/sync") return handleMailboxesSync(req, res);
+    if (req.method === "DELETE" && p === "/api/mailboxes") return handleMailboxDelete(req, res, url);
+    if (req.method === "POST" && p === "/api/mailboxes/restore") return handleMailboxRestore(req, res);
     if (p.startsWith("/api/admin/")) {
       if (!requireAdmin(req, res)) return;
       if (req.method === "GET" && p === "/api/admin/users") return handleAdminUsers(req, res);
+      /* v1.12: admin panel password, server-side (token-gated). */
+      if (req.method === "GET" && p === "/api/admin/auth-status") return handleAdminAuthStatus(req, res);
+      if (req.method === "POST" && p === "/api/admin/set-password") return handleAdminSetPassword(req, res);
+      if (req.method === "POST" && p === "/api/admin/login") return handleAdminLogin(req, res);
       if (req.method === "POST" && p === "/api/admin/block") return handleAdminBlock(req, res);
       if (req.method === "POST" && p === "/api/admin/codes") return handleAdminCodesCreate(req, res);
       if (req.method === "GET" && p === "/api/admin/codes") return handleAdminCodesList(req, res);
@@ -3723,6 +4502,14 @@ async function handleApi(req, res, url) {
       if (req.method === "GET" && p === "/api/admin/delete-requests") return handleAdminDeleteRequestsList(req, res);
       const mDelReq = /^\/api\/admin\/delete-requests\/(\d+)\/(approve|reject)$/.exec(p);
       if (req.method === "POST" && mDelReq) return handleAdminDeleteRequestDecide(req, res, mDelReq[1], mDelReq[2]);
+      /* v1.11: buyer support chat (admin side). */
+      if (req.method === "GET" && p === "/api/admin/support") return handleAdminSupportThreads(req, res);
+      const mSupThread = /^\/api\/admin\/support\/(\d+)\/messages$/.exec(p);
+      if (req.method === "GET" && mSupThread) return handleAdminSupportThread(req, res, mSupThread[1]);
+      const mSupReply = /^\/api\/admin\/support\/(\d+)\/reply$/.exec(p);
+      if (req.method === "POST" && mSupReply) return handleAdminSupportReply(req, res, mSupReply[1]);
+      const mSupRead = /^\/api\/admin\/support\/(\d+)\/read$/.exec(p);
+      if (req.method === "POST" && mSupRead) return handleAdminSupportRead(req, res, mSupRead[1]);
       const mMktOrd = /^\/api\/admin\/market\/orders\/(\d+)\/(approve|reject)$/.exec(p);
       if (req.method === "POST" && mMktOrd) return handleAdminMarketOrderDecide(req, res, mMktOrd[1], mMktOrd[2]);
       const mRec = /^\/api\/admin\/receipts\/(\d+)\/(approve|reject)$/.exec(p);

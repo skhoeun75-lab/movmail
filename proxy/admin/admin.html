@@ -37,6 +37,18 @@
       <h1 data-i18n="adminPanel">ផ្ទាំងគ្រប់គ្រង</h1>
       <p class="muted" data-i18n="adminOnly">សម្រាប់តែអ្នកគ្រប់គ្រង MovMail ប៉ុណ្ណោះ</p>
 
+      <!-- v1.12: the ADMIN_TOKEN is needed before the server can check
+           the admin password — a fresh browser has no token stored, so
+           it is entered here (and can still be changed in Settings). -->
+      <div id="authTokenRow" class="auth-token-row" hidden>
+        <label class="field">
+          <span data-i18n="adminToken">Admin API Token</span>
+          <input id="authTokenInput" type="password" autocomplete="off" data-i18n-ph="tokenPlaceholder" placeholder="បិទភ្ជាប់ token នៅទីនេះ">
+        </label>
+        <button id="authTokenSaveBtn" class="btn btn-secondary" type="button" data-i18n="save">រក្សាទុក</button>
+        <p class="error" id="authTokenError" hidden></p>
+      </div>
+
       <!-- First run: set password -->
       <form id="setupForm" hidden novalidate>
         <p class="setup-note" data-i18n="setupNote">លើកដំបូង៖ កំណត់ពាក្យសម្ងាត់អ្នកគ្រប់គ្រងរបស់អ្នក។ ពាក្យសម្ងាត់នេះរក្សាទុកតែក្នុងឧបករណ៍នេះប៉ុណ្ណោះ (ជា hash)។</p>

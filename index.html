@@ -800,6 +800,25 @@
       .del-row{width:100%;text-align:left;background:#fef2f2;border:1px solid #dc2626;border-radius:10px;padding:8px 10px;margin-bottom:6px;cursor:pointer;color:#991b1b;font:inherit}
       .del-row:hover{filter:brightness(.97)}
       .del-row .notif-time{color:#b91c1c}
+      /* v1.11: buyer support chat — blue bell row for an admin reply
+         (tap = popup with the message + copyable code), and the
+         in-order chat panel (buyer right, admin left). */
+      .support-row{width:100%;text-align:left;background:#eff6ff;border:1px solid #2563eb;border-radius:10px;padding:8px 10px;margin-bottom:6px;cursor:pointer;color:#1e40af;font:inherit}
+      .support-row:hover{filter:brightness(.97)}
+      .support-row .notif-time{color:#1d4ed8}
+      .support-modal{max-width:520px;width:calc(100vw - 32px)}
+      .support-list{max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:4px 2px;margin:6px 0 10px}
+      .sup-msg{max-width:88%;padding:8px 10px;border-radius:12px;font-size:14px;line-height:1.45;overflow-wrap:anywhere;word-break:break-word}
+      .sup-msg.buyer{align-self:flex-end;background:var(--accent-soft);border:1px solid var(--accent);color:var(--ink)}
+      .sup-msg.admin{align-self:flex-start;background:var(--surface-2);border:1px solid var(--border);color:var(--ink)}
+      .sup-who{display:block;font-size:11.5px;font-weight:700;color:var(--muted);margin-bottom:2px}
+      .sup-code{display:inline-flex;align-items:center;gap:6px;margin-top:6px;background:var(--surface);border:1px dashed var(--faint);border-radius:8px;padding:4px 8px;font-size:14px;font-weight:700}
+      .sup-code button{border:none;background:var(--accent);color:#fff;border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer}
+      .sup-time{display:block;font-size:11px;color:var(--muted);margin-top:3px}
+      .support-input-row{display:flex;gap:8px}
+      .support-input-row input{flex:1;min-width:0}
+      .support-empty{color:var(--muted);font-size:13.5px;text-align:center;padding:10px 0}
+      .support-btn{border-color:#2563eb;color:#1d4ed8}
       .gift-code{font-size:26px;font-weight:800;letter-spacing:2px;text-align:center;background:var(--surface-2);border:1px dashed var(--faint);border-radius:12px;padding:14px 10px;margin:12px 0;overflow-wrap:anywhere;word-break:break-all}
       .accent-pick{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0 4px}
       .accent-dot{width:30px;height:30px;border-radius:50%;border:2px solid transparent;padding:0;min-height:30px;cursor:pointer;flex:none}
@@ -1538,6 +1557,23 @@
       </div>
     </div>
 
+    <!-- ===== Buyer support chat (v1.11: approved orders only) ===== -->
+    <div class="mini-overlay" id="supportOverlay" role="dialog" aria-modal="true">
+      <div class="mini-modal support-modal">
+        <h3 id="supportTitle">💬 ជំនួយ</h3>
+        <p id="supportSub" class="muted"></p>
+        <div id="supportMsgList" class="support-list"></div>
+        <div class="support-input-row">
+          <input id="supportMsgInput" type="text" autocomplete="off" data-i18n-ph="supportPlaceholder" placeholder="សរសេរសាររបស់អ្នក…" maxlength="2000">
+          <button class="btn primary" id="supportSendBtn" type="button" data-i18n="supportSend">ផ្ញើ</button>
+        </div>
+        <p class="auth-error" id="supportError" hidden></p>
+        <div class="mini-actions" style="justify-content:center">
+          <button class="btn" id="supportCloseBtn" type="button" data-i18n="heroDismiss">បិទ</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ===== Profile panel (small, top-right) ===== -->
     <div class="profile-panel" id="profilePanel" role="dialog" aria-modal="false" aria-label="Profile">
       <div class="profile-head">
@@ -2023,6 +2059,161 @@
             applyServerAccount(data);
             return data;
           }).catch(function(){ return null; });
+        }
+        /* ---------- v1.12: SERVER ACCOUNTS ----------
+           The account + saved mailboxes live on the server now: Gmail +
+           password signs in from ANY device and everything comes back.
+           The session token is kept in localStorage (per gmail); the
+           Mail.tm mailbox passwords are NEVER stored on the device for
+           server-pulled rows — those rows restore through the server
+           (POST /api/mailboxes/restore), which returns a fresh token.
+           Every sync call is fire-and-forget: a failure (offline/429)
+           never blocks the UI and never loses the local action — the
+           next load / sign-in retries it silently. */
+        var SESSION_KEY = "movmail-session"; /* {gmail, token} */
+        function loadSessionToken(){
+          try {
+            var s = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+            return (s && s.token) ? s : null;
+          } catch(e){ return null; }
+        }
+        function saveSessionToken(gmail, token){
+          try { localStorage.setItem(SESSION_KEY, JSON.stringify({ gmail: String(gmail).toLowerCase(), token: token })); } catch(e){}
+        }
+        function clearSessionToken(){
+          try { localStorage.removeItem(SESSION_KEY); } catch(e){}
+        }
+        function sessionTokenFor(email){
+          var s = loadSessionToken();
+          if (!s || !s.token) return "";
+          if (email && String(s.gmail || "").toLowerCase() !== String(email).toLowerCase()) return "";
+          return s.token;
+        }
+        function serverSignOut(){
+          var s = loadSessionToken();
+          if (!s || !s.token) return Promise.resolve(null);
+          return apiAdmin("/api/auth/signout", { method: "POST", body: { token: s.token } }).catch(function(){ return null; });
+        }
+        function mailboxToServerRow(mb){
+          return {
+            address: mb.address, password: mb.password || "", name: mb.name || "",
+            logo: mb.logo || "", ipAddress: mb.ip || "", ipCountry: mb.country || "",
+            ipCity: mb.city || "", bought: !!mb.bought, listingId: mb.listingId || "",
+            createdAt: mb.createdAt || ""
+          };
+        }
+        function syncOneMailbox(mb){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p) return Promise.resolve(null);
+          var tok = sessionTokenFor(p.email);
+          if (!tok || !mb || !mb.address) return Promise.resolve(null);
+          return apiAdmin("/api/mailboxes", { method: "POST", body: { token: tok, mailbox: mailboxToServerRow(mb) } }).catch(function(){ return null; });
+        }
+        function syncServerMailboxes(){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p) return Promise.resolve(null);
+          var tok = sessionTokenFor(p.email);
+          if (!tok) return Promise.resolve(null);
+          var list = loadMailboxes().map(mailboxToServerRow);
+          return apiAdmin("/api/mailboxes/sync", { method: "POST", body: { token: tok, mailboxes: list } }).catch(function(){ return null; });
+        }
+        function deleteServerMailbox(address){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p) return Promise.resolve(null);
+          var tok = sessionTokenFor(p.email);
+          if (!tok || !address) return Promise.resolve(null);
+          return apiAdmin("/api/mailboxes?address=" + encodeURIComponent(address) + "&token=" + encodeURIComponent(tok), { method: "DELETE" }).catch(function(){ return null; });
+        }
+        /* Count today's created mailboxes from the SERVER list (non-bought
+           rows created since local midnight). Kept in serverDailyCount;
+           null = unknown/offline, and the local counter is the fallback. */
+        var serverDailyCount = null;
+        function countServerDaily(rows){
+          var start = new Date(); start.setHours(0, 0, 0, 0);
+          var n = 0;
+          (rows || []).forEach(function(r){
+            if (!r || r.bought) return;
+            var ts = new Date(r.createdAt || 0).getTime();
+            if (!isNaN(ts) && ts >= start.getTime()) n++;
+          });
+          serverDailyCount = n;
+        }
+        function pullServerMailboxes(){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p) return Promise.resolve(null);
+          var tok = sessionTokenFor(p.email);
+          if (!tok) return Promise.resolve(null);
+          return apiAdmin("/api/mailboxes?token=" + encodeURIComponent(tok)).then(function(data){
+            var rows = (data && Array.isArray(data.mailboxes)) ? data.mailboxes : [];
+            countServerDaily(rows);
+            mergeServerMailboxes(rows);
+            return data;
+          }).catch(function(err){
+            if (err && err.status === 401) clearSessionToken();
+            return null;
+          });
+        }
+        function mergeServerMailboxes(rows){
+          if (!rows || !rows.length) return;
+          var local = loadMailboxes(), changed = false;
+          rows.forEach(function(r){
+            if (!r || !r.address) return;
+            /* Rows with no name were never saved (synced at creation
+               only, so the daily quota counts them) — they stay off
+               the Saved list until the user saves them with a name. */
+            if (!r.name) return;
+            var found = null;
+            for (var i = 0; i < local.length; i++){ if (local[i].address === r.address){ found = local[i]; break; } }
+            if (found){
+              /* Server wins on conflicts — but never touch the local
+                 password/token: the server never sends a password. */
+              found.name = r.name;
+              if (r.logo) found.logo = r.logo;
+              if (r.ipAddress) found.ip = r.ipAddress;
+              if (r.ipCountry) found.country = r.ipCountry;
+              if (r.ipCity) found.city = r.ipCity;
+              if (r.bought) found.bought = true;
+              if (r.listingId) found.listingId = r.listingId;
+              if (!found.tier) found.tier = "free";
+              changed = true;
+            } else {
+              local.unshift({
+                id: "mb-" + Date.now().toString(36) + randomStr(6),
+                name: r.name, tier: "free", address: r.address,
+                password: "", token: "", accountId: "",
+                ip: r.ipAddress || "", country: r.ipCountry || "", city: r.ipCity || "",
+                flag: "", proxy: "auto", bought: !!r.bought, logo: r.logo || "",
+                listingId: r.listingId || "", createdAt: r.createdAt || new Date().toISOString()
+              });
+              changed = true;
+            }
+          });
+          if (changed){ saveMailboxes(local); renderMailboxes(); }
+        }
+        /* Server sign-up (fire-and-forget): creates/links the server
+           account with the same password, then pushes the local
+           mailboxes. A 409 means the gmail already HAS a server
+           account (made on another device) — then sign in with the
+           same password instead and pull its mailboxes. */
+        function serverSignup(email, pw, first, last){
+          return apiAdmin("/api/auth/signup", { method: "POST", body: { firstName: first, lastName: last, gmail: email, password: pw } }).then(function(data){
+            if (data && data.token) saveSessionToken(email, data.token);
+            syncServerMailboxes();
+            return data;
+          }).catch(function(err){
+            if (err && err.status === 409){
+              return apiAdmin("/api/auth/signin", { method: "POST", body: { gmail: email, password: pw } }).then(function(data){
+                if (data && data.token) saveSessionToken(email, data.token);
+                pullServerMailboxes();
+                return data;
+              }).catch(function(){ return null; });
+            }
+            return null;
+          });
         }
         /* ---------- blocked account ---------- */
         /* True once the server's blocked check has answered (a network
@@ -2559,6 +2750,10 @@ var I18N = {
     "authErrPassMatch": "ពាក្យសម្ងាត់ទាំងពីរមិនត្រូវគ្នាទេ។",
     "authErrPassShort": "ពាក្យសម្ងាត់ត្រូវមានយ៉ាងហោចណាស់ ៦ តួអក្សរ។",
     "authErrNoAccount": "មិនទាន់មានគណនីជាមួយអ៊ីមែលនេះទេ។ សូមចុះឈ្មោះជាមុន។",
+    /* v1.12: server accounts */
+    "authErrTooMany": "ព្យាយាមចូលច្រើនដងពេក។ សូមរង់ចាំប៉ុន្មាននាទីហើយព្យាយាមម្តងទៀត។",
+    "authErrNetwork": "មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេបានទេ។ សូមពិនិត្យអ៊ីនធឺណិតហើយព្យាយាមម្តងទៀត។",
+    "toastAccountRestored": "ស្វាគមន៍ត្រឡប់មកវិញ! អ៊ីមែលដែលបានរក្សាទុករបស់អ្នកត្រឡប់មកវិញហើយ។",
     "authErrWrongPass": "ពាក្យសម្ងាត់មិនត្រឹមត្រូវ។ សូមព្យាយាមម្តងទៀត។",
     "toastWelcomeBack": "ស្វាគមន៍ត្រឡប់មកវិញ!",
     "comingSoon": "មកដល់ឆាប់ៗនេះ",
@@ -2751,6 +2946,20 @@ var I18N = {
     "reportSaved": "បានរក្សាទុកការរាយការណ៍របស់អ្នក។",
     "reportFailedSaved": "បានរក្សាទុក។ អ្នកលក់នឹងពិនិត្យមើល។",
     "reportError": "រាយការណ៍មិនបានទេ សូមសាកម្តងទៀត។",
+    /* v1.11: buyer support chat — only on APPROVED orders. The buyer
+       writes to the admin; an admin reply arrives in the bell, and a
+       code in the reply is copyable. */
+    "supportBtn": "💬 ជំនួយ",
+    "supportTitle": "ជំនួយ — {title}",
+    "supportHint": "សរសេរសារទៅ admin។ បើអ្នកមិនឃើញកូដ សូមប្រាប់នៅទីនេះ។",
+    "supportPlaceholder": "សរសេរសាររបស់អ្នក…",
+    "supportSend": "ផ្ញើ",
+    "supportEmpty": "មិនទាន់មានសារទេ — ចាប់ផ្តើមសរសេរ។",
+    "supportLoadFailed": "ផ្ទុកសារមិនបានទេ។",
+    "supportSendFailed": "ផ្ញើសារមិនបានទេ។",
+    "supportYou": "អ្នក",
+    "supportAdmin": "Admin",
+    "supportReplyBellTitle": "💬 ចម្លើយពី admin",
     "restoreBoughtSuccess": "បានយកអ៊ីមែលដែលទិញមកប្រើហើយ",
     "restoreBoughtFailed": "យកអ៊ីមែលមកប្រើវិញមិនបានសម្រេច",
     "marketRevealing": "កំពុងបង្ហាញអ៊ីមែល…",
@@ -2952,6 +3161,10 @@ var I18N = {
     "authErrPassMatch": "The two passwords don't match.",
     "authErrPassShort": "Password must be at least 6 characters.",
     "authErrNoAccount": "No account with this email yet. Please sign up first.",
+    /* v1.12: server accounts */
+    "authErrTooMany": "Too many failed attempts. Try again in a few minutes.",
+    "authErrNetwork": "Could not reach the server. Check your connection and try again.",
+    "toastAccountRestored": "Welcome back! Your saved emails are back.",
     "authErrWrongPass": "Wrong password. Please try again.",
     "toastWelcomeBack": "Welcome back!",
     "comingSoon": "Coming soon",
@@ -3144,6 +3357,20 @@ var I18N = {
     "reportSaved": "Your report was saved.",
     "reportFailedSaved": "Saved. The seller will check it.",
     "reportError": "Could not save the report, please try again.",
+    /* v1.11: buyer support chat — only on APPROVED orders. The buyer
+       writes to the admin; an admin reply arrives in the bell, and a
+       code in the reply is copyable. */
+    "supportBtn": "💬 Support",
+    "supportTitle": "Support — {title}",
+    "supportHint": "Message the admin. If you don't see the code, tell us here.",
+    "supportPlaceholder": "Write your message…",
+    "supportSend": "Send",
+    "supportEmpty": "No messages yet — start the chat.",
+    "supportLoadFailed": "Could not load messages.",
+    "supportSendFailed": "Could not send the message.",
+    "supportYou": "You",
+    "supportAdmin": "Admin",
+    "supportReplyBellTitle": "💬 Reply from admin",
     "restoreBoughtSuccess": "Bought email restored",
     "restoreBoughtFailed": "Could not restore this email",
     "marketRevealing": "Revealing email…",
@@ -3512,6 +3739,15 @@ var I18N = {
             /* A new address was created: count it against the daily
                quota and log it in the bell. */
             recordEmailCreated();
+            /* v1.12: push the new address to the server at creation
+               (unsaved, name "") so the daily quota counts it on
+               every device; a fresh device sees the same count. */
+            syncOneMailbox({
+              address: state.address, password: state.password, name: "",
+              ip: currentIp ? currentIp.ip : "", country: currentIp ? currentIp.country : "",
+              city: currentIp ? currentIp.city : "", flag: currentIp ? currentIp.flag : "",
+              bought: false, logo: "", listingId: "", createdAt: state.createdAt || new Date().toISOString()
+            });
             addNotification("notifEmailGenerated", {addr: state.address});
           }).catch(function(err){
             state.creating = false;
@@ -3560,6 +3796,9 @@ var I18N = {
                mirroring deleteMailbox(). */
             var oldAddr = state.address;
             if (oldAddr) api("/saved?address=" + encodeURIComponent(oldAddr), { method: "DELETE" }).catch(function(){});
+            /* v1.12: drop the server row too (local removal only — the
+               Mail.tm account itself stays alive, v1.7b). */
+            if (oldAddr) deleteServerMailbox(oldAddr);
             /* v1.7b (Mov's rule): Delete NEVER deletes the Mail.tm
                account itself — for ANY mailbox. The same account can
                be held by the seller AND the buyer (a sold mailbox
@@ -3945,6 +4184,7 @@ var I18N = {
                  v1.7b: keep its listing id too (server re-login). */
               if (currentBought){ list[i].bought = true; if (currentBoughtLogo) list[i].logo = currentBoughtLogo; if (currentBoughtListingId) list[i].listingId = currentBoughtListingId; }
               saveMailboxes(list);
+              syncOneMailbox(list[i]); /* v1.12: push the saved row to the server */
               renderMailboxes();
               return list[i];
             }
@@ -3969,6 +4209,7 @@ var I18N = {
           };
           list.unshift(mb);
           saveMailboxes(list);
+          syncOneMailbox(mb); /* v1.12: push the saved row to the server */
           renderMailboxes();
           return mb;
         }
@@ -4133,6 +4374,9 @@ var I18N = {
           _dd.addresses = (_dd.addresses || []).filter(function(a){ return a !== mb.address; });
           saveAcctData(_dd);
           api("/saved?address=" + encodeURIComponent(mb.address), { method: "DELETE" }).catch(function(){});
+          /* v1.12: drop the server row too (local removal only — the
+             Mail.tm account itself stays alive, v1.7b). */
+          deleteServerMailbox(mb.address);
           /* v1.7b: the Mail.tm account itself is never deleted here
              either — see deleteAndRecreate. Removing a saved row
              only removes it from this device; the account stays
@@ -4260,6 +4504,7 @@ var I18N = {
           _dd.addresses = (_dd.addresses || []).filter(function(a){ return a !== mb.address; });
           saveAcctData(_dd);
           api("/saved?address=" + encodeURIComponent(mb.address), { method: "DELETE" }).catch(function(){});
+          deleteServerMailbox(mb.address); /* v1.12: the account is really gone — drop its server row too */
           renderMailboxes();
           renderSavedMessages();
           showToast(t("toastDeletedByAdmin"));
@@ -4297,6 +4542,7 @@ var I18N = {
                 _dd2.addresses = (_dd2.addresses || []).filter(function(a){ return a !== m.address; });
                 saveAcctData(_dd2);
                 api("/saved?address=" + encodeURIComponent(m.address), { method: "DELETE" }).catch(function(){});
+                deleteServerMailbox(m.address); /* v1.12: the account is really gone */
               });
               renderSavedMessages();
               showToast(t("toastDeletedByAdmin"));
@@ -4427,11 +4673,51 @@ var I18N = {
           });
           return state.reauthBoughting;
         }
+        /* ---------- v1.12: server restore ----------
+           A saved row pulled from the server has no Mail.tm password
+           on this device — the server holds it (exactly like listing
+           passwords). POST /api/mailboxes/restore logs in server-side
+           and returns a fresh token; the password never reaches the
+           browser. Resolves {ok:true, token, accountId} or {ok:false,
+           gone:true} when the Mail.tm account no longer exists. */
+        function reauthServerMailbox(mb){
+          if (state.reauthServering) return state.reauthServering;
+          var addr = (mb && mb.address) || state.address;
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!addr || !p || !p.email) return Promise.resolve({ok:false});
+          var tok = sessionTokenFor(p.email);
+          if (!tok) return Promise.resolve({ok:false});
+          state.reauthServering = apiAdmin("/api/mailboxes/restore", { method: "POST", body: { token: tok, address: addr } }).then(function(res){
+            if (!res || !res.token || !res.address || res.address !== addr) return {ok:false};
+            state.token = res.token;
+            if (res.accountId) state.accountId = res.accountId;
+            if (addr === state.address) saveCurrentSession();
+            /* The restored token + account id belong on the saved row
+               too (same as reauthMailbox's takeToken). */
+            var list = loadMailboxes(), changed = false;
+            list.forEach(function(m){ if (m.address === addr){ m.token = res.token; if (res.accountId) m.accountId = res.accountId; changed = true; } });
+            if (changed) saveMailboxes(list);
+            return {ok:true, token: res.token, accountId: res.accountId || ""};
+          }).catch(function(err){
+            var msg = "";
+            if (err && err.data && err.data.error) msg = String(err.data.error);
+            else if (err && err.message) msg = String(err.message);
+            return {ok:false, gone: msg.indexOf("no longer exists") !== -1};
+          }).then(function(r){
+            state.reauthServering = null;
+            return r;
+          });
+          return state.reauthServering;
+        }
 
         function restoreMailbox(mb){
           /* v1.7b: a bought saved row has no password (the server
              holds it) — it restores through the server instead. */
-          if (!mb || !mb.address || (!mb.password && !isBoughtMailbox(mb))) return;
+          if (!mb || !mb.address) return;
+          /* v1.12: a server-pulled row has no password on this device —
+             it restores through the server (reauthServerMailbox below)
+             instead of the local password path. */
           /* Re-read the freshest copy from storage first — the row's
              closure may hold a stale token. */
           mb = findMailbox(mb.address) || mb;
@@ -4519,11 +4805,25 @@ var I18N = {
                     fail();
                   }
                 });
-              } else {
+              } else if (mb.password){
                 reauthMailbox().then(function(res){
                   if (res && res.ok){
                     mb.token = res.token;
                     adopt(res.token, res.accountId || "");
+                  } else {
+                    fail();
+                  }
+                });
+              } else {
+                /* v1.12: no local password (server-pulled row) — the
+                   server holds the Mail.tm password and returns a
+                   fresh token. */
+                reauthServerMailbox(mb).then(function(res){
+                  if (res && res.ok){
+                    mb.token = res.token;
+                    adopt(res.token, res.accountId || "");
+                  } else if (res && res.gone){
+                    dropDeletedMailbox(mb);
                   } else {
                     fail();
                   }
@@ -4888,6 +5188,21 @@ var I18N = {
                  retry this fetch a single time. If that fails too,
                  stay quiet; the next tick retries. */
               return reauthBoughtMailbox().then(function(res){
+                if (res && res.ok){
+                  state.pollInterval = pollBaseSeconds();
+                  state.countdown = state.pollInterval;
+                  updateCountdown();
+                  return runFetch(first, true);
+                }
+                quietFail();
+                return {ok:false, reason:"reauth-failed"};
+              });
+            }
+            if (err && (err.status === 401 || err.status === 404) && !retried && state.address && !state.password && !currentBought){
+              /* v1.12: dead token on a SERVER-PULLED mailbox — no
+                 password on this device either, so heal it through
+                 the server restore, then retry this fetch once. */
+              return reauthServerMailbox().then(function(res){
                 if (res && res.ok){
                   state.pollInterval = pollBaseSeconds();
                   state.countdown = state.pollInterval;
@@ -6024,6 +6339,12 @@ var I18N = {
         }
         function dailyRemaining(){
           if (getCurrentPlan() === "pro-yearly") return Infinity;
+          /* v1.12: when online, the count comes from the SERVER list
+             (all devices share one quota); the local counter is only
+             the offline fallback. */
+          if (serverDailyCount !== null && serverDailyCount !== undefined){
+            return Math.max(0, effectiveDailyLimit() - serverDailyCount);
+          }
           var u = loadDailyUse();
           return Math.max(0, effectiveDailyLimit() - u.count);
         }
@@ -6155,6 +6476,21 @@ var I18N = {
               nl.appendChild(grow);
               return;
             }
+            /* v1.11: an admin support reply — blue row. Tapping it
+               opens the reply popup (message + copyable code when the
+               admin included one); the row is marked read then. */
+            if (g.type === "support_reply") {
+              grow.className = "notif-item support-row";
+              var stx = document.createElement("span");
+              stx.textContent = t("supportReplyBellTitle") + (g.listingTitle ? " · " + g.listingTitle : "");
+              var stm = document.createElement("span");
+              stm.className = "notif-time";
+              stm.textContent = g.created_at ? relTime(g.created_at) : "";
+              grow.appendChild(stx); grow.appendChild(stm);
+              grow.addEventListener("click", function(){ openSupportReplyPopup(g); });
+              nl.appendChild(grow);
+              return;
+            }
             grow.className = "notif-item gift-row";
             var gtx = document.createElement("span");
             /* v1.9b: forwarded codes show "Code from <sender> · <email>"
@@ -6257,7 +6593,10 @@ var I18N = {
                 /* v1.10c: delete-attempt alarm rows (admin accounts
                    only) carry the attempted path, which proxy blocked
                    it, and the attempt count. */
-                attemptPath: item.attemptPath || "", proxyHost: item.proxyHost || "", attempts: (typeof item.attempts === "number" ? item.attempts : 0) });
+                attemptPath: item.attemptPath || "", proxyHost: item.proxyHost || "", attempts: (typeof item.attempts === "number" ? item.attempts : 0),
+                /* v1.11: admin support replies carry the admin's
+                   message + the order they belong to. */
+                message: item.message || "", orderId: (item.orderId != null ? item.orderId : null) });
             });
             d.giftNotifications = gifts;
             saveAcctData(d);
@@ -6298,7 +6637,12 @@ var I18N = {
         function openGiftPopup(gift){
           currentGiftCode = gift.code || "";
           var codeEl = $("giftCodeText");
-          if (codeEl) codeEl.textContent = currentGiftCode || "—";
+          if (codeEl) { codeEl.textContent = currentGiftCode || "—"; codeEl.style.display = ""; }
+          /* v1.11: a support reply without a code hides the code box
+             + Copy button — restore both here so a later gift popup
+             always shows them. */
+          var copyBtn0 = $("giftCopyBtn");
+          if (copyBtn0) copyBtn0.style.display = "";
           var amt = $("giftAmountText");
           if (amt) amt.textContent = (typeof gift.amountPerDay === "number" && gift.amountPerDay > 0) ? t("giftAmount", {n: gift.amountPerDay}) : "";
           /* v1.9b: forwarded codes show who sent the code + which
@@ -6316,6 +6660,25 @@ var I18N = {
           markGiftRead(gift);
           openAnimated($("giftOverlay"));
         }
+        /* v1.11: an admin support reply in the bell — the same popup
+           as a forwarded code, but the admin's message is the body
+           and the code (when the admin included one) is the copyable
+           code. No code = no code box, no Copy button. */
+        function openSupportReplyPopup(g){
+          currentGiftCode = g.code || "";
+          var codeEl = $("giftCodeText");
+          var copyBtn = $("giftCopyBtn");
+          if (codeEl) { codeEl.textContent = currentGiftCode || "—"; codeEl.style.display = currentGiftCode ? "" : "none"; }
+          if (copyBtn) copyBtn.style.display = currentGiftCode ? "" : "none";
+          var amt = $("giftAmountText");
+          if (amt) amt.textContent = "";
+          var gf = $("giftFromText");
+          var titleEl = $("giftOverlay") ? $("giftOverlay").querySelector("h3") : null;
+          if (gf) { gf.hidden = false; gf.textContent = g.message || ""; }
+          if (titleEl) titleEl.textContent = t("supportReplyBellTitle") + (g.listingTitle ? " · " + g.listingTitle : "");
+          markGiftRead(g);
+          openAnimated($("giftOverlay"));
+        }
         function openBellPanel(){
           closeProfilePanel(); renderBellPanel();
           var bd = $("bellBackdrop"); if (bd) bd.hidden = false;
@@ -6324,6 +6687,109 @@ var I18N = {
         function closeBellPanel(){
           var bd = $("bellBackdrop"); if (bd) bd.hidden = true;
           closeAnimated($("bellPanel"), null);
+        }
+        /* ---------- v1.11: buyer support chat ----------
+           One thread per APPROVED order, opened from My Orders. The
+           buyer writes; the admin replies from the admin panel (with
+           an optional code). The thread polls every 10s while open
+           and stops the moment it closes — never while closed. */
+        var SUPPORT_POLL_MS = 10000;
+        var supportOrderId = null, supportTimer = null;
+        function supportProfileGmail(){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          return (p && p.email) ? p.email : "";
+        }
+        function renderSupportMessages(list){
+          var box = $("supportMsgList");
+          if (!box) return;
+          box.innerHTML = "";
+          if (!list || !list.length){
+            var em = document.createElement("div");
+            em.className = "support-empty";
+            em.textContent = t("supportEmpty");
+            box.appendChild(em);
+            return;
+          }
+          list.forEach(function(m){
+            var mine = (m.senderRole === "buyer");
+            var wrap = document.createElement("div");
+            wrap.className = "sup-msg " + (mine ? "buyer" : "admin");
+            var who = document.createElement("span");
+            who.className = "sup-who";
+            who.textContent = mine ? t("supportYou") : t("supportAdmin");
+            wrap.appendChild(who);
+            var tx = document.createElement("div");
+            tx.textContent = m.message || "";
+            wrap.appendChild(tx);
+            if (m.code){
+              var chip = document.createElement("span");
+              chip.className = "sup-code";
+              var cd = document.createElement("span");
+              cd.className = "mono";
+              cd.textContent = m.code;
+              chip.appendChild(cd);
+              var cb = document.createElement("button");
+              cb.type = "button";
+              cb.textContent = t("otpCopy");
+              cb.addEventListener("click", function(){ copyText(m.code, t("toastCopiedCode")); });
+              chip.appendChild(cb);
+              wrap.appendChild(chip);
+            }
+            var tm = document.createElement("span");
+            tm.className = "sup-time";
+            tm.textContent = m.createdAt ? relTime(m.createdAt) : "";
+            wrap.appendChild(tm);
+            box.appendChild(wrap);
+          });
+          box.scrollTop = box.scrollHeight;
+        }
+        function loadSupportMessages(){
+          var gmail = supportProfileGmail();
+          if (!supportOrderId || !gmail) return Promise.resolve([]);
+          return apiAdmin("/api/market/orders/" + encodeURIComponent(supportOrderId) + "/support/messages?gmail=" + encodeURIComponent(gmail)).then(function(data){
+            var list = (data && Array.isArray(data.messages)) ? data.messages : [];
+            renderSupportMessages(list);
+            return list;
+          }).catch(function(){ return []; });
+        }
+        function openSupportChat(o, listing){
+          var gmail = supportProfileGmail();
+          if (!gmail){ showToast(t("sellNeedSignin")); return; }
+          supportOrderId = o.id;
+          var title = (listing && (listing.title || listing.maskedEmail)) || (o.fullEmail || String(o.listingId || ""));
+          var ttl = $("supportTitle");
+          if (ttl) ttl.textContent = t("supportTitle", {title: title});
+          var sub = $("supportSub");
+          if (sub) sub.textContent = t("supportHint");
+          var err = $("supportError");
+          if (err){ err.hidden = true; err.textContent = ""; }
+          var inp = $("supportMsgInput");
+          if (inp) inp.value = "";
+          loadSupportMessages();
+          if (supportTimer) clearInterval(supportTimer);
+          supportTimer = setInterval(function(){ if (supportOrderId) loadSupportMessages(); }, SUPPORT_POLL_MS);
+          openAnimated($("supportOverlay"));
+        }
+        function closeSupportChat(){
+          supportOrderId = null;
+          if (supportTimer){ clearInterval(supportTimer); supportTimer = null; }
+          closeAnimated($("supportOverlay"), null);
+        }
+        function sendSupportMessage(){
+          var gmail = supportProfileGmail();
+          var inp = $("supportMsgInput");
+          var err = $("supportError");
+          if (!supportOrderId || !gmail || !inp) return;
+          var text = (inp.value || "").trim();
+          if (!text) return;
+          if (err){ err.hidden = true; err.textContent = ""; }
+          apiAdmin("/api/market/orders/" + encodeURIComponent(supportOrderId) + "/support/messages", { method: "POST", body: { gmail: gmail, message: text } }).then(function(){
+            inp.value = "";
+            loadSupportMessages();
+          }).catch(function(){
+            if (err){ err.textContent = t("supportSendFailed"); err.hidden = false; }
+          });
         }
 
         /* ---------- sign-up gate / sign-in ---------- */
@@ -6358,29 +6824,112 @@ var I18N = {
           if (busy) btn.innerHTML = '<span class="spin">⟳</span> ' + t("authCreating");
           else btn.innerHTML = '<span id="authSubmitLabel">' + (authMode === "signin" ? t("signInBtn") : t("createAccountBtn")) + '</span>';
         }
+        function finishSignIn(profile, restored){
+          saveProfile(profile);
+          closeAuthModal();
+          switchAccountKeepSession(profile.email);
+          checkBlocked();
+          syncAccountToServer();
+          refreshAccountFromServer();
+          updateAvatarUI();
+          showToast(t(restored ? "toastAccountRestored" : "toastWelcomeBack"));
+          resumePendingMarketBuy();
+          loadMyDeleteRequests();
+        }
+        /* Build/refresh the LOCAL account from the server user data.
+           Fresh device: creates the local profile (name, plan, id) and
+           hashes the typed password locally so the next sign-in also
+           works offline. Returns a Promise of the profile. */
+        function ensureLocalAccountFromServer(email, pw, serverUser){
+          var su = serverUser || {};
+          var local = findAccount(email);
+          if (local){
+            var changed = false;
+            if (su.plan && (su.plan === "pro-monthly" || su.plan === "pro-yearly" || su.plan === "free") && local.plan !== su.plan){ local.plan = su.plan; changed = true; }
+            if (changed) saveAccount(local);
+            return Promise.resolve(local);
+          }
+          var parts = String(su.name || "").trim().split(/\s+/).filter(function(x){ return !!x; });
+          var salt = randomStr(24);
+          return hashPassword(pw, salt).then(function(hash){
+            var profile = {
+              firstName: parts[0] || "", lastName: parts.slice(1).join(" ") || "",
+              email: email, id: "MOV-" + randomStr(6).toUpperCase(),
+              createdAt: su.created_at || new Date().toISOString(),
+              plan: (su.plan === "pro-monthly" || su.plan === "pro-yearly") ? su.plan : "free",
+              salt: salt, passwordHash: hash, avatar: ""
+            };
+            saveAccount(profile);
+            return profile;
+          });
+        }
         function doSignIn(){
           var email = $("authEmailIn").value.trim();
           var pw = $("authPasswordIn").value;
           if (!email || !pw){ showAuthError(t("authErrAllFields")); return; }
-          var profile = findAccount(email) || loadProfile();
-          if (!profile || profile.email.toLowerCase() !== email.toLowerCase()){ showAuthError(t("authErrNoAccount")); return; }
+          var local = findAccount(email);
           setAuthBusy(true);
-          hashPassword(pw, profile.salt).then(function(hash){
-            setAuthBusy(false);
-            if (hash === profile.passwordHash){
-              saveProfile(profile);
-              closeAuthModal();
-              switchAccountKeepSession(profile.email);
-              checkBlocked();
-              syncAccountToServer();
-              refreshAccountFromServer();
-              updateAvatarUI();
-              showToast(t("toastWelcomeBack"));
-              resumePendingMarketBuy();
-              loadMyDeleteRequests();
-            } else {
-              showAuthError(t("authErrWrongPass"));
-            }
+          /* 1) Local check first (works offline, today's behavior). */
+          function localCheck(){
+            if (!local) return Promise.resolve(false);
+            return hashPassword(pw, local.salt).then(function(hash){ return hash === local.passwordHash; }).catch(function(){ return false; });
+          }
+          localCheck().then(function(localOk){
+            /* The server decides. The local check only gates the
+               OFFLINE fallback: if the server cannot be reached, a
+               local match still signs in. A local mismatch does NOT
+               stop the server attempt — the password may have been
+               changed on another device (the local hash is refreshed
+               below when the server accepts the new password). */
+            return apiAdmin("/api/auth/signin", { method: "POST", body: { gmail: email, password: pw } }).then(function(data){
+              saveSessionToken(email, data.token);
+              function afterLocal(profile){
+                setAuthBusy(false);
+                finishSignIn(profile, !local);
+                /* Fresh device (no local account): pull the server
+                   mailboxes back — this is the core restore flow. */
+                pullServerMailboxes();
+              }
+              if (local && !localOk){
+                var salt = randomStr(24);
+                return hashPassword(pw, salt).then(function(hash){
+                  local.salt = salt; local.passwordHash = hash; saveAccount(local);
+                  return ensureLocalAccountFromServer(email, pw, data.user).then(afterLocal);
+                });
+              }
+              return ensureLocalAccountFromServer(email, pw, data.user).then(afterLocal);
+            }).catch(function(err){
+              if (err && err.status === 404){
+                /* No server account (or a legacy row without a
+                   password). A local account whose password matched
+                   claims/links it via signup, then pushes mailboxes. */
+                if (local && localOk){
+                  return apiAdmin("/api/auth/signup", { method: "POST", body: { firstName: local.firstName, lastName: local.lastName, gmail: email, password: pw } }).then(function(data){
+                    if (data && data.token) saveSessionToken(email, data.token);
+                    setAuthBusy(false);
+                    finishSignIn(local, false);
+                    syncServerMailboxes();
+                  }).catch(function(){
+                    /* Server unreachable: the local account still works. */
+                    setAuthBusy(false);
+                    finishSignIn(local, false);
+                  });
+                }
+                setAuthBusy(false);
+                showAuthError(local ? t("authErrWrongPass") : t("authErrNoAccount"));
+                return;
+              }
+              if (err && err.status === 401){ setAuthBusy(false); showAuthError(t("authErrWrongPass")); return; }
+              if (err && err.status === 429){ setAuthBusy(false); showAuthError(t("authErrTooMany")); return; }
+              /* Offline / 5xx: if the local password matched, sign in
+                 locally anyway and sync later. */
+              if (local && localOk){
+                setAuthBusy(false);
+                finishSignIn(local, false);
+                return;
+              }
+              setAuthBusy(false); showAuthError(t("authErrNetwork"));
+            });
           });
         }
         $("authSubmitBtn").addEventListener("click", function(){
@@ -6414,6 +6963,10 @@ var I18N = {
               saveAccount(profile);
               switchAccountKeepSession(email);
               syncAccountToServer();
+              /* v1.12: also create the SERVER account with the same
+                 password and push the local mailboxes — fire-and-forget,
+                 the local account works even if the server is down. */
+              serverSignup(email, pw, first, last);
               checkBlocked();
               addNotification("notifAccountCreated", {});
               setAuthBusy(false);
@@ -6503,6 +7056,9 @@ var I18N = {
           if (panel && panel.classList.contains("open") && !e.target.closest("#profilePanel") && !e.target.closest("#avatarBtn")) closeProfilePanel();
         });
         $("signOutBtn").addEventListener("click", function(){
+          /* v1.12: invalidate the server session too (best effort). */
+          serverSignOut();
+          clearSessionToken();
           clearProfile();
           setBlocked(false);
           switchAccount(null);
@@ -6565,6 +7121,10 @@ var I18N = {
         $("redeemSuccessClose").addEventListener("click", function(){ closeAnimated($("redeemSuccessOverlay"), ".mini-modal"); });
         $("giftCopyBtn").addEventListener("click", function(){ if (currentGiftCode) copyText(currentGiftCode, t("toastCopiedCode")); });
         $("giftCloseBtn").addEventListener("click", function(){ closeAnimated($("giftOverlay"), ".mini-modal"); });
+        /* v1.11: buyer support chat panel. */
+        $("supportSendBtn").addEventListener("click", sendSupportMessage);
+        $("supportMsgInput").addEventListener("keydown", function(e){ if (e.key === "Enter") sendSupportMessage(); });
+        $("supportCloseBtn").addEventListener("click", closeSupportChat);
         $("payBackBtn").addEventListener("click", closePayment);
         $("payKhqrBtn").addEventListener("click", function(){
           payMethod = "khqr";
@@ -6987,6 +7547,17 @@ var I18N = {
                 repBox.appendChild(rn);
               }
               row.appendChild(repBox);
+            }
+            /* v1.11: support chat — only on APPROVED orders. Before
+               purchase there is no support; after approval the buyer
+               can message the admin about this order. */
+            if (o.status === "approved"){
+              var supBtn = document.createElement("button");
+              supBtn.type = "button";
+              supBtn.className = "btn-sm support-btn";
+              supBtn.textContent = t("supportBtn");
+              supBtn.addEventListener("click", function(){ openSupportChat(o, listing); });
+              row.appendChild(supBtn);
             }
             listEl.appendChild(row);
           });
@@ -7703,6 +8274,10 @@ var I18N = {
           checkBlocked();
           syncAccountToServer();
           refreshAccountFromServer();
+          /* v1.12: pull the server mailboxes back (restore after a
+             reinstall / clear-data) and refresh the server quota
+             count; silent on failure. */
+          pullServerMailboxes();
           startGiftPolling();
         }
         applyLang(lang);

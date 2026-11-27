@@ -10,69 +10,16 @@ const ADMIN_NAME = 'Sokhoeun';
 
 /* localStorage keys (all on the admin device only — nothing leaves the device
    except the X-Admin-Token header on admin API calls). */
-const LS_SETUP   = 'movmail_admin_setup';   // {name, salt, hash, createdAt} — hash only, NEVER plaintext
 const LS_TOKEN   = 'movmail_admin_token';   // Admin API token (set by the admin in Settings)
 const LS_LANG    = 'movmail_admin_lang';    // 'km' | 'en'
 const SS_SESSION = 'movmail_admin_session'; // '1' while logged in (sessionStorage)
 
 /* ============================================================================
-   SHA-256 (pure JS, sync — works in every browser and in headless tests).
-   Passwords are stored ONLY as salted SHA-256: sha256Hex(salt + ':' + password).
+   v1.12: the admin password is NO LONGER hashed on this device.
+   It lives on the server (scrypt hash in admin_auth) and is checked
+   through POST /api/admin/login — clearing browser data just means
+   entering the password again. The old local SHA-256 helpers are gone.
    ============================================================================ */
-function sha256Hex(ascii) {
-  function rr(v, a) { return (v >>> a) | (v << (32 - a)); }
-  var maxWord = Math.pow(2, 32), result = '';
-  var words = [], bitLen = ascii.length * 8;
-  var hash = sha256Hex.h = sha256Hex.h || [], k = sha256Hex.k = sha256Hex.k || [];
-  var primeCounter = k.length, isComposite = {};
-  for (var cand = 2; primeCounter < 64; cand++) {
-    if (!isComposite[cand]) {
-      for (var i = 0; i < 313; i += cand) isComposite[i] = cand;
-      hash[primeCounter] = (Math.pow(cand, 0.5) * maxWord) | 0;
-      k[primeCounter++] = (Math.pow(cand, 1 / 3) * maxWord) | 0;
-    }
-  }
-  ascii += '\x80';
-  while (ascii.length % 64 - 56) ascii += '\x00';
-  for (var i = 0; i < ascii.length; i++) {
-    var j = ascii.charCodeAt(i);
-    if (j >> 8) return ''; // non-ASCII byte — caller must UTF-8 encode first
-    words[i >> 2] |= j << ((3 - i) % 4) * 8;
-  }
-  words[words.length] = (bitLen / maxWord) | 0;
-  words[words.length] = bitLen;
-  for (var j = 0; j < words.length;) {
-    var w = words.slice(j, j += 16), oldHash = hash;
-    hash = hash.slice(0, 8);
-    for (var i = 0; i < 64; i++) {
-      var w15 = w[i - 15], w2 = w[i - 2], a = hash[0], e = hash[4];
-      var temp1 = hash[7]
-        + (rr(e, 6) ^ rr(e, 11) ^ rr(e, 25))
-        + ((e & hash[5]) ^ (~e & hash[6]))
-        + k[i]
-        + (w[i] = i < 16 ? w[i] : (w[i - 16] + (rr(w15, 7) ^ rr(w15, 18) ^ (w15 >>> 3)) + w[i - 7] + (rr(w2, 17) ^ rr(w2, 19) ^ (w2 >>> 10))) | 0);
-      var temp2 = (rr(a, 2) ^ rr(a, 13) ^ rr(a, 22)) + ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
-      hash = [(temp1 + temp2) | 0].concat(hash);
-      hash[4] = (hash[4] + temp1) | 0;
-    }
-    for (var i = 0; i < 8; i++) hash[i] = (hash[i] + oldHash[i]) | 0;
-  }
-  for (var i = 0; i < 8; i++) for (var j = 3; j + 1; j--) {
-    var b = (hash[i] >> (j * 8)) & 255;
-    result += (b < 16 ? '0' : '') + b.toString(16);
-  }
-  return result;
-}
-function hashPassword(password, salt) {
-  // UTF-8 encode so any characters (incl. Khmer) hash correctly.
-  return sha256Hex(unescape(encodeURIComponent(salt + ':' + password)));
-}
-function makeSalt() {
-  var bytes = new Uint8Array(16);
-  if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(bytes);
-  else for (var i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
-  return Array.from(bytes).map(function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
-}
 
 /* ============================================================================
    i18n — Khmer default, English toggle. Persisted in localStorage.
@@ -80,7 +27,7 @@ function makeSalt() {
 const I18N = {
   km: {
     adminPanel: 'ផ្ទាំងគ្រប់គ្រង', adminOnly: 'សម្រាប់តែអ្នកគ្រប់គ្រង MovMail ប៉ុណ្ណោះ',
-    setupNote: 'លើកដំបូង៖ កំណត់ពាក្យសម្ងាត់អ្នកគ្រប់គ្រងរបស់អ្នក។ ពាក្យសម្ងាត់នេះរក្សាទុកតែក្នុងឧបករណ៍នេះប៉ុណ្ណោះ (ជា hash)។',
+    setupNote: 'លើកដំបូង៖ កំណត់ពាក្យសម្ងាត់អ្នកគ្រប់គ្រងរបស់អ្នក។ ពាក្យសម្ងាត់នេះរក្សាទុកនៅលើ server (ជា hash) — លុបទិន្នន័យ browser ក៏ត្រូវវាយពាក្យសម្ងាត់ម្តងទៀតបាន។',
     name: 'ឈ្មោះ', password: 'ពាក្យសម្ងាត់', confirmPassword: 'បញ្ជាក់ពាក្យសម្ងាត់',
     savePassword: 'រក្សាទុកពាក្យសម្ងាត់', login: 'ចូលប្រើ', signOut: 'ចាកចេញ',
     totalUsers: 'អ្នកប្រើសរុប', activeToday: 'សកម្មថ្ងៃនេះ', pendingReceipts: 'វិក្កយបត្ររង់ចាំ', activeCodes: 'កូដសកម្ម',
@@ -188,7 +135,7 @@ const I18N = {
     save: 'រក្សាទុក', changePassword: 'ប្តូរពាក្យសម្ងាត់', currentPassword: 'ពាក្យសម្ងាត់បច្ចុប្បន្ន',
     newPassword: 'ពាក្យសម្ងាត់ថ្មី', changePasswordBtn: 'ប្តូរពាក្យសម្ងាត់',
     errName: 'ឈ្មោះអ្នកគ្រប់គ្រងត្រូវតែជា Sokhoeun។', errPassShort: 'ពាក្យសម្ងាត់ត្រូវមានយ៉ាងហោចណាស់ 8 តួអក្សរ។',
-    errPassMismatch: 'ពាក្យសម្ងាត់ទាំងពីរមិនដូចគ្នាទេ។', errWrongLogin: 'ឈ្មោះ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ។',
+    errPassMismatch: 'ពាក្យសម្ងាត់ទាំងពីរមិនដូចគ្នាទេ។', errWrongLogin: 'ឈ្មោះ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ។', errServerAuth: 'មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេបានទេ។ សូមពិនិត្យ token ក្នុង Settings។',
     errAmount: 'ចំនួនប្រើក្នុងមួយថ្ងៃត្រូវតែចន្លោះពី 10 ដល់ 100។', errExpiry: 'សូមជ្រើសរើសថ្ងៃផុតកំណត់នៅពេលអនាគត។',
     errNoToken: 'សូមបញ្ចូល Admin API Token ក្នុងការកំណត់ជាមុនសិន។',
     recipients: 'អ្នកទទួល', selectAll: 'ជ្រើសរើសទាំងអស់', clearSelection: 'សម្អាត',
@@ -206,7 +153,7 @@ const I18N = {
   },
   en: {
     adminPanel: 'Admin Panel', adminOnly: 'For the MovMail admin only',
-    setupNote: 'First run: set your admin password. It is stored only on this device (as a hash).',
+    setupNote: 'First run: set your admin password. It is stored on the server (as a hash) — clearing browser data just means entering it again.',
     name: 'Name', password: 'Password', confirmPassword: 'Confirm password',
     savePassword: 'Save password', login: 'Log in', signOut: 'Sign out',
     totalUsers: 'Total users', activeToday: 'Active today', pendingReceipts: 'Pending receipts', activeCodes: 'Active codes',
@@ -314,7 +261,7 @@ const I18N = {
     save: 'Save', changePassword: 'Change password', currentPassword: 'Current password',
     newPassword: 'New password', changePasswordBtn: 'Change password',
     errName: 'The admin name must be Sokhoeun.', errPassShort: 'Password must be at least 8 characters.',
-    errPassMismatch: 'The two passwords do not match.', errWrongLogin: 'Name or password is incorrect.',
+    errPassMismatch: 'The two passwords do not match.', errWrongLogin: 'Name or password is incorrect.', errServerAuth: 'Could not reach the server. Check the token in Settings.',
     errAmount: 'Uses per day must be between 10 and 100.', errExpiry: 'Please pick a future expiry date.',
     errNoToken: 'Please enter the Admin API Token in Settings first.',
     recipients: 'Recipients', selectAll: 'Select all', clearSelection: 'Clear',
@@ -375,18 +322,33 @@ function flagFor(country, code) {
 }
 
 /* ============================================================================
-   Auth — salted SHA-256 hash in localStorage only. No plaintext anywhere.
+   Auth — v1.12: the admin password lives on the SERVER (scrypt hash in
+   admin_auth) and is checked through POST /api/admin/login. The token
+   holder can always set/reset it (POST /api/admin/set-password). The
+   login session itself is still this tab only (sessionStorage) — clearing
+   browser data just means entering the password again. No plaintext
+   password is ever stored anywhere.
    ============================================================================ */
-function getSetup() {
-  try { return JSON.parse(localStorage.getItem(LS_SETUP) || 'null'); } catch (e) { return null; }
-}
 function getToken() { return localStorage.getItem(LS_TOKEN) || ''; }
 function isLoggedIn() { return sessionStorage.getItem(SS_SESSION) === '1'; }
 
 function showAuth() {
   show($('view-auth'), true); show($('view-app'), false); show($('signOutBtn'), false);
-  var setup = getSetup();
-  show($('setupForm'), !setup); show($('loginForm'), !!setup);
+  /* The token row is only needed when no token is stored yet (fresh
+     browser) — without a token the server cannot even answer whether
+     a password exists. */
+  show($('authTokenRow'), !getToken());
+  /* Default to the login form while the server is asked; the setup
+     form appears only when the server says no password exists yet. */
+  show($('setupForm'), false); show($('loginForm'), true);
+  if (!getToken()){ showError($('loginError'), t('errServerAuth')); return; }
+  api('/api/admin/auth-status').then(function (data) {
+    var has = !!(data && data.hasPassword);
+    show($('setupForm'), !has); show($('loginForm'), has);
+    if (!has) showError($('setupError'), '');
+  }).catch(function () {
+    showError($('loginError'), t('errServerAuth'));
+  });
 }
 function showApp() {
   show($('view-auth'), false); show($('view-app'), true); show($('signOutBtn'), true);
@@ -394,6 +356,14 @@ function showApp() {
   startNotifPolling(); /* v1.9: pop-up toast when a code arrives at a listed email */
 }
 
+function onAuthTokenSave() {
+  var tok = $('authTokenInput').value.trim();
+  if (!tok) return showError($('authTokenError'), t('errServerAuth'));
+  localStorage.setItem(LS_TOKEN, tok);
+  $('authTokenInput').value = '';
+  showError($('authTokenError'), '');
+  showAuth(); /* re-ask the server now that a token exists */
+}
 function onSetupSubmit(e) {
   e.preventDefault();
   var name = $('setupName').value.trim();
@@ -401,26 +371,32 @@ function onSetupSubmit(e) {
   if (name !== ADMIN_NAME) return showError($('setupError'), t('errName'));
   if (pass.length < 8) return showError($('setupError'), t('errPassShort'));
   if (pass !== pass2) return showError($('setupError'), t('errPassMismatch'));
-  var salt = makeSalt();
-  localStorage.setItem(LS_SETUP, JSON.stringify({
-    name: ADMIN_NAME, salt: salt, hash: hashPassword(pass, salt), createdAt: new Date().toISOString()
-  }));
-  sessionStorage.setItem(SS_SESSION, '1');
-  showError($('setupError'), '');
-  toast(t('toastSaved'));
-  showApp();
+  api('/api/admin/set-password', { method: 'POST', body: { password: pass } }).then(function () {
+    sessionStorage.setItem(SS_SESSION, '1');
+    showError($('setupError'), '');
+    toast(t('toastSaved'));
+    showApp();
+  }).catch(function (err) {
+    showError($('setupError'), (err && err.status === 400) ? t('errPassShort') : t('errServerAuth'));
+  });
 }
 function onLoginSubmit(e) {
   e.preventDefault();
   var name = $('loginName').value.trim();
   var pass = $('loginPass').value;
-  var setup = getSetup();
-  if (!setup || name !== setup.name || name !== ADMIN_NAME || hashPassword(pass, setup.salt) !== setup.hash) {
-    return showError($('loginError'), t('errWrongLogin'));
-  }
-  sessionStorage.setItem(SS_SESSION, '1');
-  showError($('loginError'), '');
-  showApp();
+  if (name !== ADMIN_NAME) return showError($('loginError'), t('errWrongLogin'));
+  api('/api/admin/login', { method: 'POST', body: { password: pass } }).then(function () {
+    sessionStorage.setItem(SS_SESSION, '1');
+    showError($('loginError'), '');
+    showApp();
+  }).catch(function (err) {
+    if (err && err.status === 404){ /* no server password yet — show the setup form instead */
+      show($('setupForm'), true); show($('loginForm'), false);
+      showError($('setupError'), '');
+      return;
+    }
+    showError($('loginError'), (err && err.status === 401) ? t('errWrongLogin') : t('errServerAuth'));
+  });
 }
 function onSignOut() {
   sessionStorage.removeItem(SS_SESSION);
@@ -429,18 +405,21 @@ function onSignOut() {
 }
 function onChangePassSubmit(e) {
   e.preventDefault();
-  var setup = getSetup();
   var oldPass = $('changePassOld').value, np = $('changePassNew').value, np2 = $('changePassNew2').value;
-  if (!setup || hashPassword(oldPass, setup.salt) !== setup.hash) return showError($('changePassError'), t('errWrongLogin'));
   if (np.length < 8) return showError($('changePassError'), t('errPassShort'));
   if (np !== np2) return showError($('changePassError'), t('errPassMismatch'));
-  var salt = makeSalt();
-  localStorage.setItem(LS_SETUP, JSON.stringify({
-    name: ADMIN_NAME, salt: salt, hash: hashPassword(np, salt), createdAt: setup.createdAt
-  }));
-  $('changePassOld').value = ''; $('changePassNew').value = ''; $('changePassNew2').value = '';
-  showError($('changePassError'), '');
-  toast(t('toastPassChanged'));
+  /* Verify the old password first, then set the new one — the token
+     holder can always reset, so a wrong old password must NOT silently
+     reset it. */
+  api('/api/admin/login', { method: 'POST', body: { password: oldPass } }).then(function () {
+    return api('/api/admin/set-password', { method: 'POST', body: { password: np } });
+  }).then(function () {
+    $('changePassOld').value = ''; $('changePassNew').value = ''; $('changePassNew2').value = '';
+    showError($('changePassError'), '');
+    toast(t('toastPassChanged'));
+  }).catch(function (err) {
+    showError($('changePassError'), (err && err.status === 401) ? t('errWrongLogin') : t('errServerAuth'));
+  });
 }
 
 /* ============================================================================
@@ -1780,6 +1759,7 @@ function init() {
   });
   $('setupForm').addEventListener('submit', onSetupSubmit);
   $('loginForm').addEventListener('submit', onLoginSubmit);
+  $('authTokenSaveBtn').addEventListener('click', onAuthTokenSave); /* v1.12: token first, on a fresh browser */
   $('signOutBtn').addEventListener('click', onSignOut);
   $('changePassForm').addEventListener('submit', onChangePassSubmit);
   $('saveTokenBtn').addEventListener('click', onSaveToken);
@@ -1835,7 +1815,7 @@ function init() {
   $('lightboxClose').addEventListener('click', function () { show($('lightbox'), false); });
   $('lightbox').addEventListener('click', function (e) { if (e.target === $('lightbox')) show($('lightbox'), false); });
 
-  if (getSetup() && isLoggedIn()) showApp();
+  if (isLoggedIn()) showApp();
   else showAuth();
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
