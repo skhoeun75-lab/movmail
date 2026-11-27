@@ -2082,7 +2082,7 @@
           state.messages = []; state.failed = false; state.retrying = false;
           state.retryCount = 0; state.creating = false;
           savedState.messages = []; savedState.loaded = false; savedState.lastFetch = 0;
-          currentIp = null; currentBoughtLogo = null; currentBought = false; heroDismissed = {};
+          currentIp = null; currentBoughtLogo = null; currentBought = false; currentBoughtListingId = ""; heroDismissed = {};
           addrText.textContent = "—";
           addrText.classList.remove("loading");
           statusText.textContent = "";
@@ -3421,7 +3421,7 @@ var I18N = {
             state.retrying = false;
             state.createdAt = new Date().toISOString();
             /* A freshly generated address is never a bought one. */
-            currentBoughtLogo = null; currentBought = false;
+            currentBoughtLogo = null; currentBought = false; currentBoughtListingId = "";
             if (!currentIp) currentIp = generateIpProfile();
             updateIpLine();
             addrText.textContent = state.address;
@@ -3481,7 +3481,13 @@ var I18N = {
              mirroring deleteMailbox(). */
           var oldAddr = state.address;
           if (oldAddr) api("/saved?address=" + encodeURIComponent(oldAddr), { method: "DELETE" }).catch(function(){});
-          if (oldToken && oldId){
+          /* v1.7: NEVER delete the Mail.tm account of a bought
+             mailbox. It is a purchased asset — Delete only takes it
+             off this screen; the account itself stays alive on
+             Mail.tm so the buyer can bring it back with Restore in
+             My Orders. (Deleting it used to kill the mailbox for
+             good: no new codes, Refresh failed, Restore failed.) */
+          if (oldToken && oldId && !currentBought){
             var keep = state.token; state.token = oldToken;
             api("/accounts/" + oldId, { method:"DELETE" }).catch(function(){});
             state.token = keep;
@@ -3757,6 +3763,12 @@ var I18N = {
            profile forever — its IP is never regenerated. */
         var currentBoughtLogo = null;
         var currentBought = false;
+        /* v1.7: the listing id of the current bought mailbox. A bought
+           mailbox has no password on the device, so the ONLY way to
+           re-log it in when its token dies is the server restore
+           (POST /api/market/restore) — which needs this id. It is
+           persisted in the session so a reload can still heal it. */
+        var currentBoughtListingId = "";
         function isBoughtMailbox(mb){ return !!(mb && (mb.bought === true || mb.bought === "true")); }
         function updateBoughtLogo(){
           var row = $("boughtLogoRow"), img = $("boughtLogoImg");
@@ -4022,7 +4034,9 @@ var I18N = {
           _dd.addresses = (_dd.addresses || []).filter(function(a){ return a !== mb.address; });
           saveAcctData(_dd);
           api("/saved?address=" + encodeURIComponent(mb.address), { method: "DELETE" }).catch(function(){});
-          if (acctId && tok){
+          /* v1.7: a bought mailbox's Mail.tm account is never
+             deleted from here either — see deleteAndRecreate. */
+          if (acctId && tok && !isBoughtMailbox(mb)){
             var _keepTok = state.token; state.token = tok;
             api("/accounts/" + acctId, { method: "DELETE" }).catch(function(){});
             state.token = _keepTok;
@@ -4037,7 +4051,7 @@ var I18N = {
             clearCurrentSession();
             stopPolling();
             state.address = ""; state.password = ""; state.token = ""; state.accountId = "";
-            currentBoughtLogo = null; currentBought = false;
+            currentBoughtLogo = null; currentBought = false; currentBoughtListingId = "";
             state.messages = []; state.failed = false; state.retrying = false; state.retryCount = 0;
             savedState.messages = []; savedState.loaded = false; savedState.lastFetch = 0;
             addrText.textContent = "—";
@@ -4097,6 +4111,69 @@ var I18N = {
             return res && res.ok ? res : {ok:false};
           });
           return state.reauthing;
+        }
+
+        /* ---------- v1.7: re-login for a BOUGHT mailbox ----------
+           A bought mailbox has no password on the device (the server
+           holds it), so reauthMailbox() cannot help it. Instead ask
+           the server to restore it (POST /api/market/restore): the
+           server logs in with the stored credentials — re-creating
+           the Mail.tm account first if it was deleted — and returns
+           a fresh token. The new token is kept in state AND in the
+           saved session, exactly like takeToken() in reauthMailbox().
+           The listing id comes from the session (v1.7+) or, for
+           sessions saved before v1.7, from My Orders: approved
+           orders carry fullEmail, so the order for this address
+           gives its listing id. Resolves {ok:true, token, accountId}
+           or {ok:false}. Guarded so only one re-login runs at a time. */
+        function resolveBoughtListingId(address, gmail){
+          if (currentBoughtListingId) return Promise.resolve(currentBoughtListingId);
+          function fromOrders(arr){
+            if (!Array.isArray(arr)) return "";
+            for (var i = 0; i < arr.length; i++){
+              var o = arr[i];
+              if (o && o.status === "approved" && o.fullEmail === address && o.listingId) return o.listingId;
+            }
+            return "";
+          }
+          var known = [];
+          try { known = (typeof marketOrders !== "undefined" && marketOrders) || []; } catch(e) { known = []; }
+          var found = fromOrders(known);
+          if (found){ currentBoughtListingId = found; saveCurrentSession(); return Promise.resolve(found); }
+          if (!gmail) return Promise.resolve("");
+          return apiAdmin("/api/market/orders?gmail=" + encodeURIComponent(gmail)).then(function(data){
+            var arr = Array.isArray(data) ? data : (data && Array.isArray(data.orders) ? data.orders : []);
+            var id = fromOrders(arr);
+            if (id){ currentBoughtListingId = id; saveCurrentSession(); }
+            return id;
+          }).catch(function(){ return ""; });
+        }
+        function reauthBoughtMailbox(){
+          if (state.reauthBoughting) return state.reauthBoughting;
+          /* No currentBought check here: both callers already know
+             this is a bought mailbox (poll branch checks it, the
+             session branch checks isBoughtMailbox(mb)) — and on a
+             fresh page load currentBought is still false when the
+             session restore runs. */
+          if (!state.address) return Promise.resolve({ok:false});
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p || !p.email) return Promise.resolve({ok:false});
+          var addr = state.address, gmail = p.email;
+          state.reauthBoughting = resolveBoughtListingId(addr, gmail).then(function(lid){
+            if (!lid) return {ok:false};
+            return apiAdmin("/api/market/restore", { method: "POST", body: { listingId: lid, gmail: gmail } }).then(function(res){
+              if (!res || !res.token || !res.address || res.address !== addr) return {ok:false};
+              state.token = res.token;
+              if (res.accountId) state.accountId = res.accountId;
+              if (addr === state.address) saveCurrentSession();
+              return {ok:true, token: res.token, accountId: res.accountId || ""};
+            }).catch(function(){ return {ok:false}; });
+          }).then(function(r){
+            state.reauthBoughting = null;
+            return r && r.ok ? r : {ok:false};
+          });
+          return state.reauthBoughting;
         }
 
         function restoreMailbox(mb){
@@ -4515,6 +4592,22 @@ var I18N = {
                  episode, then retry this fetch a single time. If
                  re-login fails, stay quiet; the next tick retries. */
               return reauthMailbox().then(function(res){
+                if (res && res.ok){
+                  state.pollInterval = pollBaseSeconds();
+                  state.countdown = state.pollInterval;
+                  updateCountdown();
+                  return runFetch(first, true);
+                }
+                quietFail();
+                return {ok:false, reason:"reauth-failed"};
+              });
+            }
+            if (err && (err.status === 401 || err.status === 404) && !retried && state.address && currentBought){
+              /* Dead token on a BOUGHT mailbox — no password on the
+                 device, so heal it through the server restore, then
+                 retry this fetch a single time. If that fails too,
+                 stay quiet; the next tick retries. */
+              return reauthBoughtMailbox().then(function(res){
                 if (res && res.ok){
                   state.pollInterval = pollBaseSeconds();
                   state.countdown = state.pollInterval;
@@ -6228,8 +6321,11 @@ var I18N = {
               ip: currentIp ? currentIp.ip : "", country: currentIp ? currentIp.country : "",
               city: currentIp ? currentIp.city : "", flag: currentIp ? currentIp.flag : "",
               /* v1.3: a bought mailbox keeps its listing logo + IP
-                 profile in the session so a reload still shows them. */
+                 profile in the session so a reload still shows them.
+                 v1.7: the listing id too, so a dead bought token can
+                 be healed via the server restore. */
               bought: currentBought, logo: currentBoughtLogo || "",
+              listingId: currentBoughtListingId || "",
               proxy: (typeof currentProxyPref !== "undefined" ? currentProxyPref : "auto") || "auto"
             };
             saveAcctData(d);
@@ -6248,9 +6344,13 @@ var I18N = {
           state.createdAt = mb.createdAt || new Date().toISOString();
           if (mb.ip) currentIp = { ip: mb.ip, country: mb.country, city: mb.city, flag: mb.flag };
           /* v1.3: restore the bought listing's logo + IP with the
-             session — never generate a fresh IP for a bought mailbox. */
+             session — never generate a fresh IP for a bought mailbox.
+             v1.7: restore the listing id too (server re-login). */
           currentBoughtLogo = mb.logo || null;
           currentBought = !!mb.bought;
+          /* Keep a listing id resolved earlier (e.g. by the server
+             restore just now) when this old session has none. */
+          currentBoughtListingId = mb.listingId || currentBoughtListingId || "";
           hideError();
           addrText.textContent = state.address;
           addrText.classList.remove("loading");
@@ -6285,7 +6385,8 @@ var I18N = {
             accountId: cur.accountId || "", createdAt: cur.createdAt || "",
             ip: cur.ip || "", country: cur.country || "", city: cur.city || "",
             flag: cur.flag || "", proxy: cur.proxy || "auto",
-            logo: cur.logo || "", bought: !!cur.bought
+            logo: cur.logo || "", bought: !!cur.bought,
+            listingId: cur.listingId || ""
           };
           state.address = mb.address;
           state.password = mb.password;
@@ -6299,11 +6400,23 @@ var I18N = {
             if (!err || !err.status || err.status === 401 || err.status === 404){
               /* Dead token — re-log in with the SAME address/password
                  (shared helper), then adopt; only if that fails too
-                 does the session fall back to a fresh address. */
-              reauthMailbox().then(function(res){
-                if (res && res.ok){ mb.token = res.token; adoptRestoredCurrent(mb); }
-                else { clearCurrentSession(); createAccount(); }
-              });
+                 does the session fall back to a fresh address.
+                 v1.7: a BOUGHT mailbox has no password on the device,
+                 so heal it through the server restore instead — and
+                 NEVER wipe a bought mailbox: if the heal fails, keep
+                 it on screen (its saved messages stay visible and
+                 Restore in My Orders can still bring it back). */
+              if (isBoughtMailbox(mb)){
+                reauthBoughtMailbox().then(function(res){
+                  if (res && res.ok){ mb.token = res.token; }
+                  adoptRestoredCurrent(mb);
+                });
+              } else {
+                reauthMailbox().then(function(res){
+                  if (res && res.ok){ mb.token = res.token; adoptRestoredCurrent(mb); }
+                  else { clearCurrentSession(); createAccount(); }
+                });
+              }
             } else {
               /* 429 / network: keep the saved token and let the normal
                  poll reconnect — the address itself is still ours. */
@@ -6873,6 +6986,10 @@ var I18N = {
           else if (!currentIp) currentIp = generateIpProfile();
           currentBoughtLogo = (res && (res.logoDataUrl || res.logo)) || (listing && (listing.logoDataUrl || listing.logo)) || null;
           currentBought = true;
+          /* v1.7: keep the listing id so a dead bought token can be
+             healed later via the server restore (no password exists
+             on the device). Persisted in the session below. */
+          currentBoughtListingId = (listing && listing.id) || "";
           hideError();
           addrText.textContent = address;
           addrText.classList.remove("loading");
