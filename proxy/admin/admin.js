@@ -130,6 +130,10 @@ const I18N = {
     sendToBuyer: 'ផ្ញើទៅអ្នកទិញ', notifSent: '✓ បានផ្ញើទៅអ្នកទិញ',
     toastNotifSent: 'បានផ្ញើកូដទៅអ្នកទិញហើយ',
     toastNotifNewDetail: '📩 {buyer} — កូដពី {sender} បានមកដល់ {email}',
+    /* v1.9d: admin-only permanent delete of a listed mailbox. */
+    deleteAccount: 'លុបជាអចិន្ត្រៃយ៍',
+    confirmDeleteAccount: 'លុបអ៊ីមែល {email} ជាអចិន្ត្រៃយ៍មែនទេ? អ៊ីមែលនេះនឹងត្រូវលុបចេញពី Mail.tm ហើយមិនអាចយកមកវិញបានទេ។ មានតែអ្នកគ្រប់គ្រងទេដែលអាចលុបបាន។',
+    toastListingDeleted: 'បានលុបអ៊ីមែលជាអចិន្ត្រៃយ៍ហើយ។', errDeleteAccount: 'លុបអ៊ីមែលមិនបានទេ។',
     searchPlaceholder: 'ស្វែងរកតាមឈ្មោះ / Gmail / ប្រទេស…',
     filterAll: 'ទាំងអស់', filterNormal: 'ធម្មតា', filterRisk: 'មានហានិភ័យ', filterBlocked: 'បានបិទ',
     refresh: 'ធ្វើឱ្យថ្មី', country: 'ប្រទេស', city: 'ទីក្រុង', device: 'ឧបករណ៍', connection: 'ការតភ្ជាប់',
@@ -226,6 +230,10 @@ const I18N = {
     sendToBuyer: 'Send to buyer', notifSent: '✓ Sent to buyer',
     toastNotifSent: 'Code sent to the buyer',
     toastNotifNewDetail: '📩 {buyer} — code from {sender} arrived at {email}',
+    /* v1.9d: admin-only permanent delete of a listed mailbox. */
+    deleteAccount: 'Delete forever',
+    confirmDeleteAccount: 'Delete {email} forever? The Mail.tm account will be deleted permanently and can never be recovered. Only the admin can delete it.',
+    toastListingDeleted: 'Email deleted forever.', errDeleteAccount: 'Could not delete the email.',
     searchPlaceholder: 'Search by name / Gmail / country…',
     filterAll: 'All', filterNormal: 'Normal', filterRisk: 'At risk', filterBlocked: 'Blocked',
     refresh: 'Refresh', country: 'Country', city: 'City', device: 'Device', connection: 'Connection',
@@ -905,6 +913,9 @@ function normListing(l) {
   return {
     id: l.id,
     maskedEmail: l.maskedEmail || l.masked_email || l.email || '',
+    // v1.9d: admin-only full email — the "Delete forever" confirm
+    // must name the exact account. Never sent to the public shop.
+    email: l.email || '',
     sellerGmail: l.sellerGmail || l.seller || l.seller_gmail || 'admin',
     price: l.price,
     title: l.title || '',
@@ -1171,6 +1182,13 @@ function renderListings() {
     var relistBtn = l.status === 'sold'
       ? '<button class="btn btn-primary" type="button" data-listing-relist="' + esc(l.id) + '">' + esc(t('relist')) + '</button>'
       : '';
+    /* v1.9d: Delete forever — the ONLY delete that touches Mail.tm.
+       Admin token + confirm on the server; the proxy blocks every
+       other DELETE /accounts, so no website client can ever do this.
+       Darker red than Remove, so it can never be mistaken for it. */
+    var deleteAccountBtn = (l.status === 'active' || l.status === 'sold')
+      ? '<button class="btn btn-danger btn-delete-account" type="button" data-listing-delete-account="' + esc(l.id) + '">' + esc(t('deleteAccount')) + '</button>'
+      : '';
     var healthPill = isBad
       ? '<span class="pill pill-red">' + esc(t('healthBad')) + '</span>'
       : '<span class="pill pill-green">' + esc(t('healthGood')) + '</span>';
@@ -1201,7 +1219,7 @@ function renderListings() {
       + '<div class="l-line">' + esc(t('created')) + ': ' + esc(fmtDate(l.createdAt)) + '</div>'
       + '</div>'
       + listingPill(l.status)
-      + '<div class="listing-actions">' + checkBtn + healthToggleBtn + relistBtn + removeBtn + '</div>'
+      + '<div class="listing-actions">' + checkBtn + healthToggleBtn + relistBtn + removeBtn + deleteAccountBtn + '</div>'
       + '</div>';
   }).join('');
   show($('listingsEmpty'), listingsCache.length === 0);
@@ -1432,6 +1450,31 @@ async function onListingsClick(e) {
     } catch (err) {
       showError($('listingsError'), err && err.message ? err.message : t('errRelist'));
       relistBtn.disabled = false;
+    }
+    return;
+  }
+  /* v1.9d: Delete forever — the only path that deletes a Mail.tm
+     account. Requires the admin token (api) + {confirm:true}; the
+     server deletes through Mail.tm directly, never via the proxy
+     forwarder that v1.9c blocks. A dead mailbox answers ok (already
+     dead) and is just taken out of the shop. */
+  var delAccBtn = e.target.closest('[data-listing-delete-account]');
+  if (delAccBtn) {
+    var delAccId = delAccBtn.dataset.listingDeleteAccount;
+    var delRow = null;
+    for (var di = 0; di < listingsCache.length; di++) {
+      if (String(listingsCache[di].id) === String(delAccId)) { delRow = listingsCache[di]; break; }
+    }
+    var delEmail = (delRow && (delRow.email || delRow.maskedEmail)) || '';
+    if (!window.confirm(t('confirmDeleteAccount').replace('{email}', delEmail))) return;
+    delAccBtn.disabled = true;
+    try {
+      await api('/api/admin/market/listings/' + encodeURIComponent(delAccId) + '/delete-account', { method: 'POST', body: { confirm: true } });
+      toast(t('toastListingDeleted'));
+      loadListings();
+    } catch (err) {
+      showError($('listingsError'), err && err.message ? err.message : t('errDeleteAccount'));
+      delAccBtn.disabled = false;
     }
     return;
   }

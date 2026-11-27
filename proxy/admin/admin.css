@@ -379,6 +379,11 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
 .notif-forward-btn { margin-top: 8px; }
 .notif-info .n-line.n-sent { color: var(--accent); font-weight: 700; }
 
+/* v1.9d: Delete-forever button — darker red than Remove, so the
+   permanent Mail.tm delete can never be mistaken for a list remove. */
+.btn-delete-account { background: #7f1d1d; }
+.btn-delete-account:hover { background: #5f1515; }
+
 /* ---------- Mobile ---------- */
 @media (max-width: 640px) {
   .container { padding: 12px; }

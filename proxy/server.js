@@ -1108,6 +1108,10 @@ function listingAdminFromRow(r) {
   return {
     id: r.id,
     maskedEmail: maskEmail(r.email),
+    // v1.9d: admin-only full email — Mov needs to see exactly which
+    // account the "Delete forever" confirm is about. Never in the
+    // public shape. (The password is in NO shape, ever.)
+    email: r.email || "",
     sellerGmail: r.seller_gmail,
     status: r.status,
     price: Number(r.price),
@@ -2974,6 +2978,107 @@ async function handleAdminMarketListingRelist(req, res, id) {
   sendJson(res, 200, { ok: true, listing: listingAdminFromRow(updated) });
 }
 
+// Decode the Mail.tm JWT payload (base64, no signature check — we
+// only read the account id claim) as a fallback when POST /token
+// does not return the id directly.
+function jwtAccountId(token) {
+  try {
+    const parts = String(token || "").split(".");
+    if (parts.length !== 3) return "";
+    const payload = JSON.parse(
+      Buffer.from(parts[1].replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8")
+    );
+    return String(payload.sub || payload.id || "");
+  } catch (_) {
+    return "";
+  }
+}
+
+// v1.9d: ADMIN-ONLY permanent delete of a listed mailbox — the ONE
+// exception to the v1.9c proxy block. Mov's rule (2026-11-27,
+// permanent): NO ONE may delete a MovMail email except Mov himself,
+// through this admin button. The website has no delete path (its
+// Delete is local-only) and the generic forwarder refuses every
+// DELETE /accounts, so this handler calls Mail.tm DIRECTLY (same
+// UPSTREAM + fetch path as mailTmLogin), never through the
+// forwarder. Requires {confirm:true} in the body, so an accidental
+// call can never delete. On success the listing becomes 'removed'
+// and a security event is written. If the account is already dead
+// on Mail.tm (login: "no longer exists") that is NOT an error: the
+// listing is just marked removed. Any other login failure, a missing
+// account id, or a failed DELETE answers 400 and deletes NOTHING.
+async function handleAdminMarketListingDeleteAccount(req, res, id) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  if (body.confirm !== true) {
+    sendJson(res, 400, { ok: false, error: "confirm is required" });
+    return;
+  }
+  const listing = await getListing(id);
+  if (!listing) {
+    sendJson(res, 404, { ok: false, error: "listing not found" });
+    return;
+  }
+  if (listing.status === "removed") {
+    sendJson(res, 200, { ok: true, already: true, listing: listingAdminFromRow(listing) });
+    return;
+  }
+  const login = await mailTmLogin(listing.email, listing.password);
+  if (!login.ok) {
+    const err = String(login.error || "");
+    if (err.indexOf("no longer exists") !== -1) {
+      // Already dead on Mail.tm (e.g. listings 5/8): nothing left to
+      // delete — just take the listing out of the shop.
+      const row = await removeListing(id);
+      try {
+        await logSecurityEvent("", "admin_account_delete", "listing " + id + " " + listing.email + " (already dead)");
+      } catch (_) {}
+      sendJson(res, 200, { ok: true, already: true, listing: listingAdminFromRow(row || listing) });
+      return;
+    }
+    sendJson(res, 400, { ok: false, error: login.error });
+    return;
+  }
+  // POST /token returns the account id as `id` (the site has always
+  // taken it from there — index.html: state.accountId =
+  // (acc && acc.id) || tok.id); the JWT `sub` claim is the fallback.
+  const accountId = String(login.id || "") || jwtAccountId(login.token);
+  if (!accountId) {
+    sendJson(res, 400, { ok: false, error: "could not determine Mail.tm account id" });
+    return;
+  }
+  let delRes = null;
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 15000);
+    delRes = await fetch(UPSTREAM + "/accounts/" + encodeURIComponent(accountId), {
+      method: "DELETE",
+      headers: { Authorization: "Bearer " + login.token, Accept: "application/json" },
+      signal: ctl.signal,
+    });
+    clearTimeout(timer);
+  } catch (err) {
+    sendJson(res, 400, { ok: false, error: "Mail.tm unreachable: " + String((err && err.message) || err) });
+    return;
+  }
+  if (delRes.status !== 204 && delRes.status !== 200 && delRes.status !== 404) {
+    let msg = "Mail.tm delete failed (HTTP " + delRes.status + ")";
+    try {
+      const d = JSON.parse(await delRes.text());
+      if (d && (d.message || d.detail || d.error)) msg = String(d.message || d.detail || d.error);
+    } catch (_) {}
+    sendJson(res, 400, { ok: false, error: msg });
+    return;
+  }
+  // 204/200 = deleted now; 404 = already gone — either way the
+  // account no longer exists, so the listing leaves the shop.
+  const row = await removeListing(id);
+  try {
+    await logSecurityEvent("", "admin_account_delete", "listing " + id + " " + listing.email + (delRes.status === 404 ? " (already dead)" : ""));
+  } catch (_) {}
+  sendJson(res, 200, { ok: true, already: delRes.status === 404, listing: listingAdminFromRow(row || listing) });
+}
+
 // v1.3: re-run the Mail.tm login for one listing and apply the
 // result (good on success, bad on wrong credentials, unchanged on
 // upstream outage). Returns the updated listing (admin shape).
@@ -3079,6 +3184,8 @@ async function handleApi(req, res, url) {
       if (req.method === "POST" && mMktList) return handleAdminMarketListingRemove(req, res, mMktList[1]);
       const mMktRelist = /^\/api\/admin\/market\/listings\/(\d+)\/relist$/.exec(p);
       if (req.method === "POST" && mMktRelist) return handleAdminMarketListingRelist(req, res, mMktRelist[1]);
+      const mMktDelAcc = /^\/api\/admin\/market\/listings\/(\d+)\/delete-account$/.exec(p);
+      if (req.method === "POST" && mMktDelAcc) return handleAdminMarketListingDeleteAccount(req, res, mMktDelAcc[1]);
       const mMktCheck = /^\/api\/admin\/market\/listings\/(\d+)\/check$/.exec(p);
       if (req.method === "POST" && mMktCheck) return handleAdminMarketListingCheck(req, res, mMktCheck[1]);
       const mMktHealth = /^\/api\/admin\/market\/listings\/(\d+)\/health$/.exec(p);
