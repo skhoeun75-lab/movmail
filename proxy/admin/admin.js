@@ -119,6 +119,17 @@ const I18N = {
     reportReasonNoCode: 'មិនទទួលបានកូដ', reportReasonVisa: 'ត្រូវដាក់ Visa card', reportReasonCantLogin: 'ចូលមិនបាន', reportReasonOther: 'ផ្សេងៗ',
     evidenceLast: 'សារចុងក្រោយ', evidenceNone: 'មិនទាន់មានសារមកដល់ក្រោយពេលទិញទេ', evidenceMsgs: 'សារក្រោយពេលទិញ',
     mismatchFlag: '⚠️ កូដបានមកដល់ហើយ តែអ្នកទិញថាមិនដំណើរការ',
+    /* v1.9: admin code notifications for listed emails. */
+    notifications: 'ការជូនដំណឹង', notifTitle: 'ការជូនដំណឹង — កូដមកដល់អ៊ីមែលលក់',
+    notifNote: 'ពេលមានសារ ឬកូដមកដល់អ៊ីមែលដែលដាក់លក់ (ទាំងដែលលក់រួច) វានឹងលោតមកទីនេះ។',
+    noNotif: 'មិនមានការជូនដំណឹងទេ', markAllRead: 'សម្គាល់ថាបានអានទាំងអស់',
+    notifNew: 'ថ្មី', toastNotifNew: '📩 អ៊ីមែលលក់មានកូដថ្មី!',
+    lastCode: 'កូដចុងក្រោយ', noLastCode: 'មិនទាន់មានកូដមកដល់ទេ', notifCode: 'កូដ',
+    /* v1.9b: buyer identity + forward the code to the buyer. */
+    notifBuyer: 'អ្នកទិញ', notifNoBuyer: 'មិនទាន់មានអ្នកទិញ',
+    sendToBuyer: 'ផ្ញើទៅអ្នកទិញ', notifSent: '✓ បានផ្ញើទៅអ្នកទិញ',
+    toastNotifSent: 'បានផ្ញើកូដទៅអ្នកទិញហើយ',
+    toastNotifNewDetail: '📩 {buyer} — កូដពី {sender} បានមកដល់ {email}',
     searchPlaceholder: 'ស្វែងរកតាមឈ្មោះ / Gmail / ប្រទេស…',
     filterAll: 'ទាំងអស់', filterNormal: 'ធម្មតា', filterRisk: 'មានហានិភ័យ', filterBlocked: 'បានបិទ',
     refresh: 'ធ្វើឱ្យថ្មី', country: 'ប្រទេស', city: 'ទីក្រុង', device: 'ឧបករណ៍', connection: 'ការតភ្ជាប់',
@@ -204,6 +215,17 @@ const I18N = {
     reportReasonNoCode: 'No code received', reportReasonVisa: 'Asked for a Visa card', reportReasonCantLogin: "Can't log in", reportReasonOther: 'Other',
     evidenceLast: 'Last message', evidenceNone: 'No message arrived after the purchase yet', evidenceMsgs: 'messages after purchase',
     mismatchFlag: '⚠️ A code arrived, but the buyer says it does not work',
+    /* v1.9: admin code notifications for listed emails. */
+    notifications: 'Notifications', notifTitle: 'Notifications — codes arriving at listed emails',
+    notifNote: 'When a message or code arrives at an email you listed for sale (including sold ones), it pops up here.',
+    noNotif: 'No notifications yet', markAllRead: 'Mark all as read',
+    notifNew: 'New', toastNotifNew: '📩 A listed email has a new code!',
+    lastCode: 'Last code', noLastCode: 'No code arrived yet', notifCode: 'Code',
+    /* v1.9b: buyer identity + forward the code to the buyer. */
+    notifBuyer: 'Buyer', notifNoBuyer: 'No buyer yet',
+    sendToBuyer: 'Send to buyer', notifSent: '✓ Sent to buyer',
+    toastNotifSent: 'Code sent to the buyer',
+    toastNotifNewDetail: '📩 {buyer} — code from {sender} arrived at {email}',
     searchPlaceholder: 'Search by name / Gmail / country…',
     filterAll: 'All', filterNormal: 'Normal', filterRisk: 'At risk', filterBlocked: 'Blocked',
     refresh: 'Refresh', country: 'Country', city: 'City', device: 'Device', connection: 'Connection',
@@ -309,6 +331,7 @@ function showAuth() {
 function showApp() {
   show($('view-auth'), false); show($('view-app'), true); show($('signOutBtn'), true);
   loadAll();
+  startNotifPolling(); /* v1.9: pop-up toast when a code arrives at a listed email */
 }
 
 function onSetupSubmit(e) {
@@ -425,7 +448,7 @@ function adminBadgeHtml(u) {
   return isAdminGmail(u.gmail) ? ' <span class="admin-badge-user">Admin</span>' : '';
 }
 
-function loadAll() { loadUsers(); loadCodes(); loadReceipts(); loadListings(); loadOrders(); }
+function loadAll() { loadUsers(); loadCodes(); loadReceipts(); loadListings(); loadOrders(); loadNotifications(); }
 
 async function loadUsers() {
   showError($('usersError'), '');
@@ -900,7 +923,11 @@ function normListing(l) {
     ip: l.ip || l.ipAddress || '',
     country: l.country || '',
     city: l.city || '',
-    countryCode: l.countryCode || l.country_code || ''
+    countryCode: l.countryCode || l.country_code || '',
+    /* v1.9: last code/message that arrived at this listed email. */
+    lastCodeAt: l.last_code_at || l.lastCodeAt || '',
+    lastCodeFrom: l.last_code_from || l.lastCodeFrom || '',
+    lastCodeSubject: l.last_code_subject || l.lastCodeSubject || ''
   };
 }
 function normOrder(o) {
@@ -944,6 +971,149 @@ async function loadOrders() {
     ordersCache = list.map(normOrder);
     renderOrders();
   } catch (e) { showError($('ordersError'), t('errLoad')); }
+}
+/* v1.9: listing-code notifications — a message/code arriving at any
+   listed email (active or sold) pops up here. The server creates one
+   notification per saved message; the admin polls every 30s while
+   logged in, and a NEW arrival pops a toast — "email នេះមានកូដ".
+   The toast only fires when the newest id actually grows (never on
+   every poll, never for old notifications on first load). */
+var notifCache = [], notifUnread = 0, notifSeenMaxId = 0, notifPrimed = false, notifTimer = null;
+function normNotif(n) {
+  n = n || {};
+  return {
+    id: n.id,
+    listingId: n.listingId || n.listing_id || '',
+    listingEmail: n.listingEmail || n.listing_email || n.email || '',
+    listingTitle: n.listingTitle || n.listing_title || n.title || '',
+    sender: n.sender || n.from || '',
+    subject: n.subject || '',
+    code: n.code || '',
+    /* v1.9b: who bought it + whether the code was forwarded. */
+    buyerGmail: n.buyerGmail || n.buyer_gmail || '',
+    buyerName: n.buyerName || n.buyer_name || '',
+    forwarded: !!(n.forwarded || n.forwardedAt || n.forwarded_at),
+    forwardedAt: n.forwardedAt || n.forwarded_at || '',
+    isRead: !!(n.isRead || n.is_read),
+    createdAt: n.createdAt || n.created_at || ''
+  };
+}
+function updateNotifBadge() {
+  var b = $('notifTabBadge');
+  if (!b) return;
+  b.textContent = notifUnread > 99 ? '99+' : String(notifUnread);
+  b.hidden = !(notifUnread > 0);
+}
+async function loadNotifications(silent) {
+  try {
+    var data = await api('/api/admin/notifications');
+    var list = Array.isArray(data) ? data : (data.notifications || []);
+    var unread = (data && typeof data.unread === 'number')
+      ? data.unread
+      : list.filter(function (x) { return !(x.isRead || x.is_read); }).length;
+    var maxId = 0;
+    list.forEach(function (x) { if (Number(x.id) > maxId) maxId = Number(x.id); });
+    var isNew = notifPrimed && maxId > notifSeenMaxId;
+    notifCache = list.map(normNotif);
+    notifUnread = unread;
+    if (maxId > notifSeenMaxId) notifSeenMaxId = maxId;
+    notifPrimed = true;
+    renderNotifications();
+    updateNotifBadge();
+    /* v1.9b: the pop-up names the buyer + the sender + the email
+       ("email នេះមានកូដ" — who it is from and who bought it). */
+    if (isNew && isLoggedIn()) {
+      var newest = null;
+      list.forEach(function (x) { if (!newest || Number(x.id) > Number(newest.id)) newest = x; });
+      if (newest) {
+        var nn = normNotif(newest);
+        var who = nn.buyerName || nn.buyerGmail;
+        toast(t('toastNotifNewDetail')
+          .replace('{buyer}', who || nn.listingEmail || '—')
+          .replace('{sender}', nn.sender || '—')
+          .replace('{email}', nn.listingEmail || '—'));
+      } else toast(t('toastNotifNew'));
+    }
+  } catch (e) {
+    if (!silent) showError($('notifError'), t('errLoad'));
+  }
+}
+function renderNotifications() {
+  var sorted = notifCache.slice().sort(function (a, b) {
+    return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+  });
+  $('notifList').innerHTML = sorted.map(function (n) {
+    var codeLine = n.code
+      ? '<div class="n-line n-code">' + esc(t('notifCode')) + ': <code>' + esc(n.code) + '</code></div>'
+      : '';
+    /* v1.9b: who bought it (name + gmail, or "no buyer yet") and the
+       forward button — only when a code + a known buyer exist. Once
+       forwarded it becomes a "sent ✓" state and the button is gone. */
+    var buyerLine = '<div class="n-line">👤 ' + esc(t('notifBuyer')) + ': '
+      + (n.buyerGmail
+        ? esc(n.buyerName ? n.buyerName + ' (' + n.buyerGmail + ')' : n.buyerGmail)
+        : esc(t('notifNoBuyer')))
+      + '</div>';
+    var fwd = '';
+    if (n.code && n.buyerGmail) {
+      fwd = n.forwarded
+        ? '<div class="n-line n-sent">' + esc(t('notifSent')) + '</div>'
+        : '<button class="btn btn-primary notif-forward-btn" data-forward-id="' + esc(n.id) + '">' + esc(t('sendToBuyer')) + '</button>';
+    }
+    return '<div class="notif-row' + (n.isRead ? '' : ' notif-unread') + '" data-notif-id="' + esc(n.id) + '">'
+      + '<div class="notif-info">'
+      + '<div class="n-title">' + (n.isRead ? '' : '<span class="pill pill-red">' + esc(t('notifNew')) + '</span> ')
+      + esc(n.listingTitle || n.listingEmail) + '</div>'
+      + '<div class="n-line">' + esc(n.listingEmail) + '</div>'
+      + buyerLine
+      + '<div class="n-line">📩 ' + esc(n.sender || '—') + ' — ' + esc(n.subject || '—') + '</div>'
+      + codeLine
+      + fwd
+      + '<div class="n-line n-time">' + esc(fmtDate(n.createdAt)) + '</div>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+  show($('notifEmpty'), sorted.length === 0);
+}
+async function onMarkNotifReadClick() {
+  try {
+    await api('/api/admin/notifications/read', { method: 'POST' });
+    notifUnread = 0;
+    notifCache.forEach(function (n) { n.isRead = true; });
+    renderNotifications();
+    updateNotifBadge();
+    toast(t('toastSaved'));
+  } catch (e) { showError($('notifError'), t('errLoad')); }
+}
+/* v1.9b: forward the code to the buyer — it lands in the buyer's
+   website bell. Delegated: rows are re-rendered on every poll, so
+   the listener lives on the list itself. The server is idempotent
+   (second press returns already:true), and the button disables
+   while the request is in flight. */
+async function onNotifForwardClick(e) {
+  var btn = e.target && e.target.closest ? e.target.closest('[data-forward-id]') : null;
+  if (!btn) return;
+  var id = Number(btn.getAttribute('data-forward-id'));
+  if (!id) return;
+  btn.disabled = true;
+  try {
+    var data = await api('/api/admin/notifications/' + id + '/forward', { method: 'POST' });
+    if (data && data.notification) {
+      var nn = normNotif(data.notification);
+      notifCache = notifCache.map(function (x) { return String(x.id) === String(id) ? nn : x; });
+      renderNotifications();
+    }
+    toast(t('toastNotifSent'));
+  } catch (err) {
+    showError($('notifError'), t('errLoad'));
+    btn.disabled = false;
+  }
+}
+function startNotifPolling() {
+  if (notifTimer) return;
+  notifTimer = setInterval(function () {
+    if (isLoggedIn()) loadNotifications(true);
+  }, 30000);
 }
 function listingPill(st) {
   if (st === 'active') return '<span class="pill pill-green">' + esc(t('active')) + '</span>';
@@ -1024,6 +1194,9 @@ function renderListings() {
       + (l.token ? '<div class="l-line">' + esc(t('listingToken')) + ': ' + esc(l.token) + '</div>' : '')
       + '<div class="l-line">' + esc(t('listingIp')) + ': ' + esc(listingIpLine(l)) + '</div>'
       + '<div class="l-line">' + healthPill + ' ' + esc(t('healthChecked')) + ': ' + esc(fmtDate(l.healthCheckedAt)) + '</div>'
+      + (l.lastCodeAt
+        ? '<div class="l-line">📩 ' + esc(t('lastCode')) + ': ' + esc(l.lastCodeFrom || '—') + ' — ' + esc(l.lastCodeSubject || '—') + ' (' + esc(fmtDate(l.lastCodeAt)) + ')</div>'
+        : '<div class="l-line">📩 ' + esc(t('noLastCode')) + '</div>')
       + countdownLine
       + '<div class="l-line">' + esc(t('created')) + ': ' + esc(fmtDate(l.createdAt)) + '</div>'
       + '</div>'
@@ -1304,6 +1477,7 @@ function switchTab(name) {
   if (name === 'receipts') loadReceipts();
   if (name === 'listings') loadListings();
   if (name === 'orders') loadOrders();
+  if (name === 'notifications') loadNotifications();
 }
 function onSaveToken() {
   localStorage.setItem(LS_TOKEN, $('tokenInput').value.trim());
@@ -1320,7 +1494,7 @@ function init() {
     localStorage.setItem(LS_LANG, LANG);
     applyI18n();
     renderExpirySeg();
-    if (isLoggedIn()) { renderUsers(); renderCodes(); renderReceipts(); renderListings(); renderOrders(); updateStats(); renderRecipientList(); renderSendResults(lastSendResults); }
+    if (isLoggedIn()) { renderUsers(); renderCodes(); renderReceipts(); renderListings(); renderOrders(); renderNotifications(); updateNotifBadge(); updateStats(); renderRecipientList(); renderSendResults(lastSendResults); }
   });
   $('setupForm').addEventListener('submit', onSetupSubmit);
   $('loginForm').addEventListener('submit', onLoginSubmit);
@@ -1365,6 +1539,8 @@ function init() {
   $('listingForm').addEventListener('submit', onListingSubmit);
   $('listingLogo').addEventListener('change', onListingLogoChange);
   $('listingsList').addEventListener('click', onListingsClick);
+  $('markNotifReadBtn').addEventListener('click', onMarkNotifReadClick); /* v1.9 */
+  $('notifList').addEventListener('click', onNotifForwardClick); /* v1.9b: Send to buyer */
   $('ordersList').addEventListener('click', function (e) {
     if (e.target.closest('[data-order-action]')) onOrderActionClick(e);
     else onReceiptThumbClick(e); /* same lightbox as receipts */

@@ -94,6 +94,7 @@
       <button class="tab" type="button" data-tab="receipts" role="tab" data-i18n="receipts">វិក្កយបត្រ</button>
       <button class="tab" type="button" data-tab="listings" role="tab" data-i18n="listings">បញ្ជីលក់</button>
       <button class="tab" type="button" data-tab="orders" role="tab" data-i18n="orders">ការបញ្ជាទិញ</button>
+      <button class="tab" type="button" data-tab="notifications" role="tab"><span data-i18n="notifications">ការជូនដំណឹង</span><span class="tab-badge" id="notifTabBadge" hidden>0</span></button>
       <button class="tab" type="button" data-tab="settings" role="tab" data-i18n="settings">ការកំណត់</button>
     </nav>
 
@@ -257,6 +258,18 @@
         <p class="error" id="ordersError" hidden></p>
         <div id="ordersList" class="receipts-list"></div>
         <p class="muted empty-note" id="ordersEmpty" hidden data-i18n="noOrders">មិនមានការបញ្ជាទិញទេ</p>
+      </div>
+    </div>
+
+    <!-- LISTING CODE NOTIFICATIONS (v1.9) -->
+    <div class="tab-panel" id="panel-notifications" hidden>
+      <div class="card">
+        <h2 data-i18n="notifTitle">ការជូនដំណឹង — កូដមកដល់អ៊ីមែលលក់</h2>
+        <p class="muted" data-i18n="notifNote">ពេលមានសារ ឬកូដមកដល់អ៊ីមែលដែលដាក់លក់ (ទាំងដែលលក់រួច) វានឹងលោតមកទីនេះ។</p>
+        <p class="error" id="notifError" hidden></p>
+        <div class="notif-actions"><button id="markNotifReadBtn" class="btn btn-secondary" type="button" data-i18n="markAllRead">សម្គាល់ថាបានអានទាំងអស់</button></div>
+        <div id="notifList" class="notif-list"></div>
+        <p class="muted empty-note" id="notifEmpty" hidden data-i18n="noNotif">មិនមានការជូនដំណឹងទេ</p>
       </div>
     </div>
 

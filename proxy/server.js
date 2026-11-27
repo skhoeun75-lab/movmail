@@ -213,6 +213,13 @@ async function saveMessage(msg, address, detail) {
   } catch (err) {
     console.error("movmail-proxy: disable-keyword scan failed:", err.message);
   }
+  // v1.9: admin code notification for listed emails + last-code
+  // info. Same never-break-the-save rule as the keyword scan above.
+  try {
+    await notifyListingCode(address, msg);
+  } catch (err) {
+    console.error("movmail-proxy: listing-code notify failed:", err.message);
+  }
 }
 
 function rowToSaved(row) {
@@ -468,6 +475,28 @@ const ALTER_API_TABLES_SQL = [
   "ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS city TEXT DEFAULT ''",
   "ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS flag TEXT DEFAULT ''",
   "ALTER TABLE market_orders ADD COLUMN IF NOT EXISTS amount_paid NUMERIC",
+  // v1.9: last code/message that arrived at a listed email (shown
+  // on the admin Listings row).
+  "ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS last_code_at TIMESTAMPTZ",
+  "ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS last_code_from TEXT DEFAULT ''",
+  "ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS last_code_subject TEXT DEFAULT ''",
+  // v1.9: admin listing-code notifications (type 'listing_code').
+  // `code` already exists (gift codes) and is reused for the
+  // extracted verification code; the new columns name the listing,
+  // the sender and the message (for one-notification-per-message
+  // dedupe). Never a password or token.
+  "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS listing_id INT",
+  "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS listing_email TEXT DEFAULT ''",
+  "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS listing_title TEXT DEFAULT ''",
+  "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS sender TEXT DEFAULT ''",
+  "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS subject TEXT DEFAULT ''",
+  "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS message_id TEXT DEFAULT ''",
+  // v1.9b: buyer identity on listing-code notifications + whether the
+  // code was forwarded to the buyer (forwarded_at set on first
+  // forward; a second press is a no-op returning already:true).
+  "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS buyer_gmail TEXT DEFAULT ''",
+  "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS buyer_name TEXT DEFAULT ''",
+  "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS forwarded_at TIMESTAMPTZ",
 ];
 
 if (dbPool) {
@@ -817,6 +846,14 @@ function notificationFromRow(r) {
     code: r.code,
     amountPerDay: r.amount_per_day,
     created_at: toIso(r.created_at),
+    // v1.9b: forwarded codes carry their origin so the buyer's bell
+    // can show "code from <sender>" + the listing email. Gift rows
+    // leave these empty.
+    type: r.type || "gift",
+    sender: r.sender || "",
+    listingEmail: r.listing_email || "",
+    listingTitle: r.listing_title || "",
+    subject: r.subject || "",
   };
 }
 
@@ -1083,6 +1120,11 @@ function listingAdminFromRow(r) {
     // v1.3 D: admin only — why the listing went red (matched message
     // subject, or the manual marker). Never in the public shape.
     healthReason: r.health_reason || "",
+    // v1.9: last code/message that arrived at this listed email
+    // (any status) — when, from whom, about what.
+    lastCodeAt: toIso(r.last_code_at),
+    lastCodeFrom: r.last_code_from || "",
+    lastCodeSubject: r.last_code_subject || "",
     ip: r.ip || "",
     country: r.country || "",
     city: r.city || "",
@@ -1289,6 +1331,130 @@ async function markListingsBadForAddress(address, subject) {
     updated.push(await updateListingHealth(row.id, "bad", badSince, reason));
   }
   return updated;
+}
+
+// v1.9: admin code notifications for listed emails.
+// Mov never throws away the emails he creates for sale — he keeps
+// them all, and the admin/seller copy must ALSO keep receiving
+// codes. Every message saved through this proxy for a listed
+// address (status 'active' OR 'sold' — a sold email still belongs
+// to its buyer and its codes still matter) does two things:
+//   (1) one admin notification (type 'listing_code') naming the
+//       listing, the sender and the time — one per saved message,
+//       keyed by the Mail.tm message id, never duplicated; and
+//   (2) the listing's last-code info (last_code_at/from/subject),
+//       shown on the admin Listings row.
+// The notification NEVER carries the listing password or any token.
+// It MAY carry the verification code itself (extracted the same way
+// the website does) — the admin panel is Mov's own control room and
+// he owns the mailbox.
+// Only works for LIVE mailboxes: a deleted Mail.tm account receives
+// nothing anywhere, so no notification can ever fire for it.
+// A failure here must never break the save (same rule as the v1.3
+// keyword scan above).
+function extractOtpCode(subject, intro) {
+  const text = String(subject || "") + " " + String(intro || "");
+  const m = text.match(/\b(\d{4,8})\b/g);
+  if (!m) return "";
+  const kw = /(code|otp|verification|verify|pin|កូដ|បញ្ជាក់)/i.test(text);
+  return kw ? m[0] : "";
+}
+
+async function updateListingLastCode(id, from, subject) {
+  const n = Number(id);
+  const f = String(from || "").slice(0, 120);
+  const s = String(subject || "").slice(0, 200);
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "UPDATE market_listings SET last_code_at = NOW(), last_code_from = $2, last_code_subject = $3" +
+        " WHERE id = $1 RETURNING *",
+      [n, f, s]
+    );
+    return r.rows[0] || null;
+  }
+  const row = mem.listings.get(n);
+  if (!row) return null;
+  row.last_code_at = new Date().toISOString();
+  row.last_code_from = f;
+  row.last_code_subject = s;
+  return row;
+}
+
+async function notifyListingCode(address, msg) {
+  const addr = String(address || "").trim().toLowerCase();
+  if (!addr || !msg || !msg.id) return [];
+  const messageId = String(msg.id);
+  const sender = (msg.from && (msg.from.name || msg.from.address)) || "";
+  const subject = String(msg.subject || "");
+  const code = extractOtpCode(msg.subject, msg.intro);
+  let rows;
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "SELECT * FROM market_listings WHERE LOWER(email) = $1 AND status IN ('active','sold')",
+      [addr]
+    );
+    rows = r.rows;
+  } else {
+    rows = [...mem.listings.values()].filter(
+      (x) => String(x.email || "").toLowerCase() === addr && (x.status === "active" || x.status === "sold")
+    );
+  }
+  const made = [];
+  for (const row of rows) {
+    // Dedupe: one notification per saved message per listing.
+    let exists = false;
+    if (!USE_MEMORY_STORE) {
+      const r = await dbPool.query(
+        "SELECT 1 FROM admin_notifications WHERE type = 'listing_code' AND message_id = $1 AND listing_id = $2 LIMIT 1",
+        [messageId, row.id]
+      );
+      exists = r.rows.length > 0;
+    } else {
+      exists = mem.notifications.some(
+        (n) => n.type === "listing_code" && n.message_id === messageId && n.listing_id === row.id
+      );
+    }
+    if (!exists) {
+      // v1.9b: name the buyer on the notification (approved order
+      // + users table) so the admin pop-up shows who bought it.
+      const buyer = await getListingBuyer(row.id);
+      if (!USE_MEMORY_STORE) {
+        // Belt and braces: the WHERE NOT EXISTS guard covers the
+        // race between the SELECT above and this INSERT.
+        const r = await dbPool.query(
+          "INSERT INTO admin_notifications (gmail, type, code, listing_id, listing_email, listing_title, sender, subject, message_id, buyer_gmail, buyer_name)" +
+            " SELECT $1,'listing_code',$2,$3,$4,$5,$6,$7,$8,$9,$10" +
+            " WHERE NOT EXISTS (SELECT 1 FROM admin_notifications WHERE type = 'listing_code' AND message_id = $8 AND listing_id = $3)" +
+            " RETURNING *",
+          [row.seller_gmail || "ADMIN", code || null, row.id, row.email, row.title || "", sender.slice(0, 120), subject.slice(0, 200), messageId, buyer.gmail || "", buyer.name || ""]
+        );
+        if (r.rows[0]) made.push(r.rows[0]);
+      } else {
+        const nrow = {
+          id: mem.notificationSeq++,
+          gmail: row.seller_gmail || "ADMIN",
+          type: "listing_code",
+          code: code || null,
+          listing_id: row.id,
+          listing_email: row.email,
+          listing_title: row.title || "",
+          sender: sender.slice(0, 120),
+          subject: subject.slice(0, 200),
+          message_id: messageId,
+          buyer_gmail: buyer.gmail || "",
+          buyer_name: buyer.name || "",
+          forwarded_at: null,
+          created_at: new Date().toISOString(),
+          is_read: false,
+        };
+        mem.notifications.push(nrow);
+        made.push(nrow);
+      }
+    }
+    // Last-code info updates on every arrival, even a repeat save.
+    await updateListingLastCode(row.id, sender, subject);
+  }
+  return made;
 }
 
 // Scan the latest saved messages for one address (most recent
@@ -1705,6 +1871,31 @@ async function findApprovedOrder(listingId, gmail) {
       (x) => x.listing_id === n && x.buyer_gmail === gmail && x.status === "approved"
     ) || null
   );
+}
+
+// v1.9b: the buyer of a listing = the approved market order's
+// buyer_gmail; display name from the users table (fallback: the
+// gmail itself — a buyer always signed up to buy, so the row should
+// exist, but never assume it).
+async function getListingBuyer(listingId) {
+  const n = Number(listingId);
+  if (!Number.isInteger(n)) return { gmail: "", name: "" };
+  let gmail = "";
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "SELECT buyer_gmail FROM market_orders WHERE listing_id = $1 AND status = 'approved' ORDER BY created_at DESC LIMIT 1",
+      [n]
+    );
+    gmail = (r.rows[0] && r.rows[0].buyer_gmail) || "";
+  } else {
+    const o = mem.orders
+      .filter((x) => x.listing_id === n && x.status === "approved")
+      .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))[0];
+    gmail = (o && o.buyer_gmail) || "";
+  }
+  if (!gmail) return { gmail: "", name: "" };
+  const u = await getUser(gmail);
+  return { gmail, name: (u && u.name) || "" };
 }
 
 // Approve/reject a market order. Only pending orders can be decided.
@@ -2465,6 +2656,226 @@ async function handleMarketRestore(req, res) {
   });
 }
 
+// v1.9: admin shape for a listing-code notification. The FULL
+// listing email is included — this endpoint is admin-only
+// (X-Admin-Token) and the admin panel is Mov's own control room;
+// the public shop still only ever sees masked emails.
+function listingCodeNotificationFromRow(r) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    listingId: r.listing_id,
+    listingEmail: r.listing_email || "",
+    listingTitle: r.listing_title || "",
+    sender: r.sender || "",
+    subject: r.subject || "",
+    code: r.code || "",
+    messageId: r.message_id || "",
+    // v1.9b: who bought it (approved order + users table) and
+    // whether the code was already forwarded to them.
+    buyerGmail: r.buyer_gmail || "",
+    buyerName: r.buyer_name || "",
+    forwardedAt: toIso(r.forwarded_at),
+    forwarded: !!r.forwarded_at,
+    isRead: !!r.is_read,
+    createdAt: toIso(r.created_at),
+  };
+}
+
+async function listListingCodeNotifications(limit) {
+  const n = Math.max(1, Math.min(100, Number(limit) || 50));
+  // v1.9b: a notification created before its listing sold has no
+  // buyer stored yet — resolve it on read so the admin always sees
+  // who bought it (cheap: only rows missing a buyer are looked up).
+  async function withBuyer(shape) {
+    if (shape.buyerGmail || !shape.listingId) return shape;
+    try {
+      const b = await getListingBuyer(shape.listingId);
+      if (b.gmail) { shape.buyerGmail = b.gmail; shape.buyerName = b.name; }
+    } catch (_) {}
+    return shape;
+  }
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "SELECT * FROM admin_notifications WHERE type = 'listing_code'" +
+        " ORDER BY created_at DESC, id DESC LIMIT $1",
+      [n]
+    );
+    const unread = await dbPool.query(
+      "SELECT COUNT(*)::int AS count FROM admin_notifications WHERE type = 'listing_code' AND is_read IS DISTINCT FROM true"
+    );
+    const notifications = [];
+    for (const row of r.rows) notifications.push(await withBuyer(listingCodeNotificationFromRow(row)));
+    return {
+      notifications,
+      unread: (unread.rows[0] && unread.rows[0].count) || 0,
+    };
+  }
+  const rows = mem.notifications
+    .filter((x) => x.type === "listing_code")
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")) || b.id - a.id)
+    .slice(0, n);
+  const notifications = [];
+  for (const row of rows) notifications.push(await withBuyer(listingCodeNotificationFromRow(row)));
+  return {
+    notifications,
+    unread: mem.notifications.filter((x) => x.type === "listing_code" && !x.is_read).length,
+  };
+}
+
+async function markListingCodeNotificationsRead() {
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "UPDATE admin_notifications SET is_read = true WHERE type = 'listing_code' AND is_read IS DISTINCT FROM true"
+    );
+    return r.rowCount || 0;
+  }
+  let n = 0;
+  for (const x of mem.notifications) {
+    if (x.type === "listing_code" && !x.is_read) { x.is_read = true; n++; }
+  }
+  return n;
+}
+
+async function handleAdminListingNotificationsList(req, res) {
+  try {
+    sendJson(res, 200, await listListingCodeNotifications(50));
+  } catch (err) {
+    console.error("movmail-proxy: /api/admin/notifications failed:", err.message);
+    sendJson(res, 500, { error: "internal error" });
+  }
+}
+
+async function handleAdminListingNotificationsRead(req, res) {
+  try {
+    const marked = await markListingCodeNotificationsRead();
+    sendJson(res, 200, { ok: true, marked });
+  } catch (err) {
+    console.error("movmail-proxy: /api/admin/notifications/read failed:", err.message);
+    sendJson(res, 500, { error: "internal error" });
+  }
+}
+
+// v1.9b: forward a listing code to its buyer. The buyer then sees
+// the code in their own website bell (a new admin_notifications row
+// addressed to buyer_gmail, type 'code_forward', carrying the code +
+// sender + listing email). Idempotent: a second press returns
+// already:true and sends nothing — the buyer's bell never shows the
+// same code twice. The original row is stamped forwarded_at so the
+// admin button turns into a "sent ✓" state.
+async function handleAdminListingNotificationForward(req, res, id) {
+  try {
+    const nid = Number(id);
+    if (!Number.isInteger(nid)) {
+      sendJson(res, 400, { error: "bad id" });
+      return;
+    }
+    let row = null;
+    if (!USE_MEMORY_STORE) {
+      const r = await dbPool.query("SELECT * FROM admin_notifications WHERE id = $1", [nid]);
+      row = r.rows[0] || null;
+    } else {
+      row = mem.notifications.find((x) => x.id === nid) || null;
+    }
+    if (!row) {
+      sendJson(res, 404, { error: "notification not found" });
+      return;
+    }
+    if (row.type !== "listing_code") {
+      sendJson(res, 400, { error: "not a listing code" });
+      return;
+    }
+    if (!row.code) {
+      sendJson(res, 400, { error: "no code to forward" });
+      return;
+    }
+    // Resolve the buyer live — covers rows created before the
+    // listing sold (no buyer stored yet).
+    let buyerGmail = String(row.buyer_gmail || "");
+    let buyerName = String(row.buyer_name || "");
+    if (!buyerGmail && row.listing_id) {
+      const b = await getListingBuyer(row.listing_id);
+      buyerGmail = b.gmail;
+      buyerName = b.name;
+    }
+    if (!buyerGmail) {
+      sendJson(res, 400, { error: "no buyer for this listing" });
+      return;
+    }
+    // Idempotency: already stamped, or a forward row already exists.
+    let already = !!row.forwarded_at;
+    if (!already) {
+      if (!USE_MEMORY_STORE) {
+        const r = await dbPool.query(
+          "SELECT 1 FROM admin_notifications WHERE type = 'code_forward' AND message_id = $1 AND listing_id = $2 LIMIT 1",
+          [row.message_id, row.listing_id]
+        );
+        already = r.rows.length > 0;
+      } else {
+        already = mem.notifications.some(
+          (x) => x.type === "code_forward" && x.message_id === row.message_id && x.listing_id === row.listing_id
+        );
+      }
+    }
+    if (already) {
+      // Converge the stamp so the next list fetch shows forwarded.
+      if (!row.forwarded_at) {
+        if (!USE_MEMORY_STORE) {
+          const upd = await dbPool.query(
+            "UPDATE admin_notifications SET forwarded_at = NOW(), buyer_gmail = $2, buyer_name = $3 WHERE id = $1 RETURNING *",
+            [nid, buyerGmail, buyerName]
+          );
+          row = upd.rows[0] || row;
+        } else {
+          row.forwarded_at = new Date().toISOString();
+          row.buyer_gmail = buyerGmail;
+          row.buyer_name = buyerName;
+        }
+      }
+      sendJson(res, 200, { ok: true, already: true, notification: listingCodeNotificationFromRow(row) });
+      return;
+    }
+    if (!USE_MEMORY_STORE) {
+      await dbPool.query(
+        "INSERT INTO admin_notifications (gmail, type, code, listing_id, listing_email, listing_title, sender, subject, message_id)" +
+          " SELECT $1,'code_forward',$2,$3,$4,$5,$6,$7,$8" +
+          " WHERE NOT EXISTS (SELECT 1 FROM admin_notifications WHERE type = 'code_forward' AND message_id = $8 AND listing_id = $3)",
+        [buyerGmail, row.code, row.listing_id, row.listing_email || "", row.listing_title || "", row.sender || "", row.subject || "", row.message_id || ""]
+      );
+      const upd = await dbPool.query(
+        "UPDATE admin_notifications SET forwarded_at = NOW(), buyer_gmail = $2, buyer_name = $3 WHERE id = $1 RETURNING *",
+        [nid, buyerGmail, buyerName]
+      );
+      row = upd.rows[0] || row;
+    } else {
+      mem.notifications.push({
+        id: mem.notificationSeq++,
+        gmail: buyerGmail,
+        type: "code_forward",
+        code: row.code,
+        listing_id: row.listing_id,
+        listing_email: row.listing_email || "",
+        listing_title: row.listing_title || "",
+        sender: row.sender || "",
+        subject: row.subject || "",
+        message_id: row.message_id || "",
+        buyer_gmail: buyerGmail,
+        buyer_name: buyerName,
+        forwarded_at: null,
+        created_at: new Date().toISOString(),
+        is_read: false,
+      });
+      row.forwarded_at = new Date().toISOString();
+      row.buyer_gmail = buyerGmail;
+      row.buyer_name = buyerName;
+    }
+    sendJson(res, 200, { ok: true, already: false, notification: listingCodeNotificationFromRow(row) });
+  } catch (err) {
+    console.error("movmail-proxy: /api/admin/notifications forward failed:", err.message);
+    sendJson(res, 500, { error: "internal error" });
+  }
+}
+
 async function handleAdminMarketListingsList(req, res) {
   sendJson(res, 200, await listAllListings());
 }
@@ -2658,6 +3069,10 @@ async function handleApi(req, res, url) {
       if (req.method === "POST" && p === "/api/admin/notify") return handleAdminNotify(req, res);
       if (req.method === "POST" && p === "/api/admin/codes/send") return handleAdminCodesSend(req, res);
       if (req.method === "GET" && p === "/api/admin/receipts") return handleAdminReceiptsList(req, res);
+      if (req.method === "GET" && p === "/api/admin/notifications") return handleAdminListingNotificationsList(req, res);
+      if (req.method === "POST" && p === "/api/admin/notifications/read") return handleAdminListingNotificationsRead(req, res);
+      const mNotifFwd = /^\/api\/admin\/notifications\/(\d+)\/forward$/.exec(p);
+      if (req.method === "POST" && mNotifFwd) return handleAdminListingNotificationForward(req, res, mNotifFwd[1]);
       if (req.method === "GET" && p === "/api/admin/market/listings") return handleAdminMarketListingsList(req, res);
       if (req.method === "POST" && p === "/api/admin/market/listings") return handleAdminMarketListingsCreate(req, res);
       const mMktList = /^\/api\/admin\/market\/listings\/(\d+)\/remove$/.exec(p);
@@ -2707,7 +3122,10 @@ function isAllowed(method, pathname) {
   if (method === "POST" && pathname === "/token") return true;
   if (method === "GET" && pathname === "/messages") return true;
   if (method === "GET" && /^\/messages\/[^/]+$/.test(pathname)) return true;
-  if ((method === "GET" || method === "DELETE") && /^\/accounts\/[^/]+$/.test(pathname)) return true;
+  // v1.9c: DELETE is NOT allowed on /accounts/<id> anymore — the
+  // explicit guard below refuses it with 403, and this allowlist no
+  // longer permits it either, so a delete can never reach Mail.tm.
+  if (method === "GET" && /^\/accounts\/[^/]+$/.test(pathname)) return true;
   return false;
 }
 
@@ -2789,6 +3207,27 @@ const server = http.createServer((req, res) => {
       console.error("movmail-proxy: api failed:", err && err.message ? err.message : err);
       try { if (!res.headersSent) sendJson(res, 500, { error: "internal error" }); } catch (_) {}
     });
+    return;
+  }
+
+  // v1.9c: Mail.tm account deletion is BLOCKED at the proxy, for
+  // every client of every version. Two sold accounts died because a
+  // DELETE /accounts reached Mail.tm; Mail.tm's own policy is that a
+  // mailbox lives until the user deletes it, and MovMail never
+  // deletes mailboxes (v1.7b removed the frontend calls, but an old
+  // cached site on a phone could still send one). Refuse here, before
+  // any forwarding — the request never reaches Mail.tm. Logged
+  // best-effort (console + security_events); logging never breaks
+  // the 403 response.
+  if (
+    req.method === "DELETE" &&
+    (url.pathname === "/accounts" || /^\/accounts\/[^/]+$/.test(url.pathname))
+  ) {
+    console.error("movmail-proxy: blocked Mail.tm account delete:", url.pathname);
+    try {
+      logSecurityEvent("", "account_delete_blocked", url.pathname).catch(() => {});
+    } catch (_) {}
+    sendJson(res, 403, { ok: false, error: "account_delete_blocked" });
     return;
   }
 

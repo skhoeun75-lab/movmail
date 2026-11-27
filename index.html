@@ -1519,6 +1519,8 @@
         <h3 data-i18n="giftTitle">🎁 កាដូពីអេតមីន</h3>
         <p id="giftAmountText"></p>
         <div class="gift-code mono" id="giftCodeText">—</div>
+        <!-- v1.9b: forwarded codes show who sent the code + which email it is for -->
+        <p id="giftFromText" hidden></p>
         <div class="mini-actions" style="justify-content:center">
           <button class="btn primary" id="giftCopyBtn" data-i18n="otpCopy">ចម្លងលេខកូដ</button>
           <button class="btn" id="giftCloseBtn" data-i18n="okBtn">យល់ព្រម</button>
@@ -2626,6 +2628,8 @@ var I18N = {
     "giftFromAdmin": "🎁 កាដូពីអេតមីន",
     "giftTitle": "🎁 កាដូពីអេតមីន",
     "giftAmount": "+{n} ដងក្នុងមួយថ្ងៃ",
+    "codeForwardTitle": "កូដពី {sender}",
+    "codeForwardFrom": "ពី {sender} · {email}",
     "avatarRow": "រូបភាព",
     "avatarNone": "មិនទាន់ជ្រើសរើសរូបភាព",
     "payPlanLabel": "កញ្ចប់",
@@ -3004,6 +3008,8 @@ var I18N = {
     "giftFromAdmin": "🎁 Gift from admin",
     "giftTitle": "🎁 Gift from admin",
     "giftAmount": "+{n} extra uses per day",
+    "codeForwardTitle": "Code from {sender}",
+    "codeForwardFrom": "From {sender} · {email}",
     "avatarRow": "Avatar",
     "avatarNone": "No avatar chosen",
     "payPlanLabel": "Plan",
@@ -5912,7 +5918,13 @@ var I18N = {
             grow.type = "button";
             grow.className = "notif-item gift-row";
             var gtx = document.createElement("span");
-            gtx.textContent = t("giftFromAdmin") + ((typeof g.amountPerDay === "number" && g.amountPerDay > 0) ? " · +" + g.amountPerDay : "");
+            /* v1.9b: forwarded codes show "Code from <sender> · <email>"
+               instead of the gift line, same row + same popup. */
+            if (g.type === "code_forward") {
+              gtx.textContent = t("codeForwardTitle", {sender: g.sender || "—"}) + (g.listingEmail ? " · " + g.listingEmail : "");
+            } else {
+              gtx.textContent = t("giftFromAdmin") + ((typeof g.amountPerDay === "number" && g.amountPerDay > 0) ? " · +" + g.amountPerDay : "");
+            }
             var gtm = document.createElement("span");
             gtm.className = "notif-time";
             gtm.textContent = g.created_at ? relTime(g.created_at) : "";
@@ -6000,7 +6012,9 @@ var I18N = {
               var id = String(item.id);
               if (seen.indexOf(id) !== -1 || known[id]) return;
               known[id] = true;
-              gifts.push({ id: id, code: String(item.code || ""), amountPerDay: (typeof item.amountPerDay === "number" ? item.amountPerDay : 0), created_at: item.created_at || new Date().toISOString() });
+              /* v1.9b: forwarded codes carry their origin (sender +
+                 listing email) so the bell can show "code from X". */
+              gifts.push({ id: id, code: String(item.code || ""), amountPerDay: (typeof item.amountPerDay === "number" ? item.amountPerDay : 0), created_at: item.created_at || new Date().toISOString(), type: item.type || "gift", sender: item.sender || "", listingEmail: item.listingEmail || "", listingTitle: item.listingTitle || "", subject: item.subject || "" });
             });
             d.giftNotifications = gifts;
             saveAcctData(d);
@@ -6044,6 +6058,17 @@ var I18N = {
           if (codeEl) codeEl.textContent = currentGiftCode || "—";
           var amt = $("giftAmountText");
           if (amt) amt.textContent = (typeof gift.amountPerDay === "number" && gift.amountPerDay > 0) ? t("giftAmount", {n: gift.amountPerDay}) : "";
+          /* v1.9b: forwarded codes show who sent the code + which
+             email it is for, in large type like a gift code. */
+          var gf = $("giftFromText");
+          var titleEl = $("giftOverlay") ? $("giftOverlay").querySelector("h3") : null;
+          if (gift.type === "code_forward") {
+            if (gf) { gf.hidden = false; gf.textContent = t("codeForwardFrom", {sender: gift.sender || "—", email: gift.listingEmail || ""}); }
+            if (titleEl) titleEl.textContent = t("codeForwardTitle", {sender: gift.sender || "—"});
+          } else {
+            if (gf) gf.hidden = true;
+            if (titleEl) titleEl.textContent = t("giftTitle");
+          }
           /* Read the moment the popup opens, so the badge clears. */
           markGiftRead(gift);
           openAnimated($("giftOverlay"));
