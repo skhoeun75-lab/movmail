@@ -173,7 +173,7 @@
       .addr-box{
         margin:14px auto 6px;max-width:640px;background:var(--surface-2);
         border:none;border-radius:10px;
-        padding:16px 14px;display:flex;align-items:center;justify-content:center;gap:10px;
+        padding:16px 14px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;
       }
       .addr-text{
         font-size:clamp(16px,4.4vw,24px);font-weight:700;word-break:break-all;line-height:1.35;color:var(--ink);
@@ -646,6 +646,12 @@
         border:1px solid var(--accent);border-radius:999px;
         padding:1px 9px;font-size:12px;font-weight:700;white-space:nowrap;
       }
+      /* v1.18: provider badge next to the address — same chip shape,
+         muted colours so it stays subtle. */
+      .provider-badge{
+        background:transparent;color:var(--muted);
+        border-color:var(--border);font-weight:600;margin-top:0;
+      }
       /* Verified profile badge (completeness indicator inside MovMail) */
       .verified-badge{
         display:inline-flex;align-items:center;gap:4px;
@@ -1062,6 +1068,7 @@
 
         <div class="addr-box">
           <span class="addr-text mono loading gmail-pill" id="addrText">កំពុងបង្កើតអ៊ីមែល…</span>
+          <span class="saved-chip provider-badge" id="providerBadge" hidden></span>
         </div>
 
         <div class="bought-logo-row" id="boughtLogoRow" hidden>
@@ -1791,7 +1798,7 @@
            v1.15: the proxy ALSO refuses Mail.tm-bound calls without
            X-MovMail-Version >= 1.15.0 (kill-switch), and the phone
            must never hold a mailbox password again (token endpoint). */
-        var APP_VERSION = "1.15.0";
+        var APP_VERSION = "1.18.0";
         var VERSION_CHECK_MS = 60000;
         /* v1.13: client version handshake. On load and every 60s,
            ask the proxies (never DIRECT — api.mail.tm has no
@@ -2181,7 +2188,8 @@
             address: mb.address, password: mb.password || "", name: mb.name || "",
             logo: mb.logo || "", ipAddress: mb.ip || "", ipCountry: mb.country || "",
             ipCity: mb.city || "", bought: !!mb.bought, listingId: mb.listingId || "",
-            createdAt: mb.createdAt || ""
+            createdAt: mb.createdAt || "",
+            provider: mb.provider || "mailtm", guerrillaExpiresAt: mb.guerrillaExpiresAt || 0
           };
         }
         function syncOneMailbox(mb){
@@ -2332,6 +2340,8 @@
               if (r.ipCity) found.city = r.ipCity;
               if (r.bought) found.bought = true;
               if (r.listingId) found.listingId = r.listingId;
+              if (r.provider) found.provider = r.provider;
+              if (r.guerrillaExpiresAt) found.guerrillaExpiresAt = r.guerrillaExpiresAt;
               if (!found.tier) found.tier = "free";
               changed = true;
             } else {
@@ -2341,7 +2351,8 @@
                 password: "", token: "", accountId: "",
                 ip: r.ipAddress || "", country: r.ipCountry || "", city: r.ipCity || "",
                 flag: "", proxy: "auto", bought: !!r.bought, logo: r.logo || "",
-                listingId: r.listingId || "", createdAt: r.createdAt || new Date().toISOString()
+                listingId: r.listingId || "", createdAt: r.createdAt || new Date().toISOString(),
+                provider: r.provider || "mailtm", guerrillaExpiresAt: r.guerrillaExpiresAt || 0
               });
               changed = true;
             }
@@ -2447,6 +2458,7 @@
           if (state.createTimer){ clearTimeout(state.createTimer); state.createTimer = null; }
           state.address = ""; state.password = ""; state.token = ""; state.accountId = "";
           state.passwordSynced = false;
+          state.provider = "mailtm"; state.guerrillaExpiresAt = 0;
           state.messages = []; state.failed = false; state.retrying = false;
           state.retryCount = 0; state.creating = false;
           savedState.messages = []; savedState.loaded = false; savedState.lastFetch = 0;
@@ -2464,7 +2476,7 @@
           } else {
             startGiftPolling();
           }
-          renderMessages(); renderMailboxes(); updateBellBadge();
+          renderMessages(); renderMailboxes(); updateBellBadge(); updateProviderBadge();
           updateGenerateState(); updateIpLine(); updateQuotaLine();
         }
         /* Switch account but keep the live temp mailbox that was
@@ -2475,13 +2487,15 @@
             address: state.address, password: state.password, token: state.token,
             accountId: state.accountId, createdAt: state.createdAt,
             messages: state.messages, ip: currentIp,
-            boughtLogo: currentBoughtLogo, bought: currentBought
+            boughtLogo: currentBoughtLogo, bought: currentBought,
+            provider: state.provider, guerrillaExpiresAt: state.guerrillaExpiresAt
           };
           switchAccount(email);
-          if (keep.address && keep.token){
+          if (keep.address && (keep.token || keep.provider === "guerrilla")){
             state.address = keep.address; state.password = keep.password;
             state.passwordSynced = !keep.password;
             state.token = keep.token; state.accountId = keep.accountId;
+            state.provider = keep.provider || "mailtm"; state.guerrillaExpiresAt = keep.guerrillaExpiresAt || 0;
             state.createdAt = keep.createdAt; state.messages = keep.messages || [];
             if (keep.ip) currentIp = keep.ip;
             currentBoughtLogo = keep.boughtLogo || null;
@@ -2491,6 +2505,7 @@
             statusText.textContent = t("statusWaiting");
             hideError();
             setBusy(false);
+            updateProviderBadge();
             buildQr();
             startPolling();
             rememberAddress();
@@ -2812,6 +2827,12 @@ var I18N = {
     "errorDefault": "មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេអ៊ីមែលបានទេ។",
     "retrying": "ម៉ាស៊ីនមេរវល់ — កំពុងព្យាយាមម្តងទៀត (លើកទី {n})…",
     "retryingWait": "Mail.tm កំពុងកំណត់ — សូមរង់ចាំបន្តិច វានឹងព្យាយាមដោយខ្លួនឯង",
+    "providerMailtm": "Mail.tm",
+    "providerGuerrilla": "Guerrilla",
+    "guerrillaFallback": "Mail.tm កំពុងកំណត់ — ប្រើ Guerrilla ជំនួសសិន",
+    "guerrillaExpiresLeft": "ផុតកំណត់ក្នុង {n} នាទី",
+    "guerrillaExpired": "ផុតកំណត់ហើយ",
+    "guerrillaTemp": "អ៊ីមែល Guerrilla មានអាយុ 60 នាទី",
     "relJustNow": "មុននេះបន្តិច",
     "relMinutes": "{n} នាទីមុន",
     "relHours": "{n} ម៉ោងមុន",
@@ -3246,6 +3267,12 @@ var I18N = {
     "errorDefault": "Cannot connect to the email server.",
     "retrying": "Server is busy — retrying (attempt {n})…",
     "retryingWait": "Mail.tm is limiting right now — please wait a moment, it retries by itself",
+    "providerMailtm": "Mail.tm",
+    "providerGuerrilla": "Guerrilla",
+    "guerrillaFallback": "Mail.tm is limiting — using Guerrilla instead",
+    "guerrillaExpiresLeft": "expires in {n} min",
+    "guerrillaExpired": "expired",
+    "guerrillaTemp": "Guerrilla mailboxes last 60 minutes",
     "relJustNow": "Just now",
     "relMinutes": "{n} minutes ago",
     "relHours": "{n} hours ago",
@@ -3657,6 +3684,10 @@ var I18N = {
 
         var state = {
           address: "", password: "", token: "", accountId: "",
+          /* v1.18: Guerrilla Mail fallback provider ("mailtm" or
+             "guerrilla"). guerrillaExpiresAt is the mailbox expiry
+             epoch ms (0 = none). */
+          provider: "mailtm", guerrillaExpiresAt: 0,
           messages: [], timer: null, countdown: 10, pollInterval: 10,
           creating: false, checking: false, retryCount: 0,
           failed: false, retrying: false, lastErrorCode: "",
@@ -3667,6 +3698,34 @@ var I18N = {
              wiped and saved rows store "". */
           passwordSynced: false
         };
+
+        /* v1.18: true when the current mailbox can be polled — a Mail.tm
+           mailbox needs its token; a Guerrilla mailbox needs only its
+           address (no token exists for it). */
+        function hasLiveMailbox(){
+          return state.provider === "guerrilla" ? !!state.address : !!state.token;
+        }
+        /* v1.18: small provider badge next to the address. Mail.tm shows
+           just its name; Guerrilla adds a live countdown to its 60-minute
+           expiry (from expiresAt), or "expired" once it has passed. */
+        function updateProviderBadge(){
+          var b = $("providerBadge");
+          if (!b) return;
+          if (!state.address){ b.hidden = true; b.textContent = ""; b.title = ""; return; }
+          b.hidden = false;
+          if (state.provider === "guerrilla"){
+            b.title = t("guerrillaTemp");
+            if (state.guerrillaExpiresAt && Date.now() >= state.guerrillaExpiresAt){
+              b.textContent = t("providerGuerrilla") + " • " + t("guerrillaExpired");
+            } else {
+              var n = state.guerrillaExpiresAt ? Math.max(0, Math.ceil((state.guerrillaExpiresAt - Date.now()) / 60000)) : 60;
+              b.textContent = t("providerGuerrilla") + " • " + t("guerrillaExpiresLeft", {n: n});
+            }
+          } else {
+            b.title = "";
+            b.textContent = t("providerMailtm");
+          }
+        }
 
         /* Saved messages live in the server database, not in Mail.tm,
            so they survive an address change. This device remembers
@@ -3817,7 +3876,7 @@ var I18N = {
           // (restoring a saved mailbox still works, and the quota
           // resets at local midnight).
           ["copyBtn","qrBtn","deleteBtn","inboxRefreshBtn","saveBtn"].forEach(function(id){
-            $(id).disabled = busy || !state.token;
+            $(id).disabled = busy || !hasLiveMailbox();
           });
           updateGenerateState();
           $("retryBtn").disabled = false;
@@ -3870,6 +3929,35 @@ var I18N = {
           if ((state.retryCount || 0) >= 3) msg += " " + t("retryingWait");
           return msg;
         }
+        /* v1.18: Guerrilla Mail automatic fallback. Runs ONCE when the whole
+           Mail.tm create sequence (accounts -> token, incl. the v1.17 adopt
+           step) fails with a retryable error: a fresh Guerrilla mailbox is
+           requested from the proxy and, on success, the shared create
+           success handler below runs unchanged. Any Guerrilla failure
+           rethrows the ORIGINAL Mail.tm error so the outer catch records
+           the real cause once and schedules the normal v1.17 backoff retry
+           (each retry cycle tries Mail.tm first, Guerrilla second). The
+           proxy never returns a Guerrilla session id — none is expected or stored. */
+        function tryGuerrillaFallback(err){
+          var retryable = !err || !err.status || err.status === 429 || err.status >= 500;
+          if (!retryable) throw err;
+          var s = null;
+          try { s = loadSessionToken(); } catch(e) {}
+          if (!s || !s.token) throw err;
+          state.creating = true;
+          return apiAdmin("/api/guerrilla/address", { method: "POST", body: { token: s.token } }).then(function(res){
+            if (!res || !res.address) throw err;
+            state.address = res.address;
+            state.provider = "guerrilla";
+            state.guerrillaExpiresAt = Date.parse(res.expiresAt) || 0;
+            state.token = ""; state.password = ""; state.passwordSynced = true;
+            state.accountId = ""; state.createdAt = res.createdAt || new Date().toISOString();
+            showToast(t("guerrillaFallback"));
+          }).catch(function(){
+            state.creating = false;
+            throw err;
+          });
+        }
         function createAccount(){
           if (state.creating) return;
           if (!blockedKnown && loadProfile()){
@@ -3920,6 +4008,8 @@ var I18N = {
           countdownText.textContent = "";
           setBusy(true);
 
+          state.provider = "mailtm"; state.guerrillaExpiresAt = 0;
+          updateProviderBadge();
           api("/domains").catch(function(err){
             /* The domain list could not be fetched from any base
                (api() already tried primary, backup and direct). If
@@ -3967,7 +4057,7 @@ var I18N = {
                     state.passwordSynced = false;
                     state.token = tok.token; state.accountId = (res.acc && res.acc.id) || tok.id || "";
                   });
-              });
+              }).catch(tryGuerrillaFallback);
           }).then(function(){
             state.creating = false;
             state.retryCount = 0;
@@ -3982,6 +4072,7 @@ var I18N = {
             addrText.classList.remove("loading");
             statusText.textContent = t("statusWaiting");
             setBusy(false);
+            updateProviderBadge();
             buildQr();
             switchInboxTo(state.address);
             fetchMessages(true);
@@ -4004,7 +4095,8 @@ var I18N = {
               address: state.address, password: state.password, name: "",
               ip: currentIp ? currentIp.ip : "", country: currentIp ? currentIp.country : "",
               city: currentIp ? currentIp.city : "", flag: currentIp ? currentIp.flag : "",
-              bought: false, logo: "", listingId: "", createdAt: state.createdAt || new Date().toISOString()
+              bought: false, logo: "", listingId: "", createdAt: state.createdAt || new Date().toISOString(),
+              provider: state.provider || "mailtm", guerrillaExpiresAt: state.guerrillaExpiresAt || 0
             }).then(function(data){
               if (data && data.ok) wipeLocalMailboxPassword(state.address);
             });
@@ -4419,7 +4511,14 @@ var I18N = {
         var MAILBOXES_KEY = "movmail-mailboxes";
         function loadMailboxes(){
           var d = acctData();
-          return Array.isArray(d.mailboxes) ? d.mailboxes : [];
+          var list = Array.isArray(d.mailboxes) ? d.mailboxes : [];
+          /* v1.18: rows saved before providers existed count as Mail.tm. */
+          list.forEach(function(mb){
+            if (!mb) return;
+            if (!mb.provider) mb.provider = "mailtm";
+            if (!mb.guerrillaExpiresAt) mb.guerrillaExpiresAt = 0;
+          });
+          return list;
         }
         function saveMailboxes(list){
           var d = acctData();
@@ -4434,7 +4533,7 @@ var I18N = {
           return null;
         }
         function saveCurrentMailbox(name){
-          if (!state.address || !state.token) return null;
+          if (!state.address || !hasLiveMailbox()) return null;
           name = String(name || "").trim();
           if (!name) return null;
           var list = loadMailboxes();
@@ -4442,6 +4541,8 @@ var I18N = {
             if (list[i].address === state.address){
               list[i].name = name;
               if (state.accountId) list[i].accountId = state.accountId;
+              list[i].provider = state.provider || "mailtm";
+              list[i].guerrillaExpiresAt = state.guerrillaExpiresAt || 0;
               if (!list[i].tier) list[i].tier = "free";
               if (currentIp) list[i].ip = currentIp.ip, list[i].country = currentIp.country, list[i].city = currentIp.city, list[i].flag = currentIp.flag;
               /* v1.3: a saved bought mailbox keeps its listing logo +
@@ -4467,6 +4568,7 @@ var I18N = {
             password: state.passwordSynced ? "" : (state.password || ""),
             token: state.token,
             accountId: state.accountId || "",
+            provider: state.provider || "mailtm", guerrillaExpiresAt: state.guerrillaExpiresAt || 0,
             ip: currentIp ? currentIp.ip : "",
             country: currentIp ? currentIp.country : "",
             city: currentIp ? currentIp.city : "",
@@ -4669,6 +4771,7 @@ var I18N = {
           stopPolling();
           state.address = ""; state.password = ""; state.token = ""; state.accountId = "";
           state.passwordSynced = false;
+          state.provider = "mailtm"; state.guerrillaExpiresAt = 0;
           currentBoughtLogo = null; currentBought = false; currentBoughtListingId = "";
           state.messages = []; state.failed = false; state.retrying = false; state.retryCount = 0;
           savedState.messages = []; savedState.loaded = false; savedState.lastFetch = 0;
@@ -4676,6 +4779,7 @@ var I18N = {
           addrText.classList.remove("loading");
           statusText.textContent = "";
           hideError();
+          updateProviderBadge();
           updateIpLine();
           renderMessages();
           createAccount();
@@ -4976,13 +5080,15 @@ var I18N = {
           mb = findMailbox(mb.address) || mb;
           /* Keep the current session so we can roll back if the
              restore fails (e.g. the address is taken). */
-          var old = { address: state.address, password: state.password, token: state.token, accountId: state.accountId, messages: state.messages, boughtLogo: currentBoughtLogo, bought: currentBought, listingId: currentBoughtListingId };
+          var old = { address: state.address, password: state.password, token: state.token, accountId: state.accountId, messages: state.messages, boughtLogo: currentBoughtLogo, bought: currentBought, listingId: currentBoughtListingId, provider: state.provider, guerrillaExpiresAt: state.guerrillaExpiresAt };
           function adopt(token, accountId){
             state.address = mb.address;
             state.password = mb.password;
             state.passwordSynced = !mb.password;
             state.token = token;
             state.accountId = accountId || "";
+            state.provider = (mb.provider === "guerrilla") ? "guerrilla" : "mailtm";
+            state.guerrillaExpiresAt = (mb.provider === "guerrilla") ? (mb.guerrillaExpiresAt || 0) : 0;
             state.messages = [];
             state.failed = false; state.retrying = false; state.retryCount = 0;
             hideError();
@@ -5004,6 +5110,7 @@ var I18N = {
             updateIpLine();
             applyProxyPref(mb.proxy || "auto");
             setBusy(false);
+            updateProviderBadge();
             buildQr();
             stopPolling();
             switchInboxTo(mb.address);
@@ -5019,13 +5126,29 @@ var I18N = {
           function fail(){
             state.address = old.address; state.password = old.password;
             state.token = old.token; state.accountId = old.accountId;
+            state.provider = old.provider || "mailtm"; state.guerrillaExpiresAt = old.guerrillaExpiresAt || 0;
             state.messages = old.messages;
             currentBoughtLogo = old.boughtLogo; currentBought = old.bought;
             currentBoughtListingId = old.listingId || "";
             updateBoughtLogo();
             addrText.textContent = state.address || t("addrFailed");
             renderMessages();
+            updateProviderBadge();
             showToast(t("toastRestoreFailed"));
+          }
+          /* v1.18: a Guerrilla saved row never touches Mail.tm — no
+             /messages probe, no server re-login. Adopt it directly and
+             verify with one Guerrilla poll; if the mailbox is gone, drop
+             the saved row (it never comes back) and stop there. */
+          if (mb.provider === "guerrilla"){
+            adopt("", "");
+            fetchMessages(true, true).then(function(res){
+              if (res && res.ok === false && res.reason === "guerrilla-gone"){
+                dropDeletedMailbox(mb);
+                showToast(t("toastRestoreFailed"));
+              }
+            });
+            return;
           }
           /* Try the saved token first. */
           state.address = mb.address;
@@ -5099,7 +5222,7 @@ var I18N = {
         function maybeSaveBeforeGenerate(after){
           /* If the current address is not saved yet, ask once whether
              to save it (with a name) before it is replaced. */
-          if (state.address && state.token && !findMailbox(state.address)){
+          if (state.address && hasLiveMailbox() && !findMailbox(state.address)){
             openSavePrompt(after);
           } else if (after){
             after();
@@ -5257,9 +5380,25 @@ var I18N = {
             runEnrich(m);
           }
         }
+        /* v1.18: message detail for either provider, normalised to the
+           {text, html[]} shape the reader renders. Guerrilla detail goes
+           through the proxy with the session token as a Bearer header;
+           Mail.tm detail is unchanged. */
+        function fetchMessageDetail(m){
+          if (state.provider === "guerrilla"){
+            var s = null;
+            try { s = loadSessionToken(); } catch(e) {}
+            if (!s || !s.token){ var e2 = new Error("no session"); e2.status = 401; return Promise.reject(e2); }
+            return apiAdmin("/api/guerrilla/message?address=" + encodeURIComponent(state.address) + "&id=" + encodeURIComponent(m.id), {authToken: s.token}).then(function(res){
+              var mm = (res && res.message) || {};
+              return { text: mm.text || "", html: mm.html ? [mm.html] : [] };
+            });
+          }
+          return api("/messages/" + m.id);
+        }
         function runEnrich(m){
           m._detailFetching = true;
-          api("/messages/" + m.id).then(function(detail){
+          fetchMessageDetail(m).then(function(detail){
             var cur = currentMsgById(m.id) || m;
             cur._detailFetching = false;
             cur._detailFetched = true;
@@ -5341,7 +5480,91 @@ var I18N = {
            screen and the next tick retries at the plan base
            interval. This does NOT touch state.checking; the
            fetchMessages() wrapper owns that flag. */
+        /* v1.18: Guerrilla poll. Same downstream processing as the Mail.tm
+           path (merge preserving _otp/_confirmUrl/_waitSince, instant
+           extraction — Guerrilla list items already carry text, so the
+           haystack is subject + intro + text — limit-warning detect,
+           poll-interval reset, render, enrich first 10, saved fetch, new
+           toast). The proxy filters the automatic welcome message; any
+           that slips through is skipped here too. */
+        function runFetchGuerrilla(first){
+          var sess = null;
+          try { sess = loadSessionToken(); } catch(e) {}
+          if (!sess || !sess.token) return Promise.resolve({ok:false, reason:"no-session"});
+          return apiAdmin("/api/guerrilla/messages?address=" + encodeURIComponent(state.address), {authToken: sess.token}).then(function(data){
+            if (data && data.expiresAt) state.guerrillaExpiresAt = Date.parse(data.expiresAt) || state.guerrillaExpiresAt;
+            var msgs = Array.isArray(data && data.messages) ? data.messages : [];
+            msgs = msgs.filter(function(mw){ return !(mw && mw.from && mw.from.address === "no-reply@guerrillamail.com"); });
+            var hadNew = msgs.length > state.messages.length;
+            var oldById = {};
+            state.messages.forEach(function(old){ if (old && old.id) oldById[old.id] = old; });
+            var newCount = 0;
+            msgs.forEach(function(nw){ if (nw && nw.id && !oldById[nw.id]) newCount++; });
+            msgs.forEach(function(nw){
+              var old = oldById[nw.id];
+              if (!old){ nw._waitSince = Date.now(); return; }
+              if (old.seen) nw.seen = true;
+              if (old._otp) nw._otp = old._otp;
+              if (old._confirmUrl) nw._confirmUrl = old._confirmUrl;
+              if (old._limitWarn) nw._limitWarn = true;
+              if (old._detailFetched) nw._detailFetched = true;
+              if (old._detailFetching) nw._detailFetching = true;
+              if (old._detailRetries) nw._detailRetries = old._detailRetries;
+              if (old._detailNextTry) nw._detailNextTry = old._detailNextTry;
+              if (old._detailDeferredAt) nw._detailDeferredAt = old._detailDeferredAt;
+              if (old._waitSince) nw._waitSince = old._waitSince;
+              if (old._waitSecs != null) nw._waitSecs = old._waitSecs;
+            });
+            msgs.forEach(function(nw){
+              var hay = (nw.subject || "") + " " + (nw.intro || "") + " " + (nw.text || "");
+              if (!nw._otp){
+                var o = extractOtp(hay);
+                if (o){ nw._otp = o; noteExtracted(nw); }
+              }
+              if (!nw._confirmUrl){
+                var u = extractConfirmUrl({ text: (nw.intro || "") + " " + (nw.text || ""), html: nw.html ? [nw.html] : [] }, nw.subject || "");
+                if (u){ nw._confirmUrl = u; noteExtracted(nw); }
+              }
+              if (!nw._limitWarn){
+                nw._limitWarn = detectLimitWarning(hay);
+              }
+              if ((nw._otp || nw._confirmUrl) && !nw._detailFetched && !nw._detailDeferredAt){
+                nw._detailDeferredAt = Date.now() + 12000;
+              }
+            });
+            state.messages = msgs;
+            state.pollInterval = pollBaseSeconds();
+            state.countdown = state.pollInterval;
+            state.pollEverOk = true;
+            updateCountdown();
+            updateProviderBadge();
+            renderMessages();
+            state.messages.slice(0, 10).forEach(enrichMessage);
+            fetchSavedMessages();
+            if (!first && hadNew) showToast(t("toastNewMsg"));
+            return {ok:true, hadNew: hadNew, newCount: newCount, count: msgs.length};
+          }).catch(function(err){
+            function quietFail(){
+              state.pollInterval = pollBaseSeconds();
+              state.countdown = state.pollInterval;
+              updateCountdown();
+              updateProviderBadge();
+            }
+            /* A dead Guerrilla mailbox (401/404, or the proxy's
+               "mailbox expired") never triggers the Mail.tm re-login
+               branches — there is no Mail.tm token to heal. */
+            if (err && (err.status === 401 || err.status === 404 || (err.data && err.data.error === "mailbox expired"))){
+              quietFail();
+              return {ok:false, reason:"guerrilla-gone"};
+            }
+            quietFail();
+            return {ok:false, reason:"poll-failed"};
+          });
+        }
         function runFetch(first, retried){
+          if (state.provider === "guerrilla"){
+            return runFetchGuerrilla(first);
+          }
           return api("/messages?page=1").then(function(data){
             var msgs = memberList(data);
             var hadNew = msgs.length > state.messages.length;
@@ -5399,6 +5622,7 @@ var I18N = {
             state.countdown = state.pollInterval;
             state.pollEverOk = true;
             updateCountdown();
+            updateProviderBadge();
             renderMessages();
             state.messages.slice(0, 10).forEach(enrichMessage);
             fetchSavedMessages();
@@ -5413,6 +5637,7 @@ var I18N = {
               state.pollInterval = pollBaseSeconds();
               state.countdown = state.pollInterval;
               updateCountdown();
+              updateProviderBadge();
             }
             if (err && (err.status === 401 || err.status === 404) && !retried && state.address && currentBought){
               /* Dead token on a BOUGHT mailbox — no password on the
@@ -5458,7 +5683,7 @@ var I18N = {
            it is queued to run right after the in-flight one finishes,
            and the returned promise resolves with that run's result. */
         function fetchMessages(first, force){
-          if (!state.token) return Promise.resolve({ok:false, reason:"no-token"});
+          if (!hasLiveMailbox()) return Promise.resolve({ok:false, reason:"no-token"});
           if (state.checking){
             if (!force) return Promise.resolve({ok:false, reason:"in-flight"});
             state.refreshQueued = true;
@@ -5529,7 +5754,7 @@ var I18N = {
           }
         }
         /* Tick every second so every waiting chip counts up live. */
-        setInterval(updateWaitChips, 1000);
+        setInterval(function(){ updateWaitChips(); updateProviderBadge(); }, 1000);
         function buildMsgItem(m){
             var li = document.createElement("li");
             li.className = "msg-item" + (m.seen ? " seen" : "");
@@ -6051,7 +6276,7 @@ var I18N = {
               showDetail({ text: m._textBody || "", html: m._htmlBody ? [m._htmlBody] : [] });
               return;
             }
-            api("/messages/" + m.id).then(function(detail){
+            fetchMessageDetail(m).then(function(detail){
               showDetail(detail);
             }).catch(function(err){
             if (readerSeq !== state.readerSeq) return;
@@ -6163,7 +6388,8 @@ var I18N = {
             ip: currentIp ? currentIp.ip : "", country: currentIp ? currentIp.country : "",
             city: currentIp ? currentIp.city : "", flag: currentIp ? currentIp.flag : "",
             logo: currentBoughtLogo || "", bought: currentBought,
-            proxy: currentProxyPref || "auto", createdAt: state.createdAt || ""
+            proxy: currentProxyPref || "auto", createdAt: state.createdAt || "",
+            provider: state.provider || "mailtm", guerrillaExpiresAt: state.guerrillaExpiresAt || 0
           };
         }
         function openFloatPanel(mb){
@@ -7456,12 +7682,13 @@ var I18N = {
           renderMessages();
         }
         function saveCurrentSession(){
-          if (!state.address || !state.token) return;
+          if (!state.address || !hasLiveMailbox()) return;
           try {
             var d = acctData();
             d.currentMailbox = {
               address: state.address, password: state.password, token: state.token,
               accountId: state.accountId || "", createdAt: state.createdAt || "",
+              provider: state.provider || "mailtm", guerrillaExpiresAt: state.guerrillaExpiresAt || 0,
               ip: currentIp ? currentIp.ip : "", country: currentIp ? currentIp.country : "",
               city: currentIp ? currentIp.city : "", flag: currentIp ? currentIp.flag : "",
               /* v1.3: a bought mailbox keeps its listing logo + IP
@@ -7484,6 +7711,8 @@ var I18N = {
           state.passwordSynced = !mb.password;
           state.token = mb.token || state.token;
           state.accountId = mb.accountId || state.accountId || "";
+          state.provider = mb.provider || "mailtm";
+          state.guerrillaExpiresAt = mb.guerrillaExpiresAt || 0;
           state.messages = [];
           state.failed = false; state.retrying = false; state.retryCount = 0;
           state.createdAt = mb.createdAt || new Date().toISOString();
@@ -7502,6 +7731,7 @@ var I18N = {
           statusText.textContent = t("statusWaiting");
           updateIpLine();
           setBusy(false);
+          updateProviderBadge();
           buildQr();
           switchInboxTo(state.address);
           fetchMessages(true);
@@ -7516,7 +7746,7 @@ var I18N = {
           /* A bought shop mailbox has a token but no password (the
              server holds it), so a token-only session restores too —
              it just cannot re-login once the token dies. */
-          if (!cur || !cur.address || (!cur.password && !cur.token)){ createAccount(); return; }
+          if (!cur || !cur.address || (!cur.password && !cur.token && cur.provider !== "guerrilla")){ createAccount(); return; }
           /* Same blocked-account guard as createAccount: do not restore
              a mailbox for a possibly-closed account. */
           if (!blockedKnown && loadProfile()){
@@ -7531,7 +7761,8 @@ var I18N = {
             ip: cur.ip || "", country: cur.country || "", city: cur.city || "",
             flag: cur.flag || "", proxy: cur.proxy || "auto",
             logo: cur.logo || "", bought: !!cur.bought,
-            listingId: cur.listingId || ""
+            listingId: cur.listingId || "",
+            provider: cur.provider || "mailtm", guerrillaExpiresAt: cur.guerrillaExpiresAt || 0
           };
           state.address = mb.address;
           state.password = mb.password;
@@ -7540,6 +7771,12 @@ var I18N = {
           addrText.textContent = mb.address;
           addrText.classList.add("loading");
           statusText.textContent = t("statusConnecting");
+          /* v1.18: a Guerrilla session has no Mail.tm token to probe —
+             adopt it directly; the Guerrilla poll inside verifies it. */
+          if (mb.provider === "guerrilla"){
+            adoptRestoredCurrent(mb);
+            return;
+          }
           api("/messages?page=1").then(function(){
             adoptRestoredCurrent(mb);
           }).catch(function(err){
@@ -8346,6 +8583,7 @@ var I18N = {
           state.passwordSynced = true;
           state.token = token;
           state.accountId = accountId || "";
+          state.provider = "mailtm"; state.guerrillaExpiresAt = 0;
           state.messages = [];
           state.failed = false; state.retrying = false; state.retryCount = 0;
           state.createdAt = new Date().toISOString();
@@ -8372,6 +8610,7 @@ var I18N = {
           statusText.textContent = t("statusWaiting");
           updateIpLine();
           setBusy(false);
+          updateProviderBadge();
           buildQr();
           switchInboxTo(address);
           fetchMessages(true);
@@ -8404,6 +8643,7 @@ var I18N = {
                 city: (prof && prof.city) || "",
                 flag: (prof && prof.flag) || "",
                 proxy: "auto",
+                provider: "mailtm", guerrillaExpiresAt: 0,
                 bought: true,
                 logo: currentBoughtLogo || "",
                 listingId: currentBoughtListingId || "",
@@ -8414,6 +8654,7 @@ var I18N = {
               row.token = token;
               if (accountId) row.accountId = accountId;
               row.bought = true;
+              row.provider = "mailtm"; row.guerrillaExpiresAt = 0;
               if (currentBoughtLogo) row.logo = currentBoughtLogo;
               if (currentBoughtListingId) row.listingId = currentBoughtListingId;
               if (prof && prof.ip){ row.ip = prof.ip; row.country = prof.country; row.city = prof.city; row.flag = prof.flag; }
@@ -8496,7 +8737,7 @@ var I18N = {
           try { ri.title = t("autoRefreshEvery", {n: state.pollInterval || base}); } catch(e) {}
         }
         document.addEventListener("visibilitychange", function(){
-          if (!document.hidden && state.token) fetchMessages(false);
+          if (!document.hidden && hasLiveMailbox()) fetchMessages(false);
         });
 
         /* ---------- QR ---------- */

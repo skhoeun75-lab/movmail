@@ -40,8 +40,8 @@ const UPSTREAM = "https://api.mail.tm";
 // v1.15: the forwarder also refuses Mail.tm-bound calls from any
 // client older than MIN_CLIENT_VERSION (kill-switch, see the gate
 // below the DELETE /accounts block). Bump both strings together.
-const APP_VERSION = "1.15.0";
-const MIN_CLIENT_VERSION = "1.15.0";
+const APP_VERSION = "1.18.0";
+const MIN_CLIENT_VERSION = "1.15.0"; // v1.18: stays — 1.15+ clients hold no passwords and never call DIRECT, so no kill-switch bump is needed; the handshake reloads them to 1.18.0.
 // True when a client version string is at least the minimum (numeric
 // per-part compare; missing, malformed or older versions fail).
 function clientVersionOk(v) {
@@ -593,6 +593,20 @@ const CREATE_API_TABLES_SQL = [
     "  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
     ")",
   ].join("\n"),
+  [
+    // v1.18: Guerrilla Mail fallback sessions. sid_token is a session
+    // credential, held server-side exactly like Mail.tm mailbox
+    // passwords — it is NEVER sent to a browser and never logged.
+    // One row per Guerrilla address; email_timestamp is Guerrilla's
+    // creation time (seconds) and the address lives ~60 min from it.
+    "CREATE TABLE IF NOT EXISTS guerrilla_sessions (",
+    "  address TEXT PRIMARY KEY,",
+    "  sid_token TEXT NOT NULL,",
+    "  email_timestamp BIGINT NOT NULL DEFAULT 0,",
+    "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),",
+    "  last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+    ")",
+  ].join("\n"),
 ];
 
 // v1.3 columns added to tables that already exist on Render: CREATE
@@ -659,6 +673,10 @@ const ALTER_API_TABLES_SQL = [
   // users row (NULL for legacy rows that never set a server password;
   // those rows are claimed on first signup with the same gmail).
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT",
+  // v1.18: which provider serves a saved mailbox ("mailtm" default,
+  // "guerrilla" for fallback mailboxes). The restore/fetch path
+  // branches on it; Mail.tm rows never carry anything else.
+  "ALTER TABLE user_mailboxes ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'mailtm'",
 ];
 
 if (dbPool) {
@@ -697,6 +715,7 @@ const mem = {
   supportMessages: [], // v1.11 buyer support chat rows
   sessions: new Map(), // v1.12: session token -> {token, gmail, created_at, expires_at}
   userMailboxes: [], // v1.12: server mailbox rows (per gmail)
+  guerrillaSessions: new Map(), // v1.18: address -> {address, sid_token, email_timestamp, created_at, last_seen}
   adminAuth: null, // v1.12: {password_hash} single-row admin password
   listingSeq: 1,
   orderSeq: 1,
@@ -4668,6 +4687,7 @@ function mailboxFromRow(r) {
   if (!r) return null;
   return {
     address: r.address,
+    provider: r.provider || "mailtm",
     name: r.name || "",
     logo: r.logo || "",
     ipAddress: r.ip_address || "",
@@ -4685,6 +4705,7 @@ function cleanMailboxInput(mb) {
   const createdAt = mb.createdAt ? new Date(mb.createdAt) : null;
   return {
     address,
+    provider: mb.provider === "guerrilla" ? "guerrilla" : "mailtm",
     password: String(mb.password || ""),
     name: String(mb.name || "").slice(0, 200),
     logo: String(mb.logo || "").slice(0, 1500000),
@@ -4700,28 +4721,30 @@ async function upsertUserMailbox(gmail, mb) {
   const createdAt = mb.createdAt || new Date().toISOString();
   if (!USE_MEMORY_STORE) {
     const r = await dbPool.query(
-      "INSERT INTO user_mailboxes (gmail, address, password, name, logo, ip_country, ip_city, ip_address, bought, listing_id, created_at)" +
-      " VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)" +
+      "INSERT INTO user_mailboxes (gmail, address, provider, password, name, logo, ip_country, ip_city, ip_address, bought, listing_id, created_at)" +
+      " VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)" +
       " ON CONFLICT (gmail, address) DO UPDATE SET" +
+      "  provider = EXCLUDED.provider," +
       "  password = CASE WHEN EXCLUDED.password <> '' THEN EXCLUDED.password ELSE user_mailboxes.password END," +
       "  name = EXCLUDED.name, logo = EXCLUDED.logo," +
       "  ip_country = EXCLUDED.ip_country, ip_city = EXCLUDED.ip_city, ip_address = EXCLUDED.ip_address," +
       "  bought = EXCLUDED.bought, listing_id = EXCLUDED.listing_id" +
       " RETURNING *",
-      [gmail, mb.address, mb.password, mb.name, mb.logo, mb.ipCountry, mb.ipCity, mb.ipAddress, mb.bought, mb.listingId, createdAt]
+      [gmail, mb.address, mb.provider, mb.password, mb.name, mb.logo, mb.ipCountry, mb.ipCity, mb.ipAddress, mb.bought, mb.listingId, createdAt]
     );
     return mailboxFromRow(r.rows[0]);
   }
   const prev = mem.userMailboxes.find((x) => x.gmail === gmail && x.address === mb.address);
   if (prev) {
     if (mb.password) prev.password = mb.password;
+    prev.provider = mb.provider;
     prev.name = mb.name; prev.logo = mb.logo;
     prev.ip_country = mb.ipCountry; prev.ip_city = mb.ipCity; prev.ip_address = mb.ipAddress;
     prev.bought = mb.bought; prev.listing_id = mb.listingId;
     return mailboxFromRow(prev);
   }
   const row = {
-    id: mem.mailboxSeq++, gmail, address: mb.address, password: mb.password,
+    id: mem.mailboxSeq++, gmail, address: mb.address, provider: mb.provider, password: mb.password,
     name: mb.name, logo: mb.logo, ip_country: mb.ipCountry, ip_city: mb.ipCity,
     ip_address: mb.ipAddress, bought: mb.bought, listing_id: mb.listingId, created_at: createdAt,
   };
@@ -4884,6 +4907,291 @@ async function handleMailboxToken(req, res) {
   sendJson(res, 200, { ok: true, token: login.token, accountId: login.id || "", address: row.address });
 }
 
+/* --- v1.18: Guerrilla Mail automatic fallback -------------------
+   Mail.tm rate-limits Render's shared IPs so often that sustained
+   browser use fails even when isolated calls succeed. Guerrilla Mail
+   (api.guerrillamail.com/ajax.php, no key) is the automatic fallback
+   for NEW disposable mailboxes: when the Mail.tm create fails
+   retryably, the website asks here for a Guerrilla address instead.
+   Guerrilla sessions are identified by sid_token (+ a PHPSESSID
+   cookie carrying the same value). The sid_token is a credential: it
+   lives ONLY on this server (Postgres guerrilla_sessions, mem
+   fallback), is NEVER sent to a browser, and is NEVER logged.
+   Verified live 2026-11-27 from this VM:
+   - get_email_address -> {email_addr, email_timestamp, alias,
+     sid_token}. check_email/get_email_list -> {list:[{mail_id,
+     mail_from, mail_subject, mail_excerpt, mail_body,
+     mail_timestamp, mail_date, mail_read, att, content_type, ...}]}.
+     Every new inbox also holds one automatic "Welcome to Guerrilla
+     Mail" message from no-reply@guerrillamail.com — filtered out
+     here, never shown and never saved.
+   - f=extend is DISABLED upstream ("this call has been disabled -
+     call get_email_address instead"), so a Guerrilla address lives
+     ~60 min from email_timestamp and cannot be extended via the API.
+     The frontend shows the countdown honestly; the proxy reports
+     expiresAt = email_timestamp + 3600s.
+   - A stale/unknown sid_token answers {"error":"Please call
+     get_email_address or set_email_user first", ...}. The proxy then
+     re-attaches with set_email_user (same local part), which returns
+     a fresh sid_token for the SAME address and a fresh timestamp, and
+     retries once. Whether mail sent during the gap still arrives is
+     NOT verified — the proxy never claims otherwise.
+   - fetch_email returns the full body; text bodies arrive wrapped in
+     <pre> with HTML entities. The proxy strips tags + decodes
+     entities for `text` and keeps `html` only when content_type is
+     "html".
+   Guerrilla messages are NOT written to saved_messages (their
+   mail_ids are small per-inbox numbers, so a "g<id>" key would
+   collide across addresses in that table's TEXT PRIMARY KEY). The
+   live check_email list is the source of truth while the 60-min
+   session lives; the Saved section therefore does not archive
+   Guerrilla mail. No Guerrilla call ever deletes anything.
+   Errors: Guerrilla 429/unreachable -> {ok:false,
+   error:"guerrilla_busy"} with HTTP 503 (retryable — never read as
+   a dead mailbox). A session that cannot be re-attached -> 400
+   "mailbox expired" / 404 "mailbox not found". */
+const GUERRILLA_BASE = "https://api.guerrillamail.com/ajax.php";
+const GUERRILLA_TTL_MS = 60 * 60 * 1000;
+const GUERRILLA_WELCOME_FROM = "no-reply@guerrillamail.com";
+const GUERRILLA_WELCOME_SUBJECT = "Welcome to Guerrilla Mail";
+
+function guerrillaExpiresAt(emailTimestampSec) {
+  const ts = Number(emailTimestampSec) || 0;
+  if (!ts) return null;
+  return new Date(ts * 1000 + GUERRILLA_TTL_MS).toISOString();
+}
+function guerrillaDecodeEntities(s) {
+  return String(s || "")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&#x27;/g, "'")
+    .replace(/&nbsp;/g, " ");
+}
+function guerrillaTextFromBody(body) {
+  const noTags = String(body || "").replace(/<[^>]*>/g, " ");
+  return guerrillaDecodeEntities(noTags)
+    .replace(/\r\n?/g, "\n").replace(/\n{3,}/g, "\n\n").replace(/[ \t]+/g, " ").trim();
+}
+function guerrillaParseFrom(mailFrom) {
+  const raw = String(mailFrom || "").trim();
+  const m = /^(.*)<([^<>]+)>$/.exec(raw);
+  if (m) {
+    return {
+      name: (m[1] || "").trim().replace(/^["']|["']$/g, "") || m[2].trim(),
+      address: m[2].trim(),
+    };
+  }
+  return { name: raw || "?", address: raw || "" };
+}
+function guerrillaIsWelcome(m) {
+  if (!m) return false;
+  return String(m.mail_from || "").toLowerCase() === GUERRILLA_WELCOME_FROM ||
+    String(m.mail_subject || "").indexOf(GUERRILLA_WELCOME_SUBJECT) === 0;
+}
+function guerrillaCreatedAt(m) {
+  const ts = Number(m.mail_timestamp) || 0;
+  if (ts > 0) return new Date(ts * 1000).toISOString();
+  const dm = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(String(m.mail_date || "").trim());
+  if (dm) {
+    const d = new Date();
+    d.setHours(parseInt(dm[1], 10), parseInt(dm[2], 10), parseInt(dm[3] || "0", 10), 0);
+    return d.toISOString();
+  }
+  return new Date().toISOString();
+}
+function guerrillaMessageToSite(m) {
+  const from = guerrillaParseFrom(m.mail_from);
+  const excerpt = String(m.mail_excerpt || "").replace(/\r\n?/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
+  const body = String(m.mail_body || "");
+  const text = guerrillaTextFromBody(body) || excerpt;
+  return {
+    id: "g" + String(m.mail_id),
+    from: from,
+    subject: String(m.mail_subject || ""),
+    intro: excerpt,
+    text: text,
+    html: String(m.content_type || "") === "html" ? body : null,
+    createdAt: guerrillaCreatedAt(m),
+  };
+}
+async function guerrillaFetch(params, sidToken) {
+  const q = new URLSearchParams(params);
+  q.set("lang", "en");
+  if (sidToken) q.set("sid_token", sidToken);
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 15000);
+    const headers = { Accept: "application/json" };
+    if (sidToken) headers["Cookie"] = "PHPSESSID=" + sidToken;
+    const r = await fetch(GUERRILLA_BASE + "?" + q.toString(), { headers, signal: ctl.signal });
+    clearTimeout(timer);
+    const text = await r.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch (_) {}
+    if (!r.ok) {
+      return { ok: false, error: "guerrilla_http_" + r.status, status: r.status, transient: r.status === 429 || r.status >= 500 };
+    }
+    if (!data || typeof data !== "object") return { ok: false, error: "guerrilla_bad_response", transient: false };
+    return { ok: true, data: data };
+  } catch (err) {
+    return { ok: false, error: "guerrilla_unreachable", transient: true };
+  }
+}
+function guerrillaSessionError(data) {
+  return !!data && typeof data.error === "string" && /get_email_address|set_email_user/.test(data.error);
+}
+async function getGuerrillaSession(address) {
+  address = String(address || "").trim().toLowerCase();
+  if (!address) return null;
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "SELECT address, sid_token, email_timestamp, created_at, last_seen FROM guerrilla_sessions WHERE address = $1",
+      [address]
+    );
+    return r.rows[0] || null;
+  }
+  return mem.guerrillaSessions.get(address) || null;
+}
+async function putGuerrillaSession(address, sidToken, emailTimestamp) {
+  address = String(address || "").trim().toLowerCase();
+  const ts = Number(emailTimestamp) || 0;
+  const now = new Date().toISOString();
+  if (!USE_MEMORY_STORE) {
+    await dbPool.query(
+      "INSERT INTO guerrilla_sessions (address, sid_token, email_timestamp, created_at, last_seen) VALUES ($1,$2,$3,$4,$4)" +
+      " ON CONFLICT (address) DO UPDATE SET sid_token = EXCLUDED.sid_token, email_timestamp = EXCLUDED.email_timestamp, last_seen = EXCLUDED.last_seen",
+      [address, sidToken, ts, now]
+    );
+    return;
+  }
+  mem.guerrillaSessions.set(address, { address, sid_token: sidToken, email_timestamp: ts, created_at: now, last_seen: now });
+}
+async function touchGuerrillaSession(address) {
+  address = String(address || "").trim().toLowerCase();
+  if (!address) return;
+  const now = new Date().toISOString();
+  if (!USE_MEMORY_STORE) {
+    try { await dbPool.query("UPDATE guerrilla_sessions SET last_seen = $2 WHERE address = $1", [address, now]); } catch (_) {}
+    return;
+  }
+  const s = mem.guerrillaSessions.get(address);
+  if (s) s.last_seen = now;
+}
+/* Re-attach a stale session to the SAME address: set_email_user with
+   the address's local part returns a fresh sid_token for that address
+   (verified live). Try with the old sid first, then without it. The
+   returned address must match exactly — a different address means the
+   original is gone, not switched. */
+async function guerrillaReattach(address, oldSidToken) {
+  const local = String(address || "").split("@")[0];
+  if (!local) return null;
+  for (const sid of [oldSidToken, undefined]) {
+    const res = await guerrillaFetch({ f: "set_email_user", email_user: local }, sid);
+    if (!res.ok || !res.data || typeof res.data.email_addr !== "string") continue;
+    if (res.data.email_addr.toLowerCase() !== String(address).toLowerCase()) return null;
+    const newSid = String(res.data.sid_token || "");
+    if (!newSid) continue;
+    await putGuerrillaSession(address, newSid, res.data.email_timestamp);
+    return { address, sid_token: newSid, email_timestamp: Number(res.data.email_timestamp) || 0 };
+  }
+  return null;
+}
+/* One Guerrilla call with a live session: a session error triggers one
+   re-attach + one retry, then the mailbox is declared gone. */
+async function guerrillaWithSession(address, params) {
+  let sess = await getGuerrillaSession(address);
+  if (!sess) return { ok: false, error: "mailbox not found", status: 404, gone: true };
+  let res = await guerrillaFetch(params, sess.sid_token);
+  if (res.ok && guerrillaSessionError(res.data)) {
+    const re = await guerrillaReattach(address, sess.sid_token);
+    if (!re) return { ok: false, error: "mailbox expired", status: 400, gone: true };
+    sess = re;
+    res = await guerrillaFetch(params, sess.sid_token);
+    if (res.ok && guerrillaSessionError(res.data)) {
+      return { ok: false, error: "mailbox expired", status: 400, gone: true };
+    }
+  }
+  if (!res.ok) {
+    if (res.transient) return { ok: false, error: "guerrilla_busy", status: 503, transient: true };
+    return { ok: false, error: "guerrilla_failed", status: 500 };
+  }
+  if (res.data && typeof res.data.error === "string") {
+    return { ok: false, error: "guerrilla_failed", status: 500 };
+  }
+  await touchGuerrillaSession(address);
+  return { ok: true, data: res.data, emailTimestamp: sess.email_timestamp };
+}
+async function handleGuerrillaAddress(req, res) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  const sess = await requireSession(req, res, body);
+  if (!sess) return;
+  const r = await guerrillaFetch({ f: "get_email_address" });
+  if (!r.ok) {
+    if (r.transient) { sendJson(res, 503, { ok: false, error: "guerrilla_busy" }); return; }
+    sendJson(res, 500, { ok: false, error: "guerrilla_failed" });
+    return;
+  }
+  const addr = String(r.data.email_addr || "").trim().toLowerCase();
+  const sid = String(r.data.sid_token || "");
+  if (!validGmail(addr) || !sid) { sendJson(res, 500, { ok: false, error: "guerrilla_failed" }); return; }
+  await putGuerrillaSession(addr, sid, r.data.email_timestamp);
+  sendJson(res, 200, {
+    ok: true, address: addr, provider: "guerrilla",
+    expiresAt: guerrillaExpiresAt(r.data.email_timestamp),
+    createdAt: new Date().toISOString(),
+  });
+}
+async function handleGuerrillaMessages(req, res, url) {
+  const token = (url.searchParams.get("token") || "").trim() || extractSessionToken(req, null);
+  const gmail = await getSessionGmail(token);
+  if (!gmail) { sendJson(res, 401, { ok: false, error: "invalid or expired session" }); return; }
+  const address = String(url.searchParams.get("address") || "").trim().toLowerCase();
+  if (!validGmail(address)) { sendJson(res, 400, { ok: false, error: "valid address required" }); return; }
+  const chk = await guerrillaWithSession(address, { f: "check_email", seq: 0 });
+  if (!chk.ok) {
+    if (chk.status === 404) { sendJson(res, 404, { ok: false, error: "mailbox not found" }); return; }
+    if (chk.status === 400) { sendJson(res, 400, { ok: false, error: "mailbox expired" }); return; }
+    if (chk.status === 503) { sendJson(res, 503, { ok: false, error: "guerrilla_busy" }); return; }
+    sendJson(res, 500, { ok: false, error: "guerrilla_failed" });
+    return;
+  }
+  const messages = [];
+  const list = Array.isArray(chk.data.list) ? chk.data.list : [];
+  for (const raw of list) {
+    if (guerrillaIsWelcome(raw)) continue;
+    messages.push(guerrillaMessageToSite(raw));
+  }
+  sendJson(res, 200, {
+    ok: true, provider: "guerrilla", address: address,
+    expiresAt: guerrillaExpiresAt(chk.emailTimestamp),
+    messages: messages,
+  });
+}
+async function handleGuerrillaMessage(req, res, url) {
+  const token = (url.searchParams.get("token") || "").trim() || extractSessionToken(req, null);
+  const gmail = await getSessionGmail(token);
+  if (!gmail) { sendJson(res, 401, { ok: false, error: "invalid or expired session" }); return; }
+  const address = String(url.searchParams.get("address") || "").trim().toLowerCase();
+  const idRaw = String(url.searchParams.get("id") || "").trim();
+  if (!validGmail(address)) { sendJson(res, 400, { ok: false, error: "valid address required" }); return; }
+  const mId = /^g(\d+)$/.exec(idRaw);
+  if (!mId) { sendJson(res, 400, { ok: false, error: "valid message id required" }); return; }
+  const r = await guerrillaWithSession(address, { f: "fetch_email", email_id: mId[1] });
+  if (!r.ok) {
+    if (r.status === 404) { sendJson(res, 404, { ok: false, error: "mailbox not found" }); return; }
+    if (r.status === 400) { sendJson(res, 400, { ok: false, error: "mailbox expired" }); return; }
+    if (r.status === 503) { sendJson(res, 503, { ok: false, error: "guerrilla_busy" }); return; }
+    sendJson(res, 500, { ok: false, error: "guerrilla_failed" });
+    return;
+  }
+  const raw = r.data || {};
+  if (guerrillaIsWelcome(raw) || !raw.mail_id) {
+    sendJson(res, 400, { ok: false, error: "message not found" });
+    return;
+  }
+  sendJson(res, 200, { ok: true, message: guerrillaMessageToSite(raw) });
+}
+
 /* --- admin panel password, server-side (token-gated like all /api/admin/*) --- */
 async function getAdminPasswordHash() {
   if (!USE_MEMORY_STORE) {
@@ -4973,6 +5281,10 @@ async function handleApi(req, res, url) {
     if (req.method === "DELETE" && p === "/api/mailboxes") return handleMailboxDelete(req, res, url);
     if (req.method === "POST" && p === "/api/mailboxes/restore") return handleMailboxRestore(req, res);
     if (req.method === "POST" && p === "/api/mailboxes/token") return handleMailboxToken(req, res);
+    /* v1.18: Guerrilla Mail automatic fallback (new mailboxes only). */
+    if (req.method === "POST" && p === "/api/guerrilla/address") return handleGuerrillaAddress(req, res);
+    if (req.method === "GET" && p === "/api/guerrilla/messages") return handleGuerrillaMessages(req, res, url);
+    if (req.method === "GET" && p === "/api/guerrilla/message") return handleGuerrillaMessage(req, res, url);
     if (p.startsWith("/api/admin/")) {
       if (!requireAdmin(req, res)) return;
       if (req.method === "GET" && p === "/api/admin/users") return handleAdminUsers(req, res);

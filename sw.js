@@ -2,7 +2,7 @@
    Caches only the app shell so the site can install as a PWA.
    Navigation requests are network-first (so updates reach users),
    shell assets are cache-first, and API/proxy calls are never cached. */
-var CACHE_NAME = "movmail-shell-v2";
+var CACHE_NAME = "movmail-shell-v3";
 var SHELL = [
   "/",
   "/index.html",
