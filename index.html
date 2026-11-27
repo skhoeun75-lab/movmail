@@ -3475,23 +3475,22 @@ var I18N = {
         }
 
         function deleteAndRecreate(){
-          var oldToken = state.token, oldId = state.accountId;
           /* v1.2: delete the CURRENT address's saved rows too
              (best-effort, never blocks the UI or the recreate flow),
              mirroring deleteMailbox(). */
           var oldAddr = state.address;
           if (oldAddr) api("/saved?address=" + encodeURIComponent(oldAddr), { method: "DELETE" }).catch(function(){});
-          /* v1.7: NEVER delete the Mail.tm account of a bought
-             mailbox. It is a purchased asset — Delete only takes it
-             off this screen; the account itself stays alive on
-             Mail.tm so the buyer can bring it back with Restore in
-             My Orders. (Deleting it used to kill the mailbox for
-             good: no new codes, Refresh failed, Restore failed.) */
-          if (oldToken && oldId && !currentBought){
-            var keep = state.token; state.token = oldToken;
-            api("/accounts/" + oldId, { method:"DELETE" }).catch(function(){});
-            state.token = keep;
-          }
+          /* v1.7b (Mov's rule): Delete NEVER deletes the Mail.tm
+             account itself — for ANY mailbox. The same account can
+             be held by the seller AND the buyer (a sold mailbox
+             transfers to the buyer, it is not the seller's any
+             more), so deleting the account from one device would
+             destroy the other side's purchased mailbox: no new
+             codes, Refresh failed, Restore failed. Delete only
+             takes the mailbox off THIS screen — the token is
+             discarded locally and its saved messages are deleted
+             above; the Mail.tm account itself stays alive, unpolled,
+             so the buyer can always bring it back with Restore. */
           showToast(t("toastDeleted"));
           createAccount();
         }
@@ -3861,8 +3860,9 @@ var I18N = {
               if (!list[i].tier) list[i].tier = "free";
               if (currentIp) list[i].ip = currentIp.ip, list[i].country = currentIp.country, list[i].city = currentIp.city, list[i].flag = currentIp.flag;
               /* v1.3: a saved bought mailbox keeps its listing logo +
-                 bought flag, so its IP is never regenerated later. */
-              if (currentBought){ list[i].bought = true; if (currentBoughtLogo) list[i].logo = currentBoughtLogo; }
+                 bought flag, so its IP is never regenerated later.
+                 v1.7b: keep its listing id too (server re-login). */
+              if (currentBought){ list[i].bought = true; if (currentBoughtLogo) list[i].logo = currentBoughtLogo; if (currentBoughtListingId) list[i].listingId = currentBoughtListingId; }
               saveMailboxes(list);
               renderMailboxes();
               return list[i];
@@ -3883,6 +3883,7 @@ var I18N = {
             proxy: "auto",
             bought: currentBought,
             logo: currentBoughtLogo || "",
+            listingId: currentBoughtListingId || "",
             createdAt: new Date().toISOString()
           };
           list.unshift(mb);
@@ -4025,8 +4026,6 @@ var I18N = {
              only their saved rows are removed; no new proxy endpoint
              is invented for that). */
           var wasCurrent = mb.address === state.address;
-          var acctId = mb.accountId || (wasCurrent ? state.accountId : "");
-          var tok = wasCurrent ? state.token : (mb.token || "");
           var list = loadMailboxes().filter(function(m){ return m.address !== mb.address; });
           saveMailboxes(list);
           savedState.messages = savedState.messages.filter(function(m){ return m._accountAddress !== mb.address; });
@@ -4034,13 +4033,10 @@ var I18N = {
           _dd.addresses = (_dd.addresses || []).filter(function(a){ return a !== mb.address; });
           saveAcctData(_dd);
           api("/saved?address=" + encodeURIComponent(mb.address), { method: "DELETE" }).catch(function(){});
-          /* v1.7: a bought mailbox's Mail.tm account is never
-             deleted from here either — see deleteAndRecreate. */
-          if (acctId && tok && !isBoughtMailbox(mb)){
-            var _keepTok = state.token; state.token = tok;
-            api("/accounts/" + acctId, { method: "DELETE" }).catch(function(){});
-            state.token = _keepTok;
-          }
+          /* v1.7b: the Mail.tm account itself is never deleted here
+             either — see deleteAndRecreate. Removing a saved row
+             only removes it from this device; the account stays
+             alive so it can be Restored again. */
           renderMailboxes();
           renderSavedMessages();
           showToast(t("toastDeletedMailbox"));
@@ -4177,13 +4173,15 @@ var I18N = {
         }
 
         function restoreMailbox(mb){
-          if (!mb || !mb.address || !mb.password) return;
+          /* v1.7b: a bought saved row has no password (the server
+             holds it) — it restores through the server instead. */
+          if (!mb || !mb.address || (!mb.password && !isBoughtMailbox(mb))) return;
           /* Re-read the freshest copy from storage first — the row's
              closure may hold a stale token. */
           mb = findMailbox(mb.address) || mb;
           /* Keep the current session so we can roll back if the
              restore fails (e.g. the address is taken). */
-          var old = { address: state.address, password: state.password, token: state.token, accountId: state.accountId, messages: state.messages, boughtLogo: currentBoughtLogo, bought: currentBought };
+          var old = { address: state.address, password: state.password, token: state.token, accountId: state.accountId, messages: state.messages, boughtLogo: currentBoughtLogo, bought: currentBought, listingId: currentBoughtListingId };
           function adopt(token, accountId){
             state.address = mb.address;
             state.password = mb.password;
@@ -4197,9 +4195,11 @@ var I18N = {
             statusText.textContent = t("statusWaiting");
             if (mb.ip) currentIp = { ip: mb.ip, country: mb.country, city: mb.city, flag: mb.flag };
             /* v1.3: restoring a bought saved mailbox brings its
-               listing logo + IP back; a normal mailbox clears them. */
+               listing logo + IP back; a normal mailbox clears them.
+               v1.7b: bring its listing id back too (server re-login). */
             currentBoughtLogo = mb.logo || null;
             currentBought = !!mb.bought;
+            currentBoughtListingId = isBoughtMailbox(mb) ? (mb.listingId || currentBoughtListingId || "") : "";
             state.createdAt = mb.createdAt || new Date().toISOString();
             /* Free users may only pick the 5 free countries, so do
                not switch the picker to a locked country on restore —
@@ -4225,6 +4225,7 @@ var I18N = {
             state.token = old.token; state.accountId = old.accountId;
             state.messages = old.messages;
             currentBoughtLogo = old.boughtLogo; currentBought = old.bought;
+            currentBoughtListingId = old.listingId || "";
             updateBoughtLogo();
             addrText.textContent = state.address || t("addrFailed");
             renderMessages();
@@ -4240,15 +4241,32 @@ var I18N = {
             if (!err || !err.status || err.status === 401 || err.status === 404){
               /* Account expired on Mail.tm — re-log in with the SAME
                  address and password (shared helper: token first,
-                 then re-create + token). */
-              reauthMailbox().then(function(res){
-                if (res && res.ok){
-                  mb.token = res.token;
-                  adopt(res.token, res.accountId || "");
-                } else {
-                  fail();
-                }
-              });
+                 then re-create + token).
+                 v1.7b: a bought row has no password on the device —
+                 heal it through the server restore instead. */
+              if (isBoughtMailbox(mb)){
+                /* Take the row's own listing id first — the shared
+                   currentBoughtListingId may still hold the previous
+                   mailbox's id when switching saved rows. */
+                if (mb.listingId) currentBoughtListingId = mb.listingId;
+                reauthBoughtMailbox().then(function(res){
+                  if (res && res.ok){
+                    mb.token = res.token;
+                    adopt(res.token, res.accountId || "");
+                  } else {
+                    fail();
+                  }
+                });
+              } else {
+                reauthMailbox().then(function(res){
+                  if (res && res.ok){
+                    mb.token = res.token;
+                    adopt(res.token, res.accountId || "");
+                  } else {
+                    fail();
+                  }
+                });
+              }
             } else {
               /* 429 / network: keep the saved token and let the normal
                  forever auto-retry reconnect the mailbox. */
@@ -6407,6 +6425,9 @@ var I18N = {
                  it on screen (its saved messages stay visible and
                  Restore in My Orders can still bring it back). */
               if (isBoughtMailbox(mb)){
+                /* Take the session's own listing id first — on a
+                   fresh load the shared one is still empty. */
+                if (mb.listingId) currentBoughtListingId = mb.listingId;
                 reauthBoughtMailbox().then(function(res){
                   if (res && res.ok){ mb.token = res.token; }
                   adoptRestoredCurrent(mb);
@@ -7004,6 +7025,48 @@ var I18N = {
           fetchSavedMessages(true);
           saveCurrentSession();
           renderMailboxes();
+          /* v1.7b (Mov's rule): a bought mailbox belongs in the
+             buyer's Saved list forever — it is transferred to the
+             buyer, it must survive refresh and reload like any
+             saved mailbox, not live only in the current session.
+             The row carries the bought flag + listing id + logo +
+             IP, so opening it from Saved heals through the server
+             restore when its token dies. */
+          (function(){
+            var list = loadMailboxes(), row = null;
+            for (var i = 0; i < list.length; i++){ if (list[i].address === address){ row = list[i]; break; } }
+            if (!row){
+              row = {
+                id: "mb-" + Date.now().toString(36) + randomStr(6),
+                name: (listing && listing.title) || address,
+                tier: getCurrentPlan() === "free" ? "free" : "pro",
+                address: address,
+                password: "",
+                token: token,
+                accountId: accountId || "",
+                ip: (prof && prof.ip) || "",
+                country: (prof && prof.country) || "",
+                city: (prof && prof.city) || "",
+                flag: (prof && prof.flag) || "",
+                proxy: "auto",
+                bought: true,
+                logo: currentBoughtLogo || "",
+                listingId: currentBoughtListingId || "",
+                createdAt: new Date().toISOString()
+              };
+              list.unshift(row);
+            } else {
+              row.token = token;
+              if (accountId) row.accountId = accountId;
+              row.bought = true;
+              if (currentBoughtLogo) row.logo = currentBoughtLogo;
+              if (currentBoughtListingId) row.listingId = currentBoughtListingId;
+              if (prof && prof.ip){ row.ip = prof.ip; row.country = prof.country; row.city = prof.city; row.flag = prof.flag; }
+              if (listing && listing.title && !row.name) row.name = listing.title;
+            }
+            saveMailboxes(list);
+            renderMailboxes();
+          })();
           showToast(t("restoreBoughtSuccess"));
           try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch(e) { window.scrollTo(0, 0); }
         }
