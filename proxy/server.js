@@ -1289,9 +1289,9 @@ async function mailTmLogin(address, password) {
 
 // Row mappers. The password NEVER leaves the server in any of these
 // shapes; public shapes carry only the masked email.
-function listingPublicFromRow(r) {
+function listingPublicFromRow(r, mineGmail) {
   if (!r) return null;
-  return {
+  const out = {
     id: r.id,
     maskedEmail: maskEmail(r.email),
     price: Number(r.price),
@@ -1308,6 +1308,14 @@ function listingPublicFromRow(r) {
     createdAt: toIso(r.created_at),
     sold: false,
   };
+  // v1.16: the seller sees their own rows (mine:true) so the website
+  // can show an Edit button on them. Computed server-side from the
+  // session token; strangers get no mine flag at all — and the seller
+  // gmail itself is never in the public shape.
+  if (mineGmail && r.seller_gmail && String(r.seller_gmail).toLowerCase() === String(mineGmail).toLowerCase()) {
+    out.mine = true;
+  }
+  return out;
 }
 
 function listingAdminFromRow(r) {
@@ -2117,18 +2125,18 @@ async function getListing(id) {
   return mem.listings.get(n) || null;
 }
 
-async function listActiveListings() {
+async function listActiveListings(mineGmail) {
   await expireRedListings();
   if (!USE_MEMORY_STORE) {
     const r = await dbPool.query(
       "SELECT * FROM market_listings WHERE status = 'active' ORDER BY created_at DESC"
     );
-    return r.rows.map(listingPublicFromRow);
+    return r.rows.map((row) => listingPublicFromRow(row, mineGmail));
   }
   return [...mem.listings.values()]
     .filter((x) => x.status === "active")
     .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
-    .map(listingPublicFromRow);
+    .map((row) => listingPublicFromRow(row, mineGmail));
 }
 
 async function listAllListings() {
@@ -2908,7 +2916,16 @@ async function handleMarketListingsCreate(req, res) {
 }
 
 async function handleMarketListingsList(req, res) {
-  sendJson(res, 200, await listActiveListings());
+  // v1.16: a signed-in seller's own rows carry mine:true so the
+  // website can show an Edit button on them. The session token is
+  // OPTIONAL (Authorization: Bearer) — the shop stays public, and a
+  // missing/invalid token just means no mine flags, never an error.
+  let mineGmail = null;
+  try {
+    const t = extractSessionToken(req, null);
+    if (t) mineGmail = await getSessionGmail(t);
+  } catch (_) {}
+  sendJson(res, 200, await listActiveListings(mineGmail));
 }
 
 async function handleMarketOrdersCreate(req, res) {
@@ -3735,58 +3752,41 @@ async function handleAdminMarketListingRelist(req, res, id) {
   sendJson(res, 200, { ok: true, listing: listingAdminFromRow(updated) });
 }
 
-// v1.14: EDIT LISTING — change a listing's display fields (price,
-// title, token, logo) after it is listed. Mov sometimes sets the
-// wrong price or wants a new picture, and must be able to fix it
-// without re-creating the listing.
+// v1.14/v1.16: shared display-field validation + update for listing
+// edits, so the admin endpoint (v1.14, X-Admin-Token) and the seller
+// endpoint (v1.16, website session token) can never drift apart.
 // MOV'S RULE (permanent): an edit NEVER touches the Mail.tm account.
-// This handler performs NO Mail.tm call at all — no login call, no
+// These helpers perform NO Mail.tm call at all — no login call, no
 // account-delete call, nothing that could log in to or delete the
-// mailbox. It only UPDATEs the listing row's display fields. Existing
+// mailbox. They only UPDATE the listing row's display fields. Existing
 // orders keep their own locked price (orders carry their own price
 // field — no order row is read or written here), and health is
 // untouched.
-async function handleAdminMarketListingUpdate(req, res, id) {
-  // 6MB body (same as create): a listing logo is a data URI.
-  const body = await readJsonBody(req, res, 6 * 1024 * 1024);
-  if (!body) return;
-  const listing = await getListing(id);
-  if (!listing) {
-    sendJson(res, 404, { ok: false, error: "listing not found" });
-    return;
-  }
-  if (listing.status !== "active") {
-    sendJson(res, 400, { ok: false, error: "only an active listing can be edited" });
-    return;
-  }
+function validateListingUpdateBody(body) {
   const hasPrice = Object.prototype.hasOwnProperty.call(body, "price");
   const hasTitle = Object.prototype.hasOwnProperty.call(body, "title");
   const hasToken = Object.prototype.hasOwnProperty.call(body, "token");
   const hasLogo = Object.prototype.hasOwnProperty.call(body, "logo") ||
     Object.prototype.hasOwnProperty.call(body, "logoDataUrl");
   if (!hasPrice && !hasTitle && !hasToken && !hasLogo) {
-    sendJson(res, 400, { ok: false, error: "nothing to update" });
-    return;
+    return { ok: false, status: 400, error: "nothing to update" };
   }
   let price = null, title = null, token = null, logo = null;
   if (hasPrice) {
     price = Number(body.price);
     if (!Number.isFinite(price) || price <= 0) {
-      sendJson(res, 400, { ok: false, error: "price must be a number greater than 0" });
-      return;
+      return { ok: false, status: 400, error: "price must be a number greater than 0" };
     }
   }
   if (hasTitle) {
     if (typeof body.title !== "string" || body.title.trim() === "") {
-      sendJson(res, 400, { ok: false, error: "title must be a non-empty string" });
-      return;
+      return { ok: false, status: 400, error: "title must be a non-empty string" };
     }
     title = body.title.trim();
   }
   if (hasToken) {
     if (typeof body.token !== "string" || body.token.trim() === "") {
-      sendJson(res, 400, { ok: false, error: "token must be a non-empty string" });
-      return;
+      return { ok: false, status: 400, error: "token must be a non-empty string" };
     }
     token = cleanListingToken(body.token);
   }
@@ -3794,15 +3794,17 @@ async function handleAdminMarketListingUpdate(req, res, id) {
     const rawLogo = typeof body.logo === "string" ? body.logo
       : (typeof body.logoDataUrl === "string" ? body.logoDataUrl : "");
     if (!rawLogo || rawLogo.indexOf("data:image/") !== 0) {
-      sendJson(res, 400, { ok: false, error: "logo must be an image data URI" });
-      return;
+      return { ok: false, status: 400, error: "logo must be an image data URI" };
     }
     if (rawLogo.length > MARKET_IMAGE_MAX_CHARS) {
-      sendJson(res, 413, { ok: false, error: "listing logo too large (max ~5MB)" });
-      return;
+      return { ok: false, status: 413, error: "listing logo too large (max ~5MB)" };
     }
     logo = cleanListingLogo(rawLogo);
   }
+  return { ok: true, fields: { price, title, token, logo } };
+}
+async function applyListingDisplayUpdate(id, fields) {
+  const { price, title, token, logo } = fields;
   const sets = [];
   const vals = [];
   if (price !== null) { vals.push(price); sets.push("price = $" + vals.length); }
@@ -3829,11 +3831,104 @@ async function handleAdminMarketListingUpdate(req, res, id) {
     }
     updated = row || null;
   }
+  return updated;
+}
+
+// v1.14: EDIT LISTING — change a listing's display fields (price,
+// title, token, logo) after it is listed. Mov sometimes sets the
+// wrong price or wants a new picture, and must be able to fix it
+// without re-creating the listing.
+// MOV'S RULE (permanent): an edit NEVER touches the Mail.tm account.
+// This handler performs NO Mail.tm call at all — no login call, no
+// account-delete call, nothing that could log in to or delete the
+// mailbox. It only UPDATEs the listing row's display fields. Existing
+// orders keep their own locked price (orders carry their own price
+// field — no order row is read or written here), and health is
+// untouched.
+async function handleAdminMarketListingUpdate(req, res, id) {
+  // 6MB body (same as create): a listing logo is a data URI.
+  const body = await readJsonBody(req, res, 6 * 1024 * 1024);
+  if (!body) return;
+  const listing = await getListing(id);
+  if (!listing) {
+    sendJson(res, 404, { ok: false, error: "listing not found" });
+    return;
+  }
+  if (listing.status !== "active") {
+    sendJson(res, 400, { ok: false, error: "only an active listing can be edited" });
+    return;
+  }
+  const v = validateListingUpdateBody(body);
+  if (!v.ok) {
+    sendJson(res, v.status, { ok: false, error: v.error });
+    return;
+  }
+  const updated = await applyListingDisplayUpdate(id, v.fields);
   if (!updated) {
     sendJson(res, 404, { ok: false, error: "listing not found" });
     return;
   }
   sendJson(res, 200, { ok: true, listing: listingAdminFromRow(updated) });
+}
+
+// v1.16: EDIT LISTING FROM THE WEBSITE — the seller edits their OWN
+// listing from the shop card (Mov asked for this: the v1.14 Edit lives
+// only in the admin panel, but he sells from the website). Same
+// validation and same display-fields-only update as the admin
+// endpoint; the ONLY difference is the auth: the website session
+// token (Authorization: Bearer header ONLY — the body field `token`
+// is the listing token, so a body session token would collide with
+// it), and the session gmail must be the
+// listing's seller AND one of Mov's admin gmails. The server is
+// authoritative — the website's Edit button (mine:true) is only a
+// hint. MOV'S RULE (permanent): an edit NEVER touches the Mail.tm
+// account — no Mail.tm call of any kind here.
+async function handleSellerMarketListingUpdate(req, res, id) {
+  // 6MB body (same as create): a listing logo is a data URI.
+  const body = await readJsonBody(req, res, 6 * 1024 * 1024);
+  if (!body) return;
+  // Session token comes ONLY from the Authorization: Bearer header —
+  // never from the body. The body field `token` is the LISTING token
+  // (v1.14 shape), so reading a session token from the body would let
+  // it be mistaken for a listing-token change and overwrite the real
+  // token with a session string. Header-only keeps the two apart.
+  const h = String(req.headers["authorization"] || "");
+  const m = /^Bearer\s+(.+)$/.exec(h);
+  const gmail = m ? await getSessionGmail(m[1].trim()) : null;
+  if (!gmail) {
+    sendJson(res, 401, { ok: false, error: "invalid or expired session" });
+    return;
+  }
+  const sess = { gmail };
+  const listing = await getListing(id);
+  if (!listing) {
+    sendJson(res, 404, { ok: false, error: "listing not found" });
+    return;
+  }
+  // Ownership first: a stranger learns nothing about the listing
+  // beyond "not yours" (no status leak).
+  if (String(listing.seller_gmail || "").toLowerCase() !== sess.gmail ||
+      !isAdminGmail(sess.gmail)) {
+    sendJson(res, 403, { ok: false, error: "not your listing" });
+    return;
+  }
+  if (listing.status !== "active") {
+    sendJson(res, 400, { ok: false, error: "only an active listing can be edited" });
+    return;
+  }
+  const v = validateListingUpdateBody(body);
+  if (!v.ok) {
+    sendJson(res, v.status, { ok: false, error: v.error });
+    return;
+  }
+  const updated = await applyListingDisplayUpdate(id, v.fields);
+  if (!updated) {
+    sendJson(res, 404, { ok: false, error: "listing not found" });
+    return;
+  }
+  const pub = listingPublicFromRow(updated);
+  pub.mine = true; // the caller just proved they are the seller
+  sendJson(res, 200, { ok: true, listing: pub });
 }
 
 // Decode the Mail.tm JWT payload (base64, no signature check — we
@@ -4852,6 +4947,8 @@ async function handleApi(req, res, url) {
     if (req.method === "POST" && p === "/api/notifications/read") return handleApiNotificationsRead(req, res);
     if (req.method === "POST" && p === "/api/market/listings") return handleMarketListingsCreate(req, res);
     if (req.method === "GET" && p === "/api/market/listings") return handleMarketListingsList(req, res);
+    const mMktUpdateSeller = /^\/api\/market\/listings\/(\d+)\/update-seller$/.exec(p);
+    if (req.method === "POST" && mMktUpdateSeller) return handleSellerMarketListingUpdate(req, res, mMktUpdateSeller[1]);
     if (req.method === "POST" && p === "/api/market/orders") return handleMarketOrdersCreate(req, res);
     if (req.method === "GET" && p === "/api/market/orders") return handleMarketOrdersList(req, res, url);
     if (req.method === "POST" && p === "/api/market/restore") return handleMarketRestore(req, res);

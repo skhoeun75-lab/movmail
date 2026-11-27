@@ -992,6 +992,8 @@
       .shop-paid{font-size:13px;font-weight:700;color:var(--accent-ink);white-space:nowrap}
       .sell-logo-preview{width:96px;height:96px;aspect-ratio:1/1;object-fit:cover;border-radius:12px;border:1px solid var(--border);margin:8px 0 12px;display:none}
       .sell-logo-preview.show{display:block}
+      /* v1.16: "leave empty to keep the current logo" note in the edit modal. */
+      .edit-keep-note{font-size:12px;opacity:.75;margin:-4px 0 10px}
       .my-orders{margin-bottom:14px}
       .my-orders h3{font-size:14.5px;margin:0 0 8px}
       .order-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13.5px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--surface)}
@@ -1692,6 +1694,30 @@
       </div>
     </div>
 
+    <!-- ===== v1.16: Edit my own shop listing (website) ===== -->
+    <div class="mini-overlay" id="editListingOverlay" role="dialog" aria-modal="true">
+      <div class="mini-modal">
+        <h3 data-i18n="editListingTitle">កែប្រែបញ្ជីលក់</h3>
+        <p data-i18n="editListingText">កែតម្លៃ ចំណងជើង Token ឬរូបសញ្ញា។ អ៊ីមែលមិនត្រូវបានប៉ះពាល់ទេ។</p>
+        <div class="shop-masked-preview"><span data-i18n="sellMaskedLabel">អ៊ីមែលដែលបង្ហាញ៖</span> <b class="mono" id="editListingMaskedEmail">—</b></div>
+        <label for="editListingPriceInput" data-i18n="sellPriceLabel">តម្លៃ ($)</label>
+        <input type="number" id="editListingPriceInput" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" />
+        <label for="editListingTitleInput" data-i18n="sellTitleLabel">ចំណងជើង / កំណត់ចំណាំ</label>
+        <input type="text" id="editListingTitleInput" maxlength="80" />
+        <label for="editListingLogoInput" data-i18n="sellLogoLabel">រូបសញ្ញា (Logo)</label>
+        <input type="file" id="editListingLogoInput" accept="image/*" />
+        <img id="editListingLogoPreview" class="sell-logo-preview" alt="" />
+        <div class="edit-keep-note" data-i18n="editListingLogoKeep">ទុករូបចាស់ចោល បើអត់ជ្រើសរើសរូបថ្មី</div>
+        <label for="editListingTokenInput" data-i18n="sellTokenLabel">Token</label>
+        <input type="text" id="editListingTokenInput" maxlength="80" data-i18n-placeholder="sellTokenPlaceholder" placeholder="1B Token" />
+        <div class="redeem-status err" id="editListingError" hidden></div>
+        <div class="mini-actions">
+          <button class="btn" id="editListingCancelBtn" data-i18n="cancelBtn">បោះបង់</button>
+          <button class="btn primary" id="editListingSaveBtn" data-i18n="saveBtn">រក្សាទុក</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ===== Buy listing — KHQR / USDT receipt to admin ===== -->
     <div class="mini-overlay" id="marketPayOverlay" role="dialog" aria-modal="true">
       <div class="mini-modal">
@@ -2026,9 +2052,14 @@
         function apiAdmin(path, opts){
           opts = opts || {};
           function doFetch(base){
+            var headers = { "Accept": "application/json", "Content-Type": "application/json" };
+            /* v1.16: optional session token — sent as a Bearer header
+               so it never lands in a URL (used for the shop mine
+               flags and the seller edit). */
+            if (opts.authToken) headers["Authorization"] = "Bearer " + opts.authToken;
             return fetch(base + path, {
               method: opts.method || "GET",
-              headers: { "Accept": "application/json", "Content-Type": "application/json" },
+              headers: headers,
               body: opts.body ? JSON.stringify(opts.body) : undefined
             }).then(function(res){
               return res.json().catch(function(){ return null; }).then(function(data){
@@ -3051,6 +3082,20 @@ var I18N = {
     "sellFailed": "ដាក់លក់មិនបានសម្រេច។ សូមព្យាយាមម្តងទៀត។",
     "sellVerifyFailed": "ផ្ទៀងផ្ទាត់ម្ចាស់អ៊ីមែលមិនបានសម្រេច។",
     "sellSuccess": "បានដាក់លក់ហើយ",
+    /* v1.16: edit my own shop listing (website) — same rules as the
+       admin edit: price/title/token/logo, never the email itself. */
+    "editListingBtn": "✏️ កែប្រែ",
+    "editListingTitle": "កែប្រែបញ្ជីលក់",
+    "editListingText": "កែតម្លៃ ចំណងជើង Token ឬរូបសញ្ញា។ អ៊ីមែលមិនត្រូវបានប៉ះពាល់ទេ។",
+    "editListingLogoKeep": "ទុករូបចាស់ចោល បើអត់ជ្រើសរើសរូបថ្មី",
+    "editListingNoChange": "មិនមានអ្វីផ្លាស់ប្តូរទេ។",
+    "editListingUpdated": "បានកែប្រែបញ្ជីលក់ហើយ",
+    "editListingErrPrice": "តម្លៃត្រូវតែធំជាង $0។",
+    "editListingErrTitle": "ចំណងជើងមិនអាចទទេបានទេ។",
+    "editListingErrToken": "Token មិនអាចទទេបានទេ។",
+    "editListingErr": "កែប្រែមិនបានសម្រេច។ សូមព្យាយាមម្តងទៀត។",
+    "editListingErrLogo": "រូបភាពធំពេក — សូមជ្រើសរើសរូបតូចជាង 5MB។",
+    "editListingNeedSignin": "សូមចូលប្រើជាមុនដើម្បីកែប្រែ។",
     "buyBtn": "ទិញ",
     "buyNeedSignin": "សូមចូលប្រើជាមុនដើម្បីទិញ។",
     "marketPayTitle": "ទិញ Email Account",
@@ -3470,6 +3515,20 @@ var I18N = {
     "sellFailed": "Could not list this email. Please try again.",
     "sellVerifyFailed": "Could not verify you own this email.",
     "sellSuccess": "Listed for sale",
+    /* v1.16: edit my own shop listing (website) — same rules as the
+       admin edit: price/title/token/logo, never the email itself. */
+    "editListingBtn": "✏️ Edit",
+    "editListingTitle": "Edit listing",
+    "editListingText": "Change the price, title, token or logo. The email itself is never touched.",
+    "editListingLogoKeep": "Leave empty to keep the current logo",
+    "editListingNoChange": "Nothing changed.",
+    "editListingUpdated": "Listing updated",
+    "editListingErrPrice": "Price must be greater than $0.",
+    "editListingErrTitle": "Title cannot be empty.",
+    "editListingErrToken": "Token cannot be empty.",
+    "editListingErr": "Could not update the listing. Please try again.",
+    "editListingErrLogo": "Image too large — please choose an image under 5MB.",
+    "editListingNeedSignin": "Please sign in first to edit.",
     "buyBtn": "Buy",
     "buyNeedSignin": "Please sign in first to buy.",
     "marketPayTitle": "Buy Email Account",
@@ -6007,7 +6066,7 @@ var I18N = {
         function syncUpgradeFabPos(){
           document.body.classList.toggle("pill-open", !!($("floatPill") && $("floatPill").classList.contains("open")));
         }
-        document.addEventListener("keydown", function(e){ if (e.key === "Escape"){ closeMessage(); closeFloatPanel(); closeProfilePanel(); closeBellPanel(); } });
+        document.addEventListener("keydown", function(e){ if (e.key === "Escape"){ closeMessage(); closeFloatPanel(); closeProfilePanel(); closeBellPanel(); closeEditListingModal(); } });
         $("otpCopyBtn").addEventListener("click", function(){
           if (currentOtp){ flashCheck($("otpCopyBtn"), t("copiedCheck")); copyText(currentOtp, t("toastCopiedCode")); }
         });
@@ -6988,6 +7047,10 @@ var I18N = {
           showToast(t(restored ? "toastAccountRestored" : "toastWelcomeBack"));
           resumePendingMarketBuy();
           loadMyDeleteRequests();
+          /* v1.16: re-read the shop after sign-in — the server flags
+             my own listings (mine:true) only when the session token
+             is sent, so the Edit buttons appear right after login. */
+          loadMarketListings(true);
         }
         /* Build/refresh the LOCAL account from the server user data.
            Fresh device: creates the local profile (name, plan, id) and
@@ -7223,6 +7286,9 @@ var I18N = {
           switchAccount(null);
           updateAvatarUI();
           closeProfilePanel();
+          /* v1.16: re-read the shop signed out — the mine flags (and
+             their Edit buttons) must disappear with the session. */
+          loadMarketListings(true);
           openAuthModal("signup");
         });
         /* Free selects in place; a paid plan opens the KHQR / USDT
@@ -7543,7 +7609,16 @@ var I18N = {
         function loadMarketListings(quiet){
           var ld = $("shopLoading");
           if (ld) ld.hidden = false;
-          return apiAdmin("/api/market/listings").then(function(data){
+          /* v1.16: send the session token when signed in, so the
+             server can flag my own listings (mine:true) and the Edit
+             button shows only on those. The shop stays public — with
+             no token the response is exactly as before. */
+          var mktTok = "";
+          try {
+            var p0 = loadProfile();
+            if (p0 && p0.email) mktTok = sessionTokenFor(p0.email);
+          } catch(e){}
+          return apiAdmin("/api/market/listings", mktTok ? { authToken: mktTok } : undefined).then(function(data){
             var arr = Array.isArray(data) ? data : (data && Array.isArray(data.listings) ? data.listings : []);
             marketListings = arr;
             arr.forEach(function(l){ if (l) marketCacheLogo(l.id, l.logoDataUrl || l.logo); });
@@ -7863,6 +7938,19 @@ var I18N = {
             card.appendChild(price);
             var acts = document.createElement("div");
             acts.className = "shop-actions";
+            /* v1.16: Edit button — ONLY on my own listings. The flag
+               comes from the server (mine:true = session gmail is the
+               seller); strangers never get the flag, so they never
+               see this button. Grouped cards edit their first
+               listing; the edit re-groups automatically. */
+            if (l.mine === true){
+              var edBtn = document.createElement("button");
+              edBtn.type = "button";
+              edBtn.className = "btn-sm";
+              edBtn.textContent = t("editListingBtn");
+              edBtn.addEventListener("click", function(){ openEditListingModal(l); });
+              acts.appendChild(edBtn);
+            }
             if (order && order.status === "approved" && order.fullEmail && marketRevealed[l.id]){
               var rb2 = document.createElement("button");
               rb2.type = "button";
@@ -7913,6 +8001,114 @@ var I18N = {
         }
         function closeSellModal(){ closeAnimated($("sellOverlay"), ".mini-modal"); }
         $("sellCancelBtn").addEventListener("click", closeSellModal);
+        /* ---------- v1.16: Edit my own shop listing (website) ----------
+           Same rules as the admin edit (v1.14): price/title/token/logo,
+           active listings only, display fields only — the Mail.tm
+           account is never touched. The Edit button only renders when
+           the server flagged the row mine:true (session gmail is the
+           seller); the server re-checks on save, so a forged button
+           click still gets 403. The saved-mailbox "Edit" (rename,
+           openEditModal) is a different thing and is untouched. */
+        var marketEditListing = null, marketEditListingOriginal = null, marketEditListingNewLogo = null;
+        function openEditListingModal(l){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p || !p.email){ showToast(t("editListingNeedSignin")); openAuthModal("signin"); return; }
+          if (!l || !l.id) return;
+          marketEditListing = l;
+          marketEditListingOriginal = { price: Number(l.price), title: String(l.title || ""), token: String(l.token || "") };
+          marketEditListingNewLogo = null;
+          $("editListingMaskedEmail").textContent = l.maskedEmail || maskMarketEmail(l.maskedEmail || "");
+          $("editListingPriceInput").value = (l.price == null || l.price === "") ? "" : String(l.price);
+          $("editListingTitleInput").value = l.title || "";
+          $("editListingTokenInput").value = l.token || "";
+          var li = $("editListingLogoInput"); if (li) li.value = "";
+          var pv = $("editListingLogoPreview");
+          if (pv){
+            var logoUrl = l.logoDataUrl || l.logo;
+            if (logoUrl){ pv.src = logoUrl; pv.classList.add("show"); }
+            else { pv.src = ""; pv.classList.remove("show"); }
+          }
+          var err = $("editListingError"); if (err){ err.textContent = ""; err.hidden = true; }
+          openAnimated($("editListingOverlay"));
+          setTimeout(function(){ $("editListingPriceInput").focus(); }, 50);
+        }
+        function closeEditListingModal(){
+          closeAnimated($("editListingOverlay"), ".mini-modal");
+          marketEditListing = null; marketEditListingOriginal = null; marketEditListingNewLogo = null;
+          var li = $("editListingLogoInput"); if (li) li.value = "";
+        }
+        $("editListingCancelBtn").addEventListener("click", closeEditListingModal);
+        $("editListingOverlay").addEventListener("click", function(e){ if (e.target === this) closeEditListingModal(); });
+        /* v1.3-style 1:1 logo preview, same 5MB cap as Sell. Leaving
+           the file empty keeps the existing logo (never sent). */
+        $("editListingLogoInput").addEventListener("change", function(){
+          var f = this.files && this.files[0];
+          var pv = $("editListingLogoPreview");
+          if (!pv) return;
+          if (!f){ marketEditListingNewLogo = null; return; }
+          if (f.size > 5 * 1024 * 1024){
+            var e0 = $("editListingError");
+            if (e0){ e0.textContent = t("editListingErrLogo"); e0.hidden = false; }
+            this.value = "";
+            marketEditListingNewLogo = null;
+            pv.src = ""; pv.classList.remove("show");
+            return;
+          }
+          var e1 = $("editListingError"); if (e1){ e1.textContent = ""; e1.hidden = true; }
+          var r = new FileReader();
+          r.onload = function(){ marketEditListingNewLogo = r.result; pv.src = r.result; pv.classList.add("show"); };
+          r.readAsDataURL(f);
+        });
+        $("editListingSaveBtn").addEventListener("click", function(){
+          var l = marketEditListing, orig = marketEditListingOriginal;
+          if (!l || !orig) return;
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p || !p.email){ showToast(t("editListingNeedSignin")); closeEditListingModal(); openAuthModal("signin"); return; }
+          var tok = sessionTokenFor(p.email);
+          if (!tok){ showToast(t("editListingNeedSignin")); closeEditListingModal(); openAuthModal("signin"); return; }
+          var err = $("editListingError");
+          function editErr(msg){ if (err){ err.textContent = msg; err.hidden = false; } }
+          var priceRaw = $("editListingPriceInput").value.trim();
+          var price = Number(priceRaw);
+          var title = $("editListingTitleInput").value.trim();
+          var token = $("editListingTokenInput").value.trim();
+          /* Validate only the fields that changed: a token that was
+             already empty stays empty (unchanged, never sent), but
+             clearing a token that had a value is rejected — the
+             server requires a non-empty token when one is sent. */
+          var priceChanged = price !== orig.price;
+          var titleChanged = title !== orig.title;
+          var tokenChanged = token !== orig.token;
+          if (priceChanged && (priceRaw === "" || !isFinite(price) || price <= 0)){ editErr(t("editListingErrPrice")); return; }
+          if (titleChanged && !title){ editErr(t("editListingErrTitle")); return; }
+          if (tokenChanged && !token){ editErr(t("editListingErrToken")); return; }
+          /* The session token travels ONLY in the Authorization
+             header (apiAdmin authToken) — never in the body. The
+             body field `token` is the LISTING token; putting the
+             session there would overwrite the listing's token. */
+          var body = {};
+          if (priceChanged) body.price = price;
+          if (titleChanged) body.title = title;
+          if (tokenChanged) body.token = token;
+          if (marketEditListingNewLogo) body.logo = marketEditListingNewLogo;
+          if (Object.keys(body).length === 0){ editErr(t("editListingNoChange")); return; }
+          if (err){ err.textContent = ""; err.hidden = true; }
+          var btn = $("editListingSaveBtn");
+          btn.disabled = true;
+          apiAdmin("/api/market/listings/" + encodeURIComponent(l.id) + "/update-seller", { method: "POST", body: body, authToken: tok }).then(function(){
+            btn.disabled = false;
+            showToast(t("editListingUpdated"));
+            closeEditListingModal();
+            loadMarketListings();
+          }, function(e){
+            btn.disabled = false;
+            /* Server error text surfaces here (e.g. 400 bad price);
+               the modal stays open so Mov can fix it. */
+            editErr((e && e.data && e.data.error) ? e.data.error : t("editListingErr"));
+          });
+        });
         /* v1.3: square 1:1 logo preview, shown only after a file is chosen.
            Files over ~5MB are rejected with the sell error text pattern. */
         $("sellLogoInput").addEventListener("change", function(){
