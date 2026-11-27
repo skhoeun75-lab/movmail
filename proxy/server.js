@@ -458,6 +458,25 @@ const CREATE_API_TABLES_SQL = [
     "  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
     ")",
   ].join("\n"),
+  [
+    // v1.10: delete requests (BLOCKED). `buyer_gmail` is the
+    // REQUESTER's gmail — the listing's seller or its approved
+    // buyer. `address` is the mailbox's email (denormalised so the
+    // website can match requests to saved rows even after the
+    // listing is removed). A request the admin never answers
+    // EXPIRES 24h after creation (expires_at), decided_at is set
+    // on approve/reject/expire.
+    "CREATE TABLE IF NOT EXISTS market_delete_requests (",
+    "  id SERIAL PRIMARY KEY,",
+    "  listing_id INT NOT NULL,",
+    "  buyer_gmail TEXT NOT NULL,",
+    "  address TEXT NOT NULL DEFAULT '',",
+    "  status TEXT NOT NULL DEFAULT 'pending',",
+    "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),",
+    "  expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),",
+    "  decided_at TIMESTAMPTZ",
+    ")",
+  ].join("\n"),
 ];
 
 // v1.3 columns added to tables that already exist on Render: CREATE
@@ -531,8 +550,10 @@ const mem = {
   listings: new Map(), // market listing id -> listing row
   orders: [], // market order rows
   reports: new Map(), // order id -> buyer activation report row
+  deleteRequests: [], // v1.10 delete request rows
   listingSeq: 1,
   orderSeq: 1,
+  deleteRequestSeq: 1,
   receiptSeq: 1,
   eventSeq: 1,
   notificationSeq: 1,
@@ -2994,6 +3015,363 @@ function jwtAccountId(token) {
   }
 }
 
+/* ---------- v1.10: delete requests (BLOCKED) ----------
+   Mov's rule (2026-11-27, permanent): NO ONE deletes a shop email
+   without his permission. Pressing Delete on a listed mailbox does
+   NOT delete it — it files a request here. The mailbox stays alive
+   (codes keep arriving) with a "BLOCKED — waiting" badge until Mov
+   approves (real delete, v1.9d path) or rejects it. A request the
+   admin never answers EXPIRES after 24h and the mailbox goes back
+   to normal. The proxy still refuses every DELETE /accounts, so
+   this is the only way a listed account can ever die. */
+function deleteRequestFromRow(r) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    listingId: r.listing_id,
+    // `buyer_gmail` is the requester's gmail (seller or buyer).
+    requesterGmail: r.buyer_gmail || "",
+    address: r.address || "",
+    listingEmail: r.listing_email || r.address || "",
+    listingTitle: r.listing_title || "",
+    status: r.status || "pending",
+    createdAt: toIso(r.created_at),
+    expiresAt: toIso(r.expires_at),
+    decidedAt: toIso(r.decided_at),
+  };
+}
+
+// Lazy expiry: pending requests past 24h become 'expired'. Runs at
+// the start of every delete-request read (same pattern as
+// expireRedListings), so no request can ever be approved late.
+async function expireDeleteRequests() {
+  if (!USE_MEMORY_STORE) {
+    await dbPool.query(
+      "UPDATE market_delete_requests SET status = 'expired' WHERE status = 'pending' AND expires_at < NOW()"
+    );
+    return;
+  }
+  const now = Date.now();
+  for (const row of mem.deleteRequests) {
+    if (row.status === "pending" && row.expires_at && Date.parse(row.expires_at) < now) {
+      row.status = "expired";
+    }
+  }
+}
+
+function withDeleteRequestListing(row) {
+  if (!row) return null;
+  if (!USE_MEMORY_STORE) return row;
+  const l = mem.listings.get(row.listing_id);
+  return { ...row, listing_email: l ? l.email : "", listing_title: l ? l.title || "" : "" };
+}
+
+async function getDeleteRequest(id) {
+  const n = Number(id);
+  if (!Number.isInteger(n)) return null;
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "SELECT dr.*, l.email AS listing_email, l.title AS listing_title FROM market_delete_requests dr" +
+        " LEFT JOIN market_listings l ON l.id = dr.listing_id WHERE dr.id = $1 LIMIT 1",
+      [n]
+    );
+    return r.rows[0] || null;
+  }
+  return withDeleteRequestListing(mem.deleteRequests.find((x) => x.id === n) || null);
+}
+
+async function findPendingDeleteRequest(listingId, gmail) {
+  const n = Number(listingId);
+  const g = String(gmail || "").trim().toLowerCase();
+  if (!Number.isInteger(n) || !g) return null;
+  await expireDeleteRequests();
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "SELECT dr.*, l.email AS listing_email, l.title AS listing_title FROM market_delete_requests dr" +
+        " LEFT JOIN market_listings l ON l.id = dr.listing_id" +
+        " WHERE dr.listing_id = $1 AND dr.buyer_gmail = $2 AND dr.status = 'pending' AND dr.expires_at >= NOW()" +
+        " ORDER BY dr.created_at DESC LIMIT 1",
+      [n, g]
+    );
+    return r.rows[0] || null;
+  }
+  const now = Date.now();
+  const rows = mem.deleteRequests
+    .filter(
+      (x) =>
+        x.listing_id === n &&
+        String(x.buyer_gmail || "").toLowerCase() === g &&
+        x.status === "pending" &&
+        x.expires_at &&
+        Date.parse(x.expires_at) >= now
+    )
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+  return withDeleteRequestListing(rows[0] || null);
+}
+
+async function createDeleteRequest(listing, gmail) {
+  const g = String(gmail || "").trim().toLowerCase();
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "INSERT INTO market_delete_requests (listing_id, buyer_gmail, address, status, expires_at)" +
+        " VALUES ($1,$2,$3,'pending', NOW() + INTERVAL '24 hours') RETURNING *",
+      [listing.id, g, listing.email || ""]
+    );
+    return r.rows[0];
+  }
+  const now = new Date();
+  const row = {
+    id: mem.deleteRequestSeq++,
+    listing_id: listing.id,
+    buyer_gmail: g,
+    address: listing.email || "",
+    status: "pending",
+    created_at: now.toISOString(),
+    expires_at: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+    decided_at: null,
+  };
+  mem.deleteRequests.push(row);
+  return row;
+}
+
+async function decideDeleteRequest(id, status) {
+  const n = Number(id);
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "UPDATE market_delete_requests SET status = $2, decided_at = NOW() WHERE id = $1 RETURNING *",
+      [n, status]
+    );
+    return r.rows[0] || null;
+  }
+  const row = mem.deleteRequests.find((x) => x.id === n) || null;
+  if (!row) return null;
+  row.status = status;
+  row.decided_at = new Date().toISOString();
+  return row;
+}
+
+async function listDeleteRequestsForGmail(gmail) {
+  const g = String(gmail || "").trim().toLowerCase();
+  await expireDeleteRequests();
+  if (!g) return [];
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "SELECT dr.*, l.email AS listing_email, l.title AS listing_title FROM market_delete_requests dr" +
+        " LEFT JOIN market_listings l ON l.id = dr.listing_id WHERE dr.buyer_gmail = $1 ORDER BY dr.created_at DESC",
+      [g]
+    );
+    return r.rows.map(deleteRequestFromRow);
+  }
+  return mem.deleteRequests
+    .filter((x) => String(x.buyer_gmail || "").toLowerCase() === g)
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+    .map((x) => deleteRequestFromRow(withDeleteRequestListing(x)));
+}
+
+async function listAllDeleteRequests() {
+  await expireDeleteRequests();
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "SELECT dr.*, l.email AS listing_email, l.title AS listing_title FROM market_delete_requests dr" +
+        " LEFT JOIN market_listings l ON l.id = dr.listing_id ORDER BY (dr.status = 'pending') DESC, dr.created_at DESC"
+    );
+    return r.rows.map(deleteRequestFromRow);
+  }
+  return mem.deleteRequests
+    .slice()
+    .sort((a, b) => {
+      const pa = a.status === "pending" ? 0 : 1;
+      const pb = b.status === "pending" ? 0 : 1;
+      if (pa !== pb) return pa - pb;
+      return String(b.created_at || "").localeCompare(String(a.created_at || ""));
+    })
+    .map((x) => deleteRequestFromRow(withDeleteRequestListing(x)));
+}
+
+// A listing by its full email (any status except 'removed' — a
+// removed listing's mailbox is already gone). Used by the website
+// to resolve a listing id for a saved row that never got one
+// stamped (e.g. a seller copy listed from the admin panel).
+async function getListingByEmail(email) {
+  const e = String(email || "").trim().toLowerCase();
+  if (!e) return null;
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "SELECT * FROM market_listings WHERE LOWER(email) = $1 AND status <> 'removed' ORDER BY created_at DESC LIMIT 1",
+      [e]
+    );
+    return r.rows[0] || null;
+  }
+  const rows = [...mem.listings.values()]
+    .filter((x) => String(x.email || "").toLowerCase() === e && x.status !== "removed")
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+  return rows[0] || null;
+}
+
+// The REAL delete of a listed Mail.tm account, shared by the v1.9d
+// admin "Delete forever" button and by an approved v1.10 delete
+// request. Returns {ok:true, already} or {ok:false, error}. It never
+// logs by itself — the caller writes the security event (the two
+// paths have different types) — and it never touches request rows.
+async function deleteListingAccountNow(listing) {
+  const login = await mailTmLogin(listing.email, listing.password);
+  if (!login.ok) {
+    const err = String(login.error || "");
+    if (err.indexOf("no longer exists") !== -1) {
+      // Already dead on Mail.tm: nothing left to delete — just take
+      // the listing out of the shop.
+      await removeListing(listing.id);
+      return { ok: true, already: true };
+    }
+    return { ok: false, error: login.error };
+  }
+  // POST /token returns the account id as `id` (the site has always
+  // taken it from there); the JWT `sub` claim is the fallback.
+  const accountId = String(login.id || "") || jwtAccountId(login.token);
+  if (!accountId) {
+    return { ok: false, error: "could not determine Mail.tm account id" };
+  }
+  let delRes = null;
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 15000);
+    delRes = await fetch(UPSTREAM + "/accounts/" + encodeURIComponent(accountId), {
+      method: "DELETE",
+      headers: { Authorization: "Bearer " + login.token, Accept: "application/json" },
+      signal: ctl.signal,
+    });
+    clearTimeout(timer);
+  } catch (err) {
+    return { ok: false, error: "Mail.tm unreachable: " + String((err && err.message) || err) };
+  }
+  if (delRes.status !== 204 && delRes.status !== 200 && delRes.status !== 404) {
+    let msg = "Mail.tm delete failed (HTTP " + delRes.status + ")";
+    try {
+      const d = JSON.parse(await delRes.text());
+      if (d && (d.message || d.detail || d.error)) msg = String(d.message || d.detail || d.error);
+    } catch (_) {}
+    return { ok: false, error: msg };
+  }
+  // 204/200 = deleted now; 404 = already gone — either way the
+  // account no longer exists, so the listing leaves the shop.
+  await removeListing(listing.id);
+  return { ok: true, already: delRes.status === 404 };
+}
+
+async function handleMarketDeleteRequestsCreate(req, res) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  const gmail = String(body.gmail || "").trim().toLowerCase();
+  const listingId = Number(body.listingId);
+  if (!gmail || !Number.isInteger(listingId)) {
+    sendJson(res, 400, { ok: false, error: "gmail and listingId required" });
+    return;
+  }
+  const listing = await getListing(listingId);
+  if (!listing) {
+    sendJson(res, 404, { ok: false, error: "listing not found" });
+    return;
+  }
+  // Only the seller of this listing or its approved buyer may ask
+  // for it to be deleted — anyone else gets 403 and no request row.
+  const isSeller = String(listing.seller_gmail || "").toLowerCase() === gmail;
+  const order = isSeller ? null : await findApprovedOrder(listingId, gmail);
+  if (!isSeller && !order) {
+    sendJson(res, 403, { ok: false, error: "only the seller or the buyer of this listing can request deletion" });
+    return;
+  }
+  const existing = await findPendingDeleteRequest(listingId, gmail);
+  if (existing) {
+    sendJson(res, 200, { ok: true, already: true, request: deleteRequestFromRow(existing) });
+    return;
+  }
+  const row = await createDeleteRequest(listing, gmail);
+  try {
+    await logSecurityEvent(gmail, "delete_request_created", "listing " + listingId + " " + (listing.email || ""));
+  } catch (_) {}
+  sendJson(res, 200, {
+    ok: true,
+    already: false,
+    request: deleteRequestFromRow({ ...row, listing_email: listing.email || "", listing_title: listing.title || "" }),
+  });
+}
+
+async function handleMarketDeleteRequestsList(req, res, url) {
+  const gmail = (url.searchParams.get("gmail") || "").trim().toLowerCase();
+  if (!gmail) {
+    sendJson(res, 400, { ok: false, error: "gmail query param required" });
+    return;
+  }
+  sendJson(res, 200, await listDeleteRequestsForGmail(gmail));
+}
+
+async function handleMarketListingByAddress(req, res, url) {
+  const address = (url.searchParams.get("address") || "").trim().toLowerCase();
+  const gmail = (url.searchParams.get("gmail") || "").trim().toLowerCase();
+  if (!address || !gmail) {
+    sendJson(res, 400, { ok: false, error: "address and gmail query params required" });
+    return;
+  }
+  const listing = await getListingByEmail(address);
+  if (!listing) {
+    sendJson(res, 200, { listingId: null });
+    return;
+  }
+  const isSeller = String(listing.seller_gmail || "").toLowerCase() === gmail;
+  const order = isSeller ? null : await findApprovedOrder(listing.id, gmail);
+  sendJson(res, 200, { listingId: isSeller || order ? listing.id : null });
+}
+
+async function handleAdminDeleteRequestsList(req, res) {
+  sendJson(res, 200, await listAllDeleteRequests());
+}
+
+async function handleAdminDeleteRequestDecide(req, res, id, action) {
+  const row = await getDeleteRequest(id);
+  if (!row) {
+    sendJson(res, 404, { ok: false, error: "delete request not found" });
+    return;
+  }
+  if (row.status !== "pending") {
+    sendJson(res, 400, { ok: false, error: "delete request is " + row.status });
+    return;
+  }
+  if (row.expires_at && Date.parse(toIso(row.expires_at)) < Date.now()) {
+    // Lazy expiry (also runs on list reads): an unanswered request
+    // past 24h can never be approved — flip it and refuse.
+    await decideDeleteRequest(row.id, "expired");
+    sendJson(res, 400, { ok: false, error: "delete request expired" });
+    return;
+  }
+  if (action === "reject") {
+    await decideDeleteRequest(row.id, "rejected");
+    sendJson(res, 200, { ok: true, request: deleteRequestFromRow(await getDeleteRequest(id)) });
+    return;
+  }
+  // Approve: the real delete (v1.9d path). The listing may already
+  // be gone (removed by Delete forever) — then there is nothing to
+  // delete and the request just closes as approved.
+  const listing = await getListing(row.listing_id);
+  if (!listing || listing.status === "removed") {
+    await decideDeleteRequest(row.id, "approved");
+    try {
+      await logSecurityEvent("", "admin_delete_request_approved", "listing " + row.listing_id + " (already removed) requested by " + (row.buyer_gmail || ""));
+    } catch (_) {}
+    sendJson(res, 200, { ok: true, already: true, request: deleteRequestFromRow(await getDeleteRequest(id)) });
+    return;
+  }
+  const done = await deleteListingAccountNow(listing);
+  if (!done.ok) {
+    sendJson(res, 400, { ok: false, error: done.error });
+    return;
+  }
+  await decideDeleteRequest(row.id, "approved");
+  try {
+    await logSecurityEvent("", "admin_delete_request_approved", "listing " + row.listing_id + " " + (listing.email || "") + " requested by " + (row.buyer_gmail || ""));
+  } catch (_) {}
+  sendJson(res, 200, { ok: true, already: done.already, request: deleteRequestFromRow(await getDeleteRequest(id)) });
+}
+
 // v1.9d: ADMIN-ONLY permanent delete of a listed mailbox — the ONE
 // exception to the v1.9c proxy block. Mov's rule (2026-11-27,
 // permanent): NO ONE may delete a MovMail email except Mov himself,
@@ -3023,60 +3401,18 @@ async function handleAdminMarketListingDeleteAccount(req, res, id) {
     sendJson(res, 200, { ok: true, already: true, listing: listingAdminFromRow(listing) });
     return;
   }
-  const login = await mailTmLogin(listing.email, listing.password);
-  if (!login.ok) {
-    const err = String(login.error || "");
-    if (err.indexOf("no longer exists") !== -1) {
-      // Already dead on Mail.tm (e.g. listings 5/8): nothing left to
-      // delete — just take the listing out of the shop.
-      const row = await removeListing(id);
-      try {
-        await logSecurityEvent("", "admin_account_delete", "listing " + id + " " + listing.email + " (already dead)");
-      } catch (_) {}
-      sendJson(res, 200, { ok: true, already: true, listing: listingAdminFromRow(row || listing) });
-      return;
-    }
-    sendJson(res, 400, { ok: false, error: login.error });
+  // v1.10: the delete itself lives in deleteListingAccountNow
+  // (shared with approved delete requests).
+  const done = await deleteListingAccountNow(listing);
+  if (!done.ok) {
+    sendJson(res, 400, { ok: false, error: done.error });
     return;
   }
-  // POST /token returns the account id as `id` (the site has always
-  // taken it from there — index.html: state.accountId =
-  // (acc && acc.id) || tok.id); the JWT `sub` claim is the fallback.
-  const accountId = String(login.id || "") || jwtAccountId(login.token);
-  if (!accountId) {
-    sendJson(res, 400, { ok: false, error: "could not determine Mail.tm account id" });
-    return;
-  }
-  let delRes = null;
   try {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 15000);
-    delRes = await fetch(UPSTREAM + "/accounts/" + encodeURIComponent(accountId), {
-      method: "DELETE",
-      headers: { Authorization: "Bearer " + login.token, Accept: "application/json" },
-      signal: ctl.signal,
-    });
-    clearTimeout(timer);
-  } catch (err) {
-    sendJson(res, 400, { ok: false, error: "Mail.tm unreachable: " + String((err && err.message) || err) });
-    return;
-  }
-  if (delRes.status !== 204 && delRes.status !== 200 && delRes.status !== 404) {
-    let msg = "Mail.tm delete failed (HTTP " + delRes.status + ")";
-    try {
-      const d = JSON.parse(await delRes.text());
-      if (d && (d.message || d.detail || d.error)) msg = String(d.message || d.detail || d.error);
-    } catch (_) {}
-    sendJson(res, 400, { ok: false, error: msg });
-    return;
-  }
-  // 204/200 = deleted now; 404 = already gone — either way the
-  // account no longer exists, so the listing leaves the shop.
-  const row = await removeListing(id);
-  try {
-    await logSecurityEvent("", "admin_account_delete", "listing " + id + " " + listing.email + (delRes.status === 404 ? " (already dead)" : ""));
+    await logSecurityEvent("", "admin_account_delete", "listing " + id + " " + listing.email + (done.already ? " (already dead)" : ""));
   } catch (_) {}
-  sendJson(res, 200, { ok: true, already: delRes.status === 404, listing: listingAdminFromRow(row || listing) });
+  const row = await getListing(id);
+  sendJson(res, 200, { ok: true, already: done.already, listing: listingAdminFromRow(row || listing) });
 }
 
 // v1.3: re-run the Mail.tm login for one listing and apply the
@@ -3161,6 +3497,9 @@ async function handleApi(req, res, url) {
     if (req.method === "POST" && p === "/api/market/orders") return handleMarketOrdersCreate(req, res);
     if (req.method === "GET" && p === "/api/market/orders") return handleMarketOrdersList(req, res, url);
     if (req.method === "POST" && p === "/api/market/restore") return handleMarketRestore(req, res);
+    if (req.method === "POST" && p === "/api/market/delete-requests") return handleMarketDeleteRequestsCreate(req, res);
+    if (req.method === "GET" && p === "/api/market/delete-requests") return handleMarketDeleteRequestsList(req, res, url);
+    if (req.method === "GET" && p === "/api/market/listings/by-address") return handleMarketListingByAddress(req, res, url);
     const mMktRep = /^\/api\/market\/orders\/(\d+)\/report$/.exec(p);
     if (req.method === "POST" && mMktRep) return handleMarketOrderReport(req, res, mMktRep[1]);
     if (p.startsWith("/api/admin/")) {
@@ -3191,6 +3530,9 @@ async function handleApi(req, res, url) {
       const mMktHealth = /^\/api\/admin\/market\/listings\/(\d+)\/health$/.exec(p);
       if (req.method === "POST" && mMktHealth) return handleAdminMarketListingHealth(req, res, mMktHealth[1]);
       if (req.method === "GET" && p === "/api/admin/market/orders") return handleAdminMarketOrdersList(req, res);
+      if (req.method === "GET" && p === "/api/admin/delete-requests") return handleAdminDeleteRequestsList(req, res);
+      const mDelReq = /^\/api\/admin\/delete-requests\/(\d+)\/(approve|reject)$/.exec(p);
+      if (req.method === "POST" && mDelReq) return handleAdminDeleteRequestDecide(req, res, mDelReq[1], mDelReq[2]);
       const mMktOrd = /^\/api\/admin\/market\/orders\/(\d+)\/(approve|reject)$/.exec(p);
       if (req.method === "POST" && mMktOrd) return handleAdminMarketOrderDecide(req, res, mMktOrd[1], mMktOrd[2]);
       const mRec = /^\/api\/admin\/receipts\/(\d+)\/(approve|reject)$/.exec(p);

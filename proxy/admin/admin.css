@@ -379,6 +379,24 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
 .notif-forward-btn { margin-top: 8px; }
 .notif-info .n-line.n-sent { color: var(--accent); font-weight: 700; }
 
+/* ---------- v1.10: delete requests (BLOCKED) ---------- */
+.delreq-list { display: grid; gap: 10px; }
+.delreq-row {
+  border: 1px solid var(--border); border-radius: 12px; padding: 12px;
+  background: #fff;
+}
+.delreq-row.status-pending {
+  background: var(--amber-bg); border-color: #f3d38a;
+  border-left: 4px solid var(--amber);
+}
+.delreq-row.status-approved { background: var(--green-bg); opacity: .75; }
+.delreq-row.status-rejected { background: var(--red-bg); opacity: .75; }
+.delreq-row.status-expired { opacity: .6; }
+.delreq-info { font-size: 14px; min-width: 0; }
+.delreq-info .n-title { font-weight: 700; word-break: break-word; }
+.delreq-info .n-line { color: var(--muted); font-size: 13px; word-break: break-word; }
+.delreq-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
 /* v1.9d: Delete-forever button — darker red than Remove, so the
    permanent Mail.tm delete can never be mistaken for a list remove. */
 .btn-delete-account { background: #7f1d1d; }

@@ -134,6 +134,19 @@ const I18N = {
     deleteAccount: 'លុបជាអចិន្ត្រៃយ៍',
     confirmDeleteAccount: 'លុបអ៊ីមែល {email} ជាអចិន្ត្រៃយ៍មែនទេ? អ៊ីមែលនេះនឹងត្រូវលុបចេញពី Mail.tm ហើយមិនអាចយកមកវិញបានទេ។ មានតែអ្នកគ្រប់គ្រងទេដែលអាចលុបបាន។',
     toastListingDeleted: 'បានលុបអ៊ីមែលជាអចិន្ត្រៃយ៍ហើយ។', errDeleteAccount: 'លុបអ៊ីមែលមិនបានទេ។',
+    /* v1.10: delete requests (BLOCKED) — the literal word BLOCKED
+       stays in the title in both languages. */
+    delRequests: 'សំណើលុប', delReqTitle: 'សំណើលុប — BLOCKED',
+    delReqNote: 'អ្នកប្រើប្រាស់ចុចលុបលើអ៊ីមែលហាង តែអ៊ីមែលមិនត្រូវបានលុបទេ — វារង់ចាំអ្នកអនុម័ត។ បើមិនអនុម័តក្នុង 24 ម៉ោង សំណើនឹងផុតកំណត់ ហើយអ៊ីមែលត្រឡប់ទៅធម្មតាវិញ។',
+    noDelReq: 'មិនមានសំណើលុបទេ', delReqRequester: 'អ្នកស្នើសុំ',
+    delReqExpiresIn: 'ផុតកំណត់ក្នុង {n} ម៉ោង', delReqExpired: 'ផុតកំណត់ហើយ',
+    delReqApprove: 'អនុម័តលុប', delReqReject: 'បដិសេធ',
+    confirmDelReqApprove: 'អនុម័តលុបអ៊ីមែល {email} ជាអចិន្ត្រៃយ៍មែនទេ? អ៊ីមែលនេះនឹងត្រូវលុបចេញពី Mail.tm ហើយមិនអាចយកមកវិញបានទេ។',
+    confirmDelReqReject: 'បដិសេធសំណើលុបនេះមែនទេ? អ៊ីមែលនឹងនៅដដែល។',
+    toastDelReqApproved: 'បានអនុម័ត — អ៊ីមែលត្រូវបានលុបជាអចិន្ត្រៃយ៍ហើយ។',
+    toastDelReqRejected: 'បានបដិសេធសំណើលុប។', errDelReq: 'ដំណើរការសំណើលុបមិនបានទេ។',
+    delReqStatusPending: 'រង់ចាំ', delReqStatusApproved: 'បានអនុម័ត',
+    delReqStatusRejected: 'បានបដិសេធ', delReqStatusExpired: 'ផុតកំណត់',
     searchPlaceholder: 'ស្វែងរកតាមឈ្មោះ / Gmail / ប្រទេស…',
     filterAll: 'ទាំងអស់', filterNormal: 'ធម្មតា', filterRisk: 'មានហានិភ័យ', filterBlocked: 'បានបិទ',
     refresh: 'ធ្វើឱ្យថ្មី', country: 'ប្រទេស', city: 'ទីក្រុង', device: 'ឧបករណ៍', connection: 'ការតភ្ជាប់',
@@ -234,6 +247,19 @@ const I18N = {
     deleteAccount: 'Delete forever',
     confirmDeleteAccount: 'Delete {email} forever? The Mail.tm account will be deleted permanently and can never be recovered. Only the admin can delete it.',
     toastListingDeleted: 'Email deleted forever.', errDeleteAccount: 'Could not delete the email.',
+    /* v1.10: delete requests (BLOCKED) — the literal word BLOCKED
+       stays in the title in both languages. */
+    delRequests: 'Delete Requests', delReqTitle: 'Delete Requests — BLOCKED',
+    delReqNote: 'A user pressed Delete on a shop email, but nothing was deleted — it waits for your approval. If you do not approve within 24 hours, the request expires and the email goes back to normal.',
+    noDelReq: 'No delete requests', delReqRequester: 'Requested by',
+    delReqExpiresIn: 'Expires in {n}h', delReqExpired: 'Expired',
+    delReqApprove: 'Approve delete', delReqReject: 'Reject',
+    confirmDelReqApprove: 'Approve deleting {email} forever? The Mail.tm account will be deleted permanently and can never be recovered.',
+    confirmDelReqReject: 'Reject this delete request? The email stays as it is.',
+    toastDelReqApproved: 'Approved — the email has been deleted forever.',
+    toastDelReqRejected: 'Delete request rejected.', errDelReq: 'Could not process the delete request.',
+    delReqStatusPending: 'Pending', delReqStatusApproved: 'Approved',
+    delReqStatusRejected: 'Rejected', delReqStatusExpired: 'Expired',
     searchPlaceholder: 'Search by name / Gmail / country…',
     filterAll: 'All', filterNormal: 'Normal', filterRisk: 'At risk', filterBlocked: 'Blocked',
     refresh: 'Refresh', country: 'Country', city: 'City', device: 'Device', connection: 'Connection',
@@ -456,7 +482,7 @@ function adminBadgeHtml(u) {
   return isAdminGmail(u.gmail) ? ' <span class="admin-badge-user">Admin</span>' : '';
 }
 
-function loadAll() { loadUsers(); loadCodes(); loadReceipts(); loadListings(); loadOrders(); loadNotifications(); }
+function loadAll() { loadUsers(); loadCodes(); loadReceipts(); loadListings(); loadOrders(); loadNotifications(); loadDelRequests(); }
 
 async function loadUsers() {
   showError($('usersError'), '');
@@ -1124,8 +1150,122 @@ async function onNotifForwardClick(e) {
 function startNotifPolling() {
   if (notifTimer) return;
   notifTimer = setInterval(function () {
-    if (isLoggedIn()) loadNotifications(true);
+    if (isLoggedIn()) { loadNotifications(true); loadDelRequests(true); }
   }, 30000);
+}
+/* ---------- v1.10: delete requests (BLOCKED) ----------
+   A user pressed Delete on a shop email — nothing was deleted, the
+   mailbox stays alive with a BLOCKED waiting badge. Pending requests
+   come first; Approve runs the real delete (v1.9d path) and Reject
+   sends the mailbox back to normal. A request the admin never
+   answers expires after 24h (the server flips it on read). */
+var delReqCache = [];
+function normDelReq(r) {
+  r = r || {};
+  return {
+    id: r.id,
+    listingId: r.listingId || r.listing_id || '',
+    requesterGmail: r.requesterGmail || r.requester_gmail || r.buyerGmail || r.buyer_gmail || '',
+    address: r.address || '',
+    listingEmail: r.listingEmail || r.listing_email || r.address || '',
+    listingTitle: r.listingTitle || r.listing_title || '',
+    status: r.status || 'pending',
+    createdAt: r.createdAt || r.created_at || '',
+    expiresAt: r.expiresAt || r.expires_at || '',
+    decidedAt: r.decidedAt || r.decided_at || ''
+  };
+}
+function delReqPendingCount() {
+  var n = 0;
+  delReqCache.forEach(function (r) { if (r.status === 'pending') n++; });
+  return n;
+}
+function updateDelReqBadge() {
+  var b = $('delReqTabBadge');
+  if (!b) return;
+  var n = delReqPendingCount();
+  b.textContent = n > 99 ? '99+' : String(n);
+  b.hidden = !(n > 0);
+}
+function delReqStatusPill(st) {
+  if (st === 'pending') return '<span class="pill pill-amber">' + esc(t('delReqStatusPending')) + '</span>';
+  if (st === 'approved') return '<span class="pill pill-green">' + esc(t('delReqStatusApproved')) + '</span>';
+  if (st === 'rejected') return '<span class="pill pill-red">' + esc(t('delReqStatusRejected')) + '</span>';
+  return '<span class="pill pill-grey">' + esc(t('delReqStatusExpired')) + '</span>';
+}
+function delReqExpiresText(r) {
+  if (r.status !== 'pending') return '';
+  var ms = new Date(r.expiresAt || 0) - Date.now();
+  if (!r.expiresAt || isNaN(ms)) return '';
+  if (ms <= 0) return esc(t('delReqExpired'));
+  var h = Math.max(1, Math.ceil(ms / 3600000));
+  return esc(t('delReqExpiresIn').replace('{n}', String(h)));
+}
+async function loadDelRequests(silent) {
+  showError($('delReqError'), '');
+  try {
+    var data = await api('/api/admin/delete-requests');
+    var list = Array.isArray(data) ? data : (data.requests || []);
+    delReqCache = list.map(normDelReq);
+    renderDelRequests();
+    updateDelReqBadge();
+  } catch (e) {
+    if (!silent) showError($('delReqError'), t('errLoad'));
+  }
+}
+function renderDelRequests() {
+  var sorted = delReqCache.slice().sort(function (a, b) {
+    var pa = a.status === 'pending' ? 0 : 1;
+    var pb = b.status === 'pending' ? 0 : 1;
+    if (pa !== pb) return pa - pb;
+    return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+  });
+  $('delReqList').innerHTML = sorted.map(function (r) {
+    var exp = delReqExpiresText(r);
+    var actions = r.status === 'pending'
+      ? '<div class="delreq-actions">'
+        + '<button class="btn btn-danger btn-delete-account" type="button" data-delreq-approve="' + esc(r.id) + '">' + esc(t('delReqApprove')) + '</button>'
+        + '<button class="btn btn-secondary" type="button" data-delreq-reject="' + esc(r.id) + '">' + esc(t('delReqReject')) + '</button>'
+        + '</div>'
+      : '';
+    return '<div class="delreq-row status-' + esc(r.status) + '" data-delreq-id="' + esc(r.id) + '">'
+      + '<div class="delreq-info">'
+      + '<div class="n-title">' + esc(r.listingTitle || r.listingEmail) + ' ' + delReqStatusPill(r.status) + '</div>'
+      + '<div class="n-line">' + esc(r.listingEmail) + '</div>'
+      + '<div class="n-line">👤 ' + esc(t('delReqRequester')) + ': ' + esc(r.requesterGmail || '—') + '</div>'
+      + '<div class="n-line">' + esc(t('created')) + ': ' + esc(fmtDate(r.createdAt)) + (exp ? ' · ⏳ ' + exp : '') + '</div>'
+      + '</div>'
+      + actions
+      + '</div>';
+  }).join('');
+  show($('delReqEmpty'), sorted.length === 0);
+}
+async function onDelReqActionClick(e) {
+  var btn = e.target && e.target.closest ? e.target.closest('[data-delreq-approve],[data-delreq-reject]') : null;
+  if (!btn) return;
+  var id = Number(btn.getAttribute('data-delreq-approve') || btn.getAttribute('data-delreq-reject'));
+  if (!id) return;
+  var approve = !!btn.getAttribute('data-delreq-approve');
+  var row = null;
+  delReqCache.forEach(function (r) { if (String(r.id) === String(id)) row = r; });
+  var email = (row && (row.listingEmail || row.address)) || '';
+  if (approve) {
+    if (!window.confirm(t('confirmDelReqApprove').replace('{email}', email))) return;
+  } else {
+    if (!window.confirm(t('confirmDelReqReject'))) return;
+  }
+  btn.disabled = true;
+  try {
+    await api('/api/admin/delete-requests/' + id + '/' + (approve ? 'approve' : 'reject'), { method: 'POST' });
+    toast(approve ? t('toastDelReqApproved') : t('toastDelReqRejected'));
+    loadDelRequests();
+    loadListings();
+  } catch (err) {
+    var msg = (err && err.message) || t('errDelReq');
+    showError($('delReqError'), msg);
+    toast(msg);
+    btn.disabled = false;
+  }
 }
 function listingPill(st) {
   if (st === 'active') return '<span class="pill pill-green">' + esc(t('active')) + '</span>';
@@ -1521,6 +1661,7 @@ function switchTab(name) {
   if (name === 'receipts') loadReceipts();
   if (name === 'listings') loadListings();
   if (name === 'orders') loadOrders();
+  if (name === 'delrequests') loadDelRequests();
   if (name === 'notifications') loadNotifications();
 }
 function onSaveToken() {
@@ -1538,7 +1679,7 @@ function init() {
     localStorage.setItem(LS_LANG, LANG);
     applyI18n();
     renderExpirySeg();
-    if (isLoggedIn()) { renderUsers(); renderCodes(); renderReceipts(); renderListings(); renderOrders(); renderNotifications(); updateNotifBadge(); updateStats(); renderRecipientList(); renderSendResults(lastSendResults); }
+    if (isLoggedIn()) { renderUsers(); renderCodes(); renderReceipts(); renderListings(); renderOrders(); renderNotifications(); renderDelRequests(); updateNotifBadge(); updateDelReqBadge(); updateStats(); renderRecipientList(); renderSendResults(lastSendResults); }
   });
   $('setupForm').addEventListener('submit', onSetupSubmit);
   $('loginForm').addEventListener('submit', onLoginSubmit);
@@ -1585,6 +1726,7 @@ function init() {
   $('listingsList').addEventListener('click', onListingsClick);
   $('markNotifReadBtn').addEventListener('click', onMarkNotifReadClick); /* v1.9 */
   $('notifList').addEventListener('click', onNotifForwardClick); /* v1.9b: Send to buyer */
+  $('delReqList').addEventListener('click', onDelReqActionClick); /* v1.10: approve/reject delete requests */
   $('ordersList').addEventListener('click', function (e) {
     if (e.target.closest('[data-order-action]')) onOrderActionClick(e);
     else onReceiptThumbClick(e); /* same lightbox as receipts */

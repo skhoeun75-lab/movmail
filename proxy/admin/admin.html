@@ -94,6 +94,7 @@
       <button class="tab" type="button" data-tab="receipts" role="tab" data-i18n="receipts">វិក្កយបត្រ</button>
       <button class="tab" type="button" data-tab="listings" role="tab" data-i18n="listings">បញ្ជីលក់</button>
       <button class="tab" type="button" data-tab="orders" role="tab" data-i18n="orders">ការបញ្ជាទិញ</button>
+      <button class="tab" type="button" data-tab="delrequests" role="tab"><span data-i18n="delRequests">សំណើលុប</span><span class="tab-badge" id="delReqTabBadge" hidden>0</span></button>
       <button class="tab" type="button" data-tab="notifications" role="tab"><span data-i18n="notifications">ការជូនដំណឹង</span><span class="tab-badge" id="notifTabBadge" hidden>0</span></button>
       <button class="tab" type="button" data-tab="settings" role="tab" data-i18n="settings">ការកំណត់</button>
     </nav>
@@ -258,6 +259,17 @@
         <p class="error" id="ordersError" hidden></p>
         <div id="ordersList" class="receipts-list"></div>
         <p class="muted empty-note" id="ordersEmpty" hidden data-i18n="noOrders">មិនមានការបញ្ជាទិញទេ</p>
+      </div>
+    </div>
+
+    <!-- DELETE REQUESTS (v1.10) -->
+    <div class="tab-panel" id="panel-delrequests" hidden>
+      <div class="card">
+        <h2 data-i18n="delReqTitle">សំណើលុប — BLOCKED</h2>
+        <p class="muted" data-i18n="delReqNote">អ្នកប្រើប្រាស់ចុចលុបលើអ៊ីមែលហាង តែអ៊ីមែលមិនត្រូវបានលុបទេ — វារង់ចាំអ្នកអនុម័ត។ បើមិនអនុម័តក្នុង 24 ម៉ោង សំណើនឹងផុតកំណត់ ហើយអ៊ីមែលត្រឡប់ទៅធម្មតាវិញ។</p>
+        <p class="error" id="delReqError" hidden></p>
+        <div id="delReqList" class="delreq-list"></div>
+        <p class="muted empty-note" id="delReqEmpty" hidden data-i18n="noDelReq">មិនមានសំណើលុបទេ</p>
       </div>
     </div>
 
