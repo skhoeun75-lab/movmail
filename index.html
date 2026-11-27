@@ -1798,7 +1798,7 @@
            v1.15: the proxy ALSO refuses Mail.tm-bound calls without
            X-MovMail-Version >= 1.15.0 (kill-switch), and the phone
            must never hold a mailbox password again (token endpoint). */
-        var APP_VERSION = "1.18.0";
+        var APP_VERSION = "1.19.0";
         var VERSION_CHECK_MS = 60000;
         /* v1.13: client version handshake. On load and every 60s,
            ask the proxies (never DIRECT — api.mail.tm has no
@@ -1843,11 +1843,13 @@
            loads. */
         var FALLBACK_DOMAINS = [{ "domain": "euploading.com", "isActive": true }];
         /* Poll: a quiet plan-interval timer that fetches silently.
-           On failure nothing visible changes — no backoff spiral,
-           no alarm — the next tick simply retries at the plan base
-           interval. A dead token is re-logged-in once per failure
-           episode (see reauthServerMailbox); other failures just wait
-           for the next tick. Never hammer the API. */
+           v1.19: on a retryable failure (429 / 5xx / network) the
+           interval backs off base -> 20s -> 30s -> 60s (cap) so the
+           polls stop feeding a Mail.tm limit; a success resumes the
+           plan base at once and a calm wait line shows while backed
+           off. A dead token is re-logged-in once per failure
+           episode (see reauthServerMailbox) and never backs off.
+           Never hammer the API. */
         var POLL_MAX_SECONDS = 20;
         /* Poll speed by plan (Batch 3): Free polls every 10s
            (moderate, never too slow), Monthly every 5s, Yearly
@@ -1859,10 +1861,62 @@
           return POLL_BY_PLAN[p] || 10;
         }
         function refreshPollForPlan(){
+          state.pollBackoffStep = 0;
           state.pollInterval = pollBaseSeconds();
           state.countdown = state.pollInterval;
           if (state.timer) startPolling();
           updateCountdown();
+        }
+        /* v1.19: poll backoff during a Mail.tm / Guerrilla limit.
+           The poll loop is the remaining hammer: at the plan base
+           (Free 10s / Monthly 5s / Yearly 2s) every poll hits the
+           proxy -> Mail.tm, so during a 429 episode the polls
+           themselves keep the limit engaged. On a retryable poll
+           failure (429 / 5xx / network) the interval backs off
+           base -> 20s -> 30s -> 60s (cap) and stays there until a
+           poll succeeds, which resumes the plan base at once. A
+           dead token (401/404) is NOT a limit — it heals through
+           re-login, never backoff. Guerrilla polls back off the
+           same way. */
+        var POLL_BACKOFF_SECONDS = [0, 20, 30, 60];
+        function pollBackoffSeconds(){
+          var step = state.pollBackoffStep || 0;
+          if (step <= 0) return pollBaseSeconds();
+          return POLL_BACKOFF_SECONDS[Math.min(step, 3)];
+        }
+        function isPollRetryable(err){
+          return !err || !err.status || err.status === 429 || err.status >= 500;
+        }
+        function applyPollBackoff(err){
+          /* Step the poll interval up on a retryable failure; returns
+             true when backed off, false when the error is not a limit
+             (dead token, bad request, gone mailbox) and the base
+             interval stands. */
+          if (!isPollRetryable(err)) return false;
+          if ((state.pollBackoffStep || 0) < 3) state.pollBackoffStep = (state.pollBackoffStep || 0) + 1;
+          state.pollInterval = pollBackoffSeconds();
+          state.countdown = state.pollInterval;
+          updateCountdown();
+          updatePollStatusLine();
+          return true;
+        }
+        function clearPollBackoff(){
+          /* First successful poll after a backoff resumes the plan base. */
+          if (!state.pollBackoffStep) return;
+          state.pollBackoffStep = 0;
+          state.pollInterval = pollBaseSeconds();
+          state.countdown = state.pollInterval;
+          updateCountdown();
+          updatePollStatusLine();
+        }
+        function updatePollStatusLine(){
+          /* Calm status line while the poll is backed off (v1.17
+             style). Only while a mailbox is live and no create is in
+             flight — the create retry text owns the line while
+             creating. */
+          if (state.creating || state.retrying || !state.address) return;
+          if (state.pollBackoffStep > 0) statusText.textContent = t("pollBackoffWait");
+          else if (statusText.textContent === t("pollBackoffWait")) statusText.textContent = t("statusWaiting");
         }
         /* Plan daily limits: Free 10/day, Pro Monthly 100/day,
            Pro Yearly unlimited. Everyone is Free for now; the plan
@@ -2827,6 +2881,7 @@ var I18N = {
     "errorDefault": "មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេអ៊ីមែលបានទេ។",
     "retrying": "ម៉ាស៊ីនមេរវល់ — កំពុងព្យាយាមម្តងទៀត (លើកទី {n})…",
     "retryingWait": "Mail.tm កំពុងកំណត់ — សូមរង់ចាំបន្តិច វានឹងព្យាយាមដោយខ្លួនឯង",
+    "pollBackoffWait": "ម៉ាស៊ីនមេកំពុងកំណត់ — កំពុងចាំបន្តិច មុនពេលពិនិត្យសារម្តងទៀត",
     "providerMailtm": "Mail.tm",
     "providerGuerrilla": "Guerrilla",
     "guerrillaFallback": "Mail.tm កំពុងកំណត់ — ប្រើ Guerrilla ជំនួសសិន",
@@ -3267,6 +3322,7 @@ var I18N = {
     "errorDefault": "Cannot connect to the email server.",
     "retrying": "Server is busy — retrying (attempt {n})…",
     "retryingWait": "Mail.tm is limiting right now — please wait a moment, it retries by itself",
+    "pollBackoffWait": "Server is limiting — waiting a moment before checking again",
     "providerMailtm": "Mail.tm",
     "providerGuerrilla": "Guerrilla",
     "guerrillaFallback": "Mail.tm is limiting — using Guerrilla instead",
@@ -3657,7 +3713,7 @@ var I18N = {
             statusText.textContent = state.retrying ? retryStatusText() : t("statusConnecting");
           } else if (state.address){
             addrText.textContent = state.address;
-            statusText.textContent = t("statusWaiting");
+            statusText.textContent = (state.pollBackoffStep > 0) ? t("pollBackoffWait") : t("statusWaiting");
           } else if (state.failed){
             addrText.textContent = t("addrFailed");
             statusText.textContent = t("statusNoConn");
@@ -3693,6 +3749,9 @@ var I18N = {
           failed: false, retrying: false, lastErrorCode: "",
           createTimer: null, pollEverOk: false, reauthing: null,
           refreshQueued: false,
+          /* v1.19: poll backoff step (0 = plan base interval;
+             1 = 20s, 2 = 30s, 3 = 60s cap) during a limit. */
+          pollBackoffStep: 0,
           /* v1.15: true once the current mailbox's password is
              confirmed on the server — only then may the local copy be
              wiped and saved rows store "". */
@@ -5533,6 +5592,8 @@ var I18N = {
               }
             });
             state.messages = msgs;
+            /* v1.19: a successful poll clears any backoff. */
+            clearPollBackoff();
             state.pollInterval = pollBaseSeconds();
             state.countdown = state.pollInterval;
             state.pollEverOk = true;
@@ -5545,9 +5606,15 @@ var I18N = {
             return {ok:true, hadNew: hadNew, newCount: newCount, count: msgs.length};
           }).catch(function(err){
             function quietFail(){
-              state.pollInterval = pollBaseSeconds();
-              state.countdown = state.pollInterval;
-              updateCountdown();
+              /* v1.19: a retryable failure (429 / 5xx / network)
+                 backs the poll off instead of hammering at the plan
+                 base; anything else (dead mailbox, bad request)
+                 just waits at base. */
+              if (!applyPollBackoff(err)){
+                state.pollInterval = pollBaseSeconds();
+                state.countdown = state.pollInterval;
+                updateCountdown();
+              }
               updateProviderBadge();
             }
             /* A dead Guerrilla mailbox (401/404, or the proxy's
@@ -5617,7 +5684,9 @@ var I18N = {
               }
             });
             state.messages = msgs;
-            /* A successful poll resets the interval back to the plan base. */
+            /* v1.19: a successful poll clears any backoff and resumes
+               the plan base interval. */
+            clearPollBackoff();
             state.pollInterval = pollBaseSeconds();
             state.countdown = state.pollInterval;
             state.pollEverOk = true;
@@ -5631,12 +5700,19 @@ var I18N = {
           }).catch(function(err){
             /* Quiet failure: keep the last good state on screen —
                statusText and the inbox are left exactly as they
-               were, no alarm. Back at the plan base interval; the
-               next 1s-tick poll retries on schedule. */
+               were, no alarm. A retryable failure backs the poll
+               off (v1.19); anything else waits at the plan base
+               and the next 1s-tick poll retries on schedule. */
             function quietFail(){
-              state.pollInterval = pollBaseSeconds();
-              state.countdown = state.pollInterval;
-              updateCountdown();
+              /* v1.19: a retryable failure (429 / 5xx / network)
+                 backs the poll off instead of hammering at the plan
+                 base; anything else (dead token, bad request) just
+                 waits at base. */
+              if (!applyPollBackoff(err)){
+                state.pollInterval = pollBaseSeconds();
+                state.countdown = state.pollInterval;
+                updateCountdown();
+              }
               updateProviderBadge();
             }
             if (err && (err.status === 401 || err.status === 404) && !retried && state.address && currentBought){
@@ -8701,7 +8777,9 @@ var I18N = {
         function startPolling(){
           stopPolling();
           /* (Re)starting a poll run always begins at the plan's base
-             interval — backoff only grows inside a running timer. */
+             interval — backoff only grows inside a running timer, so
+             a fresh run is a fresh episode. */
+          state.pollBackoffStep = 0;
           state.pollInterval = pollBaseSeconds();
           state.countdown = state.pollInterval;
           updateCountdown();
@@ -8734,7 +8812,15 @@ var I18N = {
           var base = pollBaseSeconds();
           ri.classList.remove("warn", "err", "idle");
           if (!state.pollEverOk) ri.classList.add("idle");
-          try { ri.title = t("autoRefreshEvery", {n: state.pollInterval || base}); } catch(e) {}
+          /* v1.19: while the poll is backed off the indicator turns
+             amber and its hover text carries the calm wait line
+             instead of the plan interval. */
+          if (state.pollBackoffStep > 0){
+            ri.classList.add("warn");
+            try { ri.title = t("pollBackoffWait") + " (" + (state.pollInterval || base) + "s)"; } catch(e) {}
+          } else {
+            try { ri.title = t("autoRefreshEvery", {n: state.pollInterval || base}); } catch(e) {}
+          }
         }
         document.addEventListener("visibilitychange", function(){
           if (!document.hidden && hasLiveMailbox()) fetchMessages(false);
@@ -8869,25 +8955,32 @@ var I18N = {
           p.classList.toggle("open");
         });
         /* Manual Refresh — the inbox-header button does a full refresh.
-           Always starts from a clean slate (plan base interval, no
-           failed/backed-off state), forces a live fetch NOW even if
-           the poll failed or is backed off, re-logs in first if the
-           token is dead (same recovery as the poll loop), and
-           refreshes /saved too — saved rows stay visible with their
-           "✓ Saved" chips even when live is down. A click that lands
-           while a poll is in flight is queued, never dropped
-           (fetchMessages force flag). Ends with a short result
-           toast: "✓ Refreshed — N new", "No new messages", or a
-           plain error if it still fails. Never blocked by the failed
-           poll state: setBusy() only disables these buttons while a
-           create is busy or there is no token at all. */
+           Makes exactly one live fetch NOW even if the poll failed or
+           is backed off (v1.19: it never resets a backed-off interval
+           to the plan base — the fetch outcome steps the backoff up
+           or clears it), re-logs in first if the token is dead (same
+           recovery as the poll loop), and refreshes /saved too — saved
+           rows stay visible with their "✓ Saved" chips even when live
+           is down. A click that lands while a poll is in flight is
+           queued, never dropped (fetchMessages force flag). Ends with
+           a short result toast: "✓ Refreshed — N new", "No new
+           messages", or a plain error if it still fails. Never blocked
+           by the failed poll state: setBusy() only disables these
+           buttons while a create is busy or there is no token at all. */
         function manualRefresh(iconEl){
-          if (!state.token) return;
+          /* v1.19: was `!state.token` — that made Refresh a no-op on
+             Guerrilla mailboxes, which hold no token. */
+          if (!hasLiveMailbox()) return;
           if (iconEl) iconEl.classList.add("spin");
-          var base = pollBaseSeconds();
-          state.pollInterval = base;
-          state.countdown = base;
-          updateCountdown();
+          /* v1.19: never reset a backed-off interval to the plan
+             base — this is the ONE attempt; its outcome (via
+             runFetch) steps the backoff up or clears it. */
+          if (!state.pollBackoffStep){
+            var base = pollBaseSeconds();
+            state.pollInterval = base;
+            state.countdown = base;
+            updateCountdown();
+          }
           var before = mergedMessages().length;
           savedState.lastFetch = 0;
           var liveP = fetchMessages(false, true);
