@@ -440,6 +440,8 @@ const CREATE_API_TABLES_SQL = [
     "  status TEXT NOT NULL DEFAULT 'pending',",
     "  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
     ")",
+  ].join("\n"),
+  [
     "CREATE TABLE IF NOT EXISTS market_reports (",
     "  order_id INT PRIMARY KEY REFERENCES market_orders(id),",
     "  buyer_gmail TEXT NOT NULL,",
@@ -1612,7 +1614,13 @@ async function listBuyerOrders(gmail) {
     const out = [];
     for (const x of r.rows) {
       const o = orderBuyerFromRow(x, x.listing_email);
-      o.report = reportFromRow(await getOrderReport(o.id));
+      /* v1.8b: the report enrichment must never blank the whole list —
+         if it fails for one order, keep the order with no report. */
+      try {
+        o.report = reportFromRow(await getOrderReport(o.id));
+      } catch (_) {
+        o.report = null;
+      }
       out.push(o);
     }
     return out;
@@ -1623,7 +1631,11 @@ async function listBuyerOrders(gmail) {
     .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))) {
     const listing = mem.listings.get(x.listing_id);
     const o = orderBuyerFromRow(x, listing ? listing.email : null);
-    o.report = reportFromRow(await getOrderReport(o.id));
+    try {
+      o.report = reportFromRow(await getOrderReport(o.id));
+    } catch (_) {
+      o.report = null;
+    }
     out.push(o);
   }
   return out;
@@ -1639,8 +1651,19 @@ async function listAllOrders() {
     const out = [];
     for (const x of r.rows) {
       const o = orderAdminFromRow(x, x.listing_email);
-      o.report = reportFromRow(await getOrderReport(o.id));
-      o.evidence = await getOrderEvidence(x.listing_email, o.createdAt);
+      /* v1.8b: the report/evidence enrichment must never blank the
+         whole Orders panel — if it fails for one order, keep the
+         order with no report/evidence. */
+      try {
+        o.report = reportFromRow(await getOrderReport(o.id));
+      } catch (_) {
+        o.report = null;
+      }
+      try {
+        o.evidence = await getOrderEvidence(x.listing_email, o.createdAt);
+      } catch (_) {
+        o.evidence = null;
+      }
       out.push(o);
     }
     return out;
@@ -1651,8 +1674,16 @@ async function listAllOrders() {
   )) {
     const listing = mem.listings.get(x.listing_id);
     const o = orderAdminFromRow(x, listing ? listing.email : null);
-    o.report = reportFromRow(await getOrderReport(o.id));
-    o.evidence = await getOrderEvidence(listing ? listing.email : null, o.createdAt);
+    try {
+      o.report = reportFromRow(await getOrderReport(o.id));
+    } catch (_) {
+      o.report = null;
+    }
+    try {
+      o.evidence = await getOrderEvidence(listing ? listing.email : null, o.createdAt);
+    } catch (_) {
+      o.evidence = null;
+    }
     out.push(o);
   }
   return out;
