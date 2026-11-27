@@ -1032,42 +1032,6 @@ async function mailTmLogin(address, password) {
   }
 }
 
-// Re-create a Mail.tm account with the same address + password.
-// Used only by the market restore self-heal below: when a bought
-// mailbox's Mail.tm account was deleted (e.g. the buyer pressed
-// Delete), the address is free again and re-creating it brings the
-// mailbox back to life — new mail flows again. Old Mail.tm messages
-// are gone with the deleted account (saved copies in Postgres stay).
-// Returns { ok:true, id } on success, { ok:false, error } otherwise
-// (422 = the address is taken again by someone else — never forced).
-async function mailTmCreateAccount(address, password) {
-  try {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 15000);
-    const r = await fetch(UPSTREAM + "/accounts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ address, password }),
-      signal: ctl.signal,
-    });
-    clearTimeout(timer);
-    const text = await r.text();
-    let data = null;
-    try {
-      data = JSON.parse(text);
-    } catch (_) {}
-    if (!r.ok) {
-      const msg =
-        (data && (data.message || data.detail || data.error)) ||
-        "Mail.tm create failed (HTTP " + r.status + ")";
-      return { ok: false, error: String(msg) };
-    }
-    return { ok: true, id: data && data.id };
-  } catch (err) {
-    return { ok: false, error: "Mail.tm unreachable: " + String((err && err.message) || err) };
-  }
-}
-
 // Row mappers. The password NEVER leaves the server in any of these
 // shapes; public shapes carry only the masked email.
 function listingPublicFromRow(r) {
@@ -2287,17 +2251,15 @@ async function handleMarketRestore(req, res) {
   }
   // Log in with the stored credentials server-side; only the Mail.tm
   // token (never the password) goes back to the browser.
-  let login = await mailTmLogin(listing.email, listing.password);
-  if (!login.ok && /no longer exists/i.test(String(login.error || ""))) {
-    // The Mail.tm account was deleted (the buyer pressed Delete, which
-    // used to destroy the real account). The address is free again, so
-    // re-create it with the SAME stored password and log in again —
-    // the bought mailbox comes back to life and new mail flows again.
-    // If the address was taken again by someone else, the re-create
-    // fails and the original error is returned, nothing is forced.
-    const recreated = await mailTmCreateAccount(listing.email, listing.password);
-    if (recreated.ok) login = await mailTmLogin(listing.email, listing.password);
-  }
+  // NOTE (verified live 2026-11-27): a deleted Mail.tm account can
+  // NEVER be brought back — POST /accounts with the same address
+  // always answers 422 "This value is already used". So there is no
+  // re-create fallback here on purpose: if this login fails, the
+  // mailbox is permanently gone and the restore reports it honestly.
+  // The real protection is on the website: Delete never deletes a
+  // Mail.tm account at all (v1.7b), so a bought mailbox cannot be
+  // destroyed that way again.
+  const login = await mailTmLogin(listing.email, listing.password);
   if (!login.ok) {
     sendJson(res, 400, { ok: false, error: login.error });
     return;
