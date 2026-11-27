@@ -37,7 +37,27 @@ const UPSTREAM = "https://api.mail.tm";
 // listing 12 — pre-v1.7b code reaching Mail.tm directly with a
 // delete on session-restore failure. The version handshake forces
 // every open session onto the current build.
-const APP_VERSION = "1.13.0";
+// v1.15: the forwarder also refuses Mail.tm-bound calls from any
+// client older than MIN_CLIENT_VERSION (kill-switch, see the gate
+// below the DELETE /accounts block). Bump both strings together.
+const APP_VERSION = "1.15.0";
+const MIN_CLIENT_VERSION = "1.15.0";
+// True when a client version string is at least the minimum (numeric
+// per-part compare; missing, malformed or older versions fail).
+function clientVersionOk(v) {
+  if (typeof v !== "string") return false;
+  const parts = v.trim().split(".");
+  if (parts.length < 2 || parts.length > 4) return false;
+  const nums = parts.map((p) => { const n = Number(p); return Number.isInteger(n) && n >= 0 ? n : -1; });
+  if (nums.some((n) => n < 0)) return false;
+  const min = MIN_CLIENT_VERSION.split(".").map(Number);
+  for (let i = 0; i < min.length; i++) {
+    const got = nums[i] || 0;
+    if (got > min[i]) return true;
+    if (got < min[i]) return false;
+  }
+  return true;
+}
 
 // Mail.tm's own message for an account that existed and was deleted.
 // A never-existed address answers "Invalid credentials." instead,
@@ -2828,15 +2848,15 @@ async function handleMarketListingsCreate(req, res) {
   const body = await readJsonBody(req, res, 6 * 1024 * 1024);
   if (!body) return;
   const address = String(body.address || "").trim().toLowerCase();
-  const password = String(body.password || "");
+  let password = String(body.password || "");
   const price = Number(body.price);
   const title = body.title ? String(body.title) : "";
   const sellerGmail = String(body.sellerGmail || "").trim().toLowerCase();
   const logoDataUrl = typeof body.logoDataUrl === "string" ? body.logoDataUrl : "";
   const token = cleanListingToken(body.token);
   const ipProfile = cleanIpProfile(body);
-  if (!address || address.indexOf("@") === -1 || !password) {
-    sendJson(res, 400, { ok: false, error: "address and password required" });
+  if (!address || address.indexOf("@") === -1) {
+    sendJson(res, 400, { ok: false, error: "address required" });
     return;
   }
   if (!Number.isFinite(price) || price <= 0) {
@@ -2853,6 +2873,21 @@ async function handleMarketListingsCreate(req, res) {
   // insert. Admin emails are set by Mov.
   if (!ADMIN_GMAILS.has(sellerGmail)) {
     sendJson(res, 403, { ok: false, error: "admin_only" });
+    return;
+  }
+  // v1.15: the website no longer holds mailbox passwords (they live
+  // only on this server), so a Sell from a migrated device sends no
+  // password. The server already holds this seller's copy in
+  // user_mailboxes (synced with a session token) — reuse it. The
+  // password still never leaves the server; it only moves from one
+  // server-side row to another. Without a stored copy either, the
+  // listing is refused exactly as before.
+  if (!password) {
+    const own = await getUserMailboxRow(sellerGmail, address);
+    if (own && own.password) password = own.password;
+  }
+  if (!password) {
+    sendJson(res, 400, { ok: false, error: "address and password required" });
     return;
   }
   if (logoDataUrl.length > MARKET_IMAGE_MAX_CHARS) {
@@ -4349,6 +4384,27 @@ function authFailRecord(gmail) {
 }
 function authFailReset(gmail) { authFailures.delete(gmail); }
 
+/* v1.15: same brute-force guard shape as signin (10 failures per
+   gmail per 10 minutes -> 429), but a SEPARATE counter — a mailbox
+   token failure must never block the user's sign-in, and vice versa.
+   Only hard failures count (unknown address, wrong owner, bad login);
+   a transient Mail.tm 429 (503 mailtm_busy) never counts. A success
+   clears the counter. */
+const mailboxTokenFailures = new Map();
+function mailboxTokenFailBlocked(gmail) {
+  const e = mailboxTokenFailures.get(gmail);
+  if (!e) return false;
+  if (Date.now() - e.firstAt > AUTH_FAIL_WINDOW_MS) { mailboxTokenFailures.delete(gmail); return false; }
+  return e.count >= AUTH_FAIL_MAX;
+}
+function mailboxTokenFailRecord(gmail) {
+  const now = Date.now();
+  const e = mailboxTokenFailures.get(gmail);
+  if (!e || now - e.firstAt > AUTH_FAIL_WINDOW_MS) { mailboxTokenFailures.set(gmail, { count: 1, firstAt: now }); return; }
+  e.count++;
+}
+function mailboxTokenFailReset(gmail) { mailboxTokenFailures.delete(gmail); }
+
 /* --- users password hash (kept OUT of userFromRow — never leaves the server) --- */
 async function getUserAuthRow(gmail) {
   if (!USE_MEMORY_STORE) {
@@ -4603,6 +4659,18 @@ async function deleteUserMailbox(gmail, address) {
   mem.userMailboxes = mem.userMailboxes.filter((x) => !(x.gmail === gmail && x.address === address));
   return mem.userMailboxes.length < before;
 }
+// v1.15: which gmail owns this address in user_mailboxes (any owner),
+// or null when no row exists. Used by the token endpoint to tell a
+// wrong-owner request (403) from an unknown address (404). Internal
+// only — the owner gmail is never sent to a browser.
+async function mailboxAddressOwner(address) {
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query("SELECT gmail FROM user_mailboxes WHERE address = $1 LIMIT 1", [address]);
+    return r.rows[0] ? r.rows[0].gmail : null;
+  }
+  const row = mem.userMailboxes.find((x) => x.address === address);
+  return row ? row.gmail : null;
+}
 async function handleMailboxesList(req, res, url) {
   const token = (url.searchParams.get("token") || "").trim() || extractSessionToken(req, null);
   const gmail = await getSessionGmail(token);
@@ -4665,6 +4733,60 @@ async function handleMailboxRestore(req, res) {
     logo: row.logo || "", ip: row.ip_address || "", country: row.ip_country || "",
     city: row.ip_city || "", flag: "",
   });
+}
+
+/* --- v1.15: server-held mailbox passwords only ---------------------
+   POST /api/mailboxes/token {token, address} -> {ok, token, accountId}
+   Four mailboxes died because a CLIENT held the mailbox password and
+   deleted the Mail.tm account directly (old cached app, or another
+   temp-mail app). Mail.tm has no password-change API, so a password
+   already on a client can never be invalidated — it must live ONLY
+   here, on the server. The website keeps no mailbox password after
+   the v1.15 migration; it fetches a fresh Mail.tm JWT here instead.
+   The JWT (never the password) is the only thing returned — the
+   password never leaves this server in any response, and is never
+   logged. Errors: bad/expired session 401; address owned by another
+   gmail 403; unknown address 404; Mail.tm rate-limit/unreachable 503
+   {error:"mailtm_busy"} (retryable — NEVER read as a dead mailbox);
+   dead mailbox 400 with Mail.tm's "no longer exists" (the website
+   drops the row). Rate-limited like signin: 10 hard failures per
+   gmail per 10 minutes -> 429; transient 503s never count. */
+async function handleMailboxToken(req, res) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  const sess = await requireSession(req, res, body);
+  if (!sess) return;
+  const address = String(body.address || "").trim().toLowerCase();
+  if (!validGmail(address)) { sendJson(res, 400, { ok: false, error: "valid address required" }); return; }
+  if (mailboxTokenFailBlocked(sess.gmail)) { sendJson(res, 429, { ok: false, error: "too many failed attempts, try again in a few minutes" }); return; }
+  const row = await getUserMailboxRow(sess.gmail, address);
+  if (!row) {
+    const owner = await mailboxAddressOwner(address);
+    mailboxTokenFailRecord(sess.gmail);
+    if (owner) { sendJson(res, 403, { ok: false, error: "not your mailbox" }); return; }
+    sendJson(res, 404, { ok: false, error: "mailbox not found" });
+    return;
+  }
+  if (!row.password) {
+    mailboxTokenFailRecord(sess.gmail);
+    sendJson(res, 400, { ok: false, error: "no stored credentials for this mailbox" });
+    return;
+  }
+  // Log in with the stored password server-side; only the fresh Mail.tm
+  // token (never the password) goes back to the browser.
+  const login = await mailTmLogin(row.address, row.password);
+  if (!login.ok) {
+    if (mailTmLoginTransient(login)) {
+      // 429 / unreachable: retryable, never a death, never counted.
+      sendJson(res, 503, { ok: false, error: "mailtm_busy" });
+      return;
+    }
+    mailboxTokenFailRecord(sess.gmail);
+    sendJson(res, 400, { ok: false, error: login.error });
+    return;
+  }
+  mailboxTokenFailReset(sess.gmail);
+  sendJson(res, 200, { ok: true, token: login.token, accountId: login.id || "", address: row.address });
 }
 
 /* --- admin panel password, server-side (token-gated like all /api/admin/*) --- */
@@ -4753,6 +4875,7 @@ async function handleApi(req, res, url) {
     if (req.method === "POST" && p === "/api/mailboxes/sync") return handleMailboxesSync(req, res);
     if (req.method === "DELETE" && p === "/api/mailboxes") return handleMailboxDelete(req, res, url);
     if (req.method === "POST" && p === "/api/mailboxes/restore") return handleMailboxRestore(req, res);
+    if (req.method === "POST" && p === "/api/mailboxes/token") return handleMailboxToken(req, res);
     if (p.startsWith("/api/admin/")) {
       if (!requireAdmin(req, res)) return;
       if (req.method === "GET" && p === "/api/admin/users") return handleAdminUsers(req, res);
@@ -4963,6 +5086,27 @@ const server = http.createServer((req, res) => {
       } catch (_) {}
     }
     sendJson(res, 404, { error: "not found" });
+    return;
+  }
+
+  // v1.15 kill-switch: Mail.tm-bound calls through this proxy must
+  // come from a current website build (X-MovMail-Version >=
+  // MIN_CLIENT_VERSION). Four mailboxes died because an OLD cached
+  // site (pre-v1.7b) still held mailbox passwords and deleted the
+  // real Mail.tm accounts; the v1.13 version handshake forces v1.13+
+  // clients to reload, but pre-v1.13 builds have no handshake — this
+  // gate stops them using the proxy at all. GET /domains stays open:
+  // it is a read-only public list, and the keep-awake monitor and
+  // curl checks call it with no header. The DELETE /accounts 403
+  // above runs first and is unchanged. HONEST LIMIT: this cannot stop
+  // an old client talking DIRECTLY to api.mail.tm — only the new
+  // website code (no DIRECT in its bases) and closing the old session
+  // on the phone can.
+  if (
+    !(req.method === "GET" && url.pathname === "/domains") &&
+    !clientVersionOk(req.headers["x-movmail-version"])
+  ) {
+    sendJson(res, 426, { ok: false, error: "client_outdated" });
     return;
   }
 

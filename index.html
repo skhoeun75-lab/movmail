@@ -1743,12 +1743,16 @@
         var PROXY = "https://movmail-proxy.onrender.com";
         var PROXY2 = "https://movmail-proxy-2.onrender.com";
         var DIRECT = "https://api.mail.tm";
-        /* Failover bases, in order: primary proxy, backup proxy, then
-           direct Mail.tm (usually CORS-blocked from a browser, kept as
-           a last resort). apiBaseIdx remembers the base that last
-           answered, so later requests go straight to the working one
-           instead of retrying a dead base first. */
-        var API_BASES = [PROXY, PROXY2, DIRECT];
+        /* Failover bases, in order: primary proxy, backup proxy.
+           v1.15: DIRECT api.mail.tm is GONE from the bases. An old
+           cached app used DIRECT failover to delete real Mail.tm
+           accounts around the proxy's 403 block (both proxies 429
+           -> fail over to DIRECT -> DELETE succeeds there). Reads now
+           fail when both proxies are down — the site shows "try
+           again" — but NOTHING can ever be deleted around the proxy
+           again. api() below also refuses to route any DELETE to a
+           direct base, fail-closed, even if a base list ever changes. */
+        var API_BASES = [PROXY, PROXY2];
         var apiBaseIdx = 0;
         /* v1.13: this copy's build version — it MUST match the
            version the deployed proxy reports from GET /api/version
@@ -1757,8 +1761,11 @@
            code reaching Mail.tm directly with a delete on
            session-restore failure. checkAppVersion() below forces
            every open session onto the current build. Bump this
-           string on every release, together with server.js. */
-        var APP_VERSION = "1.13.0";
+           string on every release, together with server.js.
+           v1.15: the proxy ALSO refuses Mail.tm-bound calls without
+           X-MovMail-Version >= 1.15.0 (kill-switch), and the phone
+           must never hold a mailbox password again (token endpoint). */
+        var APP_VERSION = "1.15.0";
         var VERSION_CHECK_MS = 60000;
         /* v1.13: client version handshake. On load and every 60s,
            ask the proxies (never DIRECT — api.mail.tm has no
@@ -1806,7 +1813,7 @@
            On failure nothing visible changes — no backoff spiral,
            no alarm — the next tick simply retries at the plan base
            interval. A dead token is re-logged-in once per failure
-           episode (see reauthMailbox); other failures just wait
+           episode (see reauthServerMailbox); other failures just wait
            for the next tick. Never hammer the API. */
         var POLL_MAX_SECONDS = 20;
         /* Poll speed by plan (Batch 3): Free polls every 10s
@@ -2163,6 +2170,78 @@
           var list = loadMailboxes().map(mailboxToServerRow);
           return apiAdmin("/api/mailboxes/sync", { method: "POST", body: { token: tok, mailboxes: list } }).catch(function(){ return null; });
         }
+        /* v1.15: wipe ONE mailbox password off this device — in-memory
+           state, the saved current-session row and the saved-mailbox
+           row. The JWT (state.token / row token) stays: it is
+           short-lived and cannot be renewed without the password. */
+        function wipeLocalMailboxPassword(address){
+          if (!address) return false;
+          var changed = false;
+          if (state.address === address && state.password){ state.password = ""; state.passwordSynced = true; changed = true; }
+          try {
+            var d = acctData();
+            if (d.currentMailbox && d.currentMailbox.address === address && d.currentMailbox.password){
+              d.currentMailbox.password = ""; saveAcctData(d); changed = true;
+            }
+          } catch(e) {}
+          var list = loadMailboxes(), rowChanged = false;
+          list.forEach(function(m){ if (m.address === address && m.password){ m.password = ""; rowChanged = true; } });
+          if (rowChanged) saveMailboxes(list);
+          return changed || rowChanged;
+        }
+        /* v1.15: migrate mailbox passwords to the server, then wipe
+           them off this device. Runs on sign-in and on load while a
+           session exists. FIRST the local rows (saved mailboxes, plus
+           the current mailbox when it is not a saved row yet) are
+           synced up via /sync — the server keeps the password — and
+           ONLY after the server confirms do the local copies get
+           wiped. If the sync fails (offline / server down) nothing
+           is wiped: the local password is the only copy, and losing
+           it would orphan the mailbox forever (Mail.tm has no
+           password reset). Next sign-in/load retries. Seller copies
+           of LISTED mailboxes are ordinary saved rows, so the same
+           migration covers them; the listing password in
+           market_listings is untouched (admin Check / buyer Restore
+           use the server-side copy already). */
+        function migrateMailboxPasswordsToServer(){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!p) return Promise.resolve(false);
+          var tok = sessionTokenFor(p.email);
+          if (!tok) return Promise.resolve(false);
+          var list = loadMailboxes();
+          var hasPw = false;
+          list.forEach(function(m){ if (m && m.address && m.password) hasPw = true; });
+          var cur = null;
+          try { cur = acctData().currentMailbox || null; } catch(e) {}
+          var curHasPw = !!(cur && cur.address && cur.password);
+          var curCovered = false;
+          if (curHasPw){ for (var i = 0; i < list.length; i++){ if (list[i].address === cur.address){ curCovered = true; break; } } }
+          if (!hasPw && !curHasPw) return Promise.resolve(true);
+          return syncServerMailboxes().then(function(data){
+            if (!data || !data.ok) return false;
+            if (!curHasPw || curCovered){
+              list.forEach(function(m){ if (m && m.address) wipeLocalMailboxPassword(m.address); });
+              if (curHasPw) wipeLocalMailboxPassword(cur.address);
+              return true;
+            }
+            var saved = findMailbox(cur.address);
+            var row = {
+              address: cur.address, password: cur.password,
+              name: saved ? (saved.name || "") : "",
+              logo: saved ? (saved.logo || "") : (cur.logo || ""),
+              ip: cur.ip || "", country: cur.country || "", city: cur.city || "",
+              bought: !!cur.bought, listingId: cur.listingId || "",
+              createdAt: cur.createdAt || ""
+            };
+            return syncOneMailbox(row).then(function(d2){
+              if (!d2 || !d2.ok) return false;
+              list.forEach(function(m){ if (m && m.address) wipeLocalMailboxPassword(m.address); });
+              wipeLocalMailboxPassword(cur.address);
+              return true;
+            }).catch(function(){ return false; });
+          }).catch(function(){ return false; });
+        }
         function deleteServerMailbox(address){
           var p = null;
           try { p = loadProfile(); } catch(e) {}
@@ -2336,6 +2415,7 @@
           stopPolling();
           if (state.createTimer){ clearTimeout(state.createTimer); state.createTimer = null; }
           state.address = ""; state.password = ""; state.token = ""; state.accountId = "";
+          state.passwordSynced = false;
           state.messages = []; state.failed = false; state.retrying = false;
           state.retryCount = 0; state.creating = false;
           savedState.messages = []; savedState.loaded = false; savedState.lastFetch = 0;
@@ -2369,6 +2449,7 @@
           switchAccount(email);
           if (keep.address && keep.token){
             state.address = keep.address; state.password = keep.password;
+            state.passwordSynced = !keep.password;
             state.token = keep.token; state.accountId = keep.accountId;
             state.createdAt = keep.createdAt; state.messages = keep.messages || [];
             if (keep.ip) currentIp = keep.ip;
@@ -3519,7 +3600,11 @@ var I18N = {
           creating: false, checking: false, retryCount: 0,
           failed: false, retrying: false, lastErrorCode: "",
           createTimer: null, pollEverOk: false, reauthing: null,
-          refreshQueued: false
+          refreshQueued: false,
+          /* v1.15: true once the current mailbox's password is
+             confirmed on the server — only then may the local copy be
+             wiped and saved rows store "". */
+          passwordSynced: false
         };
 
         /* Saved messages live in the server database, not in Mail.tm,
@@ -3572,7 +3657,7 @@ var I18N = {
         }
         function api(path, opts){
           opts = opts || {};
-          var headers = { "Accept": "application/json" };
+          var headers = { "Accept": "application/json", "X-MovMail-Version": APP_VERSION };
           if (state.token) headers["Authorization"] = "Bearer " + state.token;
           if (state.address) headers["X-Movmail-Address"] = state.address;
           if (opts.body) headers["Content-Type"] = "application/json";
@@ -3591,11 +3676,12 @@ var I18N = {
           }
           // Mail.tm does not send Access-Control-Allow-Origin, so browser
           // fetch to it directly is blocked by CORS. Go through our
-          // Render proxies first (primary, then backup), and only as a
-          // last resort try api.mail.tm directly (best effort, usually
-          // CORS-blocked). A 429/5xx/network failure on one base falls
-          // through to the next base for this request; the base that
-          // answers becomes the remembered base for later requests.
+          // Render proxies first (primary, then backup).
+          // v1.15: DIRECT api.mail.tm is NO LONGER a failover base at
+          // all (see API_BASES). An old client failed over to DIRECT
+          // when both proxies were 429 and deleted real accounts
+          // there, around the proxy's 403 block. Reads now fail when
+          // both proxies are down — "try again", never a delete.
           // Other HTTP errors (e.g. 401/404) fail at once — another
           // base would answer the same way.
           function failoverRetryable(err){
@@ -3604,6 +3690,19 @@ var I18N = {
           var order = [];
           var bases = apiOrderOverride || API_BASES;
           for (var i = 0; i < bases.length; i++) order.push(bases[(apiBaseIdx + i) % bases.length]);
+          // v1.15 fail-closed: a DELETE must never be routed to a
+          // direct Mail.tm base, whatever the base list holds — the
+          // proxy is the only path that can refuse it (403). If no
+          // proxy base remains, refuse at once instead of falling
+          // through. (The site's own DELETEs are /saved rows on the
+          // proxy; none of them ever needs DIRECT.)
+          if ((opts.method || "GET").toUpperCase() === "DELETE"){
+            order = order.filter(function(b){ return b !== DIRECT; });
+            if (!order.length){
+              var de = new Error("delete refused"); de.status = 403; de.data = { error: "delete_refused" };
+              return Promise.reject(de);
+            }
+          }
           var attempt = 0;
           function tryNext(lastErr){
             if (attempt >= order.length) throw lastErr;
@@ -3772,6 +3871,7 @@ var I18N = {
                 return api("/token", { method:"POST", body:{ address: address, password: password } })
                   .then(function(tok){
                     state.address = address; state.password = password;
+                    state.passwordSynced = false;
                     state.token = tok.token; state.accountId = (acc && acc.id) || tok.id || "";
                   });
               });
@@ -3801,12 +3901,19 @@ var I18N = {
             recordEmailCreated();
             /* v1.12: push the new address to the server at creation
                (unsaved, name "") so the daily quota counts it on
-               every device; a fresh device sees the same count. */
+               every device; a fresh device sees the same count.
+               v1.15: once the server confirms it holds the password,
+               wipe the local copy at once (state + session + any
+               saved row) — the phone must never keep it. Until the
+               server confirms, the password stays local: it is the
+               only copy, and losing it would orphan the mailbox. */
             syncOneMailbox({
               address: state.address, password: state.password, name: "",
               ip: currentIp ? currentIp.ip : "", country: currentIp ? currentIp.country : "",
               city: currentIp ? currentIp.city : "", flag: currentIp ? currentIp.flag : "",
               bought: false, logo: "", listingId: "", createdAt: state.createdAt || new Date().toISOString()
+            }).then(function(data){
+              if (data && data.ok) wipeLocalMailboxPassword(state.address);
             });
             addNotification("notifEmailGenerated", {addr: state.address});
           }).catch(function(err){
@@ -4205,8 +4312,8 @@ var I18N = {
         var currentProxyPref = "auto";
         function applyProxyPref(pref){
           currentProxyPref = (pref === "proxy1" || pref === "proxy2") ? pref : "auto";
-          if (pref === "proxy1") apiOrderOverride = [PROXY, PROXY2, DIRECT];
-          else if (pref === "proxy2") apiOrderOverride = [PROXY2, PROXY, DIRECT];
+          if (pref === "proxy1") apiOrderOverride = [PROXY, PROXY2];
+          else if (pref === "proxy2") apiOrderOverride = [PROXY2, PROXY];
           else apiOrderOverride = null;
         }
 
@@ -4254,7 +4361,12 @@ var I18N = {
             name: name,
             tier: getCurrentPlan() === "free" ? "free" : "pro",
             address: state.address,
-            password: state.password,
+            /* v1.15: never write a mailbox password to a saved row
+               once the server confirmed it holds it (passwordSynced).
+               Until then the password is stored — it is the only
+               copy, and the migration uploads + wipes it on the next
+               sign-in/load. */
+            password: state.passwordSynced ? "" : (state.password || ""),
             token: state.token,
             accountId: state.accountId || "",
             ip: currentIp ? currentIp.ip : "",
@@ -4458,6 +4570,7 @@ var I18N = {
           clearCurrentSession();
           stopPolling();
           state.address = ""; state.password = ""; state.token = ""; state.accountId = "";
+          state.passwordSynced = false;
           currentBoughtLogo = null; currentBought = false; currentBoughtListingId = "";
           state.messages = []; state.failed = false; state.retrying = false; state.retryCount = 0;
           savedState.messages = []; savedState.loaded = false; savedState.lastFetch = 0;
@@ -4612,64 +4725,26 @@ var I18N = {
             return arr;
           }).catch(function(){ return myDeleteRequests; });
         }
-        /* ---------- shared re-login (dead-token recovery) ----------
-           POST /token with the current address + password; if that
-           fails, re-create the account (POST /accounts) with the
-           same address + password and then take a fresh token, with
-           one last token-only try. On success the new token is kept
-           in state AND persisted to the matching saved-mailbox row
-           (an unsaved mailbox keeps the token in memory only).
-           Resolves {ok:true, token, accountId} or {ok:false}.
-           Guarded so only one re-login runs at a time — concurrent
-           callers share the in-flight attempt. Used by the poll
-           loop (fetchMessages) and by restoreMailbox(). */
-        function reauthMailbox(){
-          if (state.reauthing) return state.reauthing;
-          if (!state.address || !state.password) return Promise.resolve({ok:false});
-          var addr = state.address, pw = state.password;
-          function takeToken(tok, accountId){
-            var token = tok && tok.token;
-            if (!token) return {ok:false};
-            state.token = token;
-            if (accountId) state.accountId = accountId;
-            var list = loadMailboxes(), changed = false;
-            list.forEach(function(m){ if (m.address === addr){ m.token = token; if (accountId) m.accountId = accountId; changed = true; } });
-            if (changed) saveMailboxes(list);
-            if (addr === state.address) saveCurrentSession();
-            return {ok:true, token: token, accountId: accountId || ""};
-          }
-          function tokenOnly(){
-            return api("/token", { method: "POST", body: { address: addr, password: pw } }).then(function(tok){
-              return takeToken(tok, (tok && tok.id) || "");
-            });
-          }
-          state.reauthing = api("/token", { method: "POST", body: { address: addr, password: pw } }).then(function(tok){
-            return takeToken(tok, (tok && tok.id) || "");
-          }).catch(function(){
-            /* Token login failed — re-create the account with the
-               same address/password, then take a fresh token. If
-               re-create fails (e.g. the address is still taken
-               because the account exists), one last token-only try. */
-            return api("/accounts", { method: "POST", body: { address: addr, password: pw } }).then(function(acc){
-              return api("/token", { method: "POST", body: { address: addr, password: pw } }).then(function(tok){
-                return takeToken(tok, (acc && acc.id) || (tok && tok.id) || "");
-              });
-            }).catch(function(){ return tokenOnly(); });
-          }).catch(function(){ return {ok:false}; }).then(function(res){
-            state.reauthing = null;
-            return res && res.ok ? res : {ok:false};
-          });
-          return state.reauthing;
-        }
+        /* ---------- v1.15: the local-password re-login is GONE ----------
+           reauthMailbox() used to POST /token with the mailbox
+           password held on this device — and on failure it re-created
+           the account. That password is exactly what killed four
+           mailboxes (an old client holding it deleted the real
+           Mail.tm account directly). The phone holds no mailbox
+           password anymore: every re-login goes through the server
+           token endpoint (fetchMailboxToken / reauthServerMailbox
+           below) or the bought-mailbox server restore. There is no
+           local-password fallback, by design. */
 
         /* ---------- v1.7: re-login for a BOUGHT mailbox ----------
            A bought mailbox has no password on the device (the server
-           holds it), so reauthMailbox() cannot help it. Instead ask
+           holds it), so a local re-login cannot help it. Instead ask
            the server to restore it (POST /api/market/restore): the
            server logs in with the stored credentials — re-creating
            the Mail.tm account first if it was deleted — and returns
            a fresh token. The new token is kept in state AND in the
-           saved session, exactly like takeToken() in reauthMailbox().
+           saved session, exactly like the token path in
+           reauthServerMailbox().
            The listing id comes from the session (v1.7+) or, for
            sessions saved before v1.7, from My Orders: approved
            orders carry fullEmail, so the order for this address
@@ -4733,37 +4808,57 @@ var I18N = {
           });
           return state.reauthBoughting;
         }
-        /* ---------- v1.12: server restore ----------
-           A saved row pulled from the server has no Mail.tm password
-           on this device — the server holds it (exactly like listing
-           passwords). POST /api/mailboxes/restore logs in server-side
-           and returns a fresh token; the password never reaches the
-           browser. Resolves {ok:true, token, accountId} or {ok:false,
-           gone:true} when the Mail.tm account no longer exists. */
+        /* ---------- v1.15: server-held mailbox passwords only ----------
+           The phone must never hold a mailbox password again: four
+           mailboxes died because a client holding the password deleted
+           the real Mail.tm account directly. POST /api/mailboxes/token
+           logs in server-side with the stored password and returns a
+           fresh Mail.tm JWT — the password never reaches the browser.
+           fetchMailboxToken resolves {ok:true, token, accountId} or
+           {ok:false, busy:true} (Mail.tm rate-limit — retry later,
+           never a death) or {ok:false, gone:true} (Mail.tm says the
+           account no longer exists). A failure NEVER falls back to a
+           stored password — there is none on this device anymore. */
+        function fetchMailboxToken(address){
+          var p = null;
+          try { p = loadProfile(); } catch(e) {}
+          if (!address || !p || !p.email) return Promise.resolve({ok:false});
+          var tok = sessionTokenFor(p.email);
+          if (!tok) return Promise.resolve({ok:false});
+          return apiAdmin("/api/mailboxes/token", { method: "POST", body: { token: tok, address: address } }).then(function(res){
+            if (!res || !res.token || !res.address || res.address !== address) return {ok:false};
+            return {ok:true, token: res.token, accountId: res.accountId || ""};
+          }).catch(function(err){
+            var status = (err && err.status) || 0;
+            var msg = "";
+            if (err && err.data && err.data.error) msg = String(err.data.error);
+            else if (err && err.message) msg = String(err.message);
+            if (status === 503 || msg === "mailtm_busy") return {ok:false, busy:true};
+            return {ok:false, gone: msg.indexOf("no longer exists") !== -1};
+          });
+        }
+        /* v1.12: server restore (now via the v1.15 token endpoint).
+           A saved row has no Mail.tm password on this device — the
+           server holds it (exactly like listing passwords) and returns
+           a fresh token; the password never reaches the browser.
+           Resolves {ok:true, token, accountId} or {ok:false,
+           gone:true} when the Mail.tm account no longer exists, or
+           {ok:false, busy:true} when Mail.tm is rate-limiting. */
         function reauthServerMailbox(mb){
           if (state.reauthServering) return state.reauthServering;
           var addr = (mb && mb.address) || state.address;
-          var p = null;
-          try { p = loadProfile(); } catch(e) {}
-          if (!addr || !p || !p.email) return Promise.resolve({ok:false});
-          var tok = sessionTokenFor(p.email);
-          if (!tok) return Promise.resolve({ok:false});
-          state.reauthServering = apiAdmin("/api/mailboxes/restore", { method: "POST", body: { token: tok, address: addr } }).then(function(res){
-            if (!res || !res.token || !res.address || res.address !== addr) return {ok:false};
+          if (!addr) return Promise.resolve({ok:false});
+          state.reauthServering = fetchMailboxToken(addr).then(function(res){
+            if (!res || !res.ok) return res || {ok:false};
             state.token = res.token;
             if (res.accountId) state.accountId = res.accountId;
             if (addr === state.address) saveCurrentSession();
             /* The restored token + account id belong on the saved row
-               too (same as reauthMailbox's takeToken). */
+               too (same as the old local re-login's takeToken). */
             var list = loadMailboxes(), changed = false;
             list.forEach(function(m){ if (m.address === addr){ m.token = res.token; if (res.accountId) m.accountId = res.accountId; changed = true; } });
             if (changed) saveMailboxes(list);
             return {ok:true, token: res.token, accountId: res.accountId || ""};
-          }).catch(function(err){
-            var msg = "";
-            if (err && err.data && err.data.error) msg = String(err.data.error);
-            else if (err && err.message) msg = String(err.message);
-            return {ok:false, gone: msg.indexOf("no longer exists") !== -1};
           }).then(function(r){
             state.reauthServering = null;
             return r;
@@ -4787,6 +4882,7 @@ var I18N = {
           function adopt(token, accountId){
             state.address = mb.address;
             state.password = mb.password;
+            state.passwordSynced = !mb.password;
             state.token = token;
             state.accountId = accountId || "";
             state.messages = [];
@@ -4836,6 +4932,7 @@ var I18N = {
           /* Try the saved token first. */
           state.address = mb.address;
           state.password = mb.password;
+          state.passwordSynced = !mb.password;
           state.token = mb.token || "";
           api("/messages?page=1").then(function(){
             adopt(mb.token, "");
@@ -4865,19 +4962,11 @@ var I18N = {
                     fail();
                   }
                 });
-              } else if (mb.password){
-                reauthMailbox().then(function(res){
-                  if (res && res.ok){
-                    mb.token = res.token;
-                    adopt(res.token, res.accountId || "");
-                  } else {
-                    fail();
-                  }
-                });
               } else {
-                /* v1.12: no local password (server-pulled row) — the
+                /* v1.15: no local password on ANY row anymore — the
                    server holds the Mail.tm password and returns a
-                   fresh token. */
+                   fresh token (fetchMailboxToken). There is no
+                   local-password path left to try. */
                 reauthServerMailbox(mb).then(function(res){
                   if (res && res.ok){
                     mb.token = res.token;
@@ -5227,21 +5316,6 @@ var I18N = {
               state.countdown = state.pollInterval;
               updateCountdown();
             }
-            if (err && (err.status === 401 || err.status === 404) && !retried && state.address && state.password){
-              /* Dead token — re-log in once for this failure
-                 episode, then retry this fetch a single time. If
-                 re-login fails, stay quiet; the next tick retries. */
-              return reauthMailbox().then(function(res){
-                if (res && res.ok){
-                  state.pollInterval = pollBaseSeconds();
-                  state.countdown = state.pollInterval;
-                  updateCountdown();
-                  return runFetch(first, true);
-                }
-                quietFail();
-                return {ok:false, reason:"reauth-failed"};
-              });
-            }
             if (err && (err.status === 401 || err.status === 404) && !retried && state.address && currentBought){
               /* Dead token on a BOUGHT mailbox — no password on the
                  device, so heal it through the server restore, then
@@ -5258,10 +5332,13 @@ var I18N = {
                 return {ok:false, reason:"reauth-failed"};
               });
             }
-            if (err && (err.status === 401 || err.status === 404) && !retried && state.address && !state.password && !currentBought){
-              /* v1.12: dead token on a SERVER-PULLED mailbox — no
-                 password on this device either, so heal it through
-                 the server restore, then retry this fetch once. */
+            if (err && (err.status === 401 || err.status === 404) && !retried && state.address && !currentBought){
+              /* v1.15: dead token on an ORDINARY mailbox — the phone
+                 holds no password anymore, so heal it through the
+                 server token endpoint (fresh JWT, password never
+                 leaves the server), then retry this fetch once. A
+                 busy (Mail.tm 429) answer just waits for the next
+                 tick like any other quiet failure. */
               return reauthServerMailbox().then(function(res){
                 if (res && res.ok){
                   state.pollInterval = pollBaseSeconds();
@@ -6965,6 +7042,9 @@ var I18N = {
                 /* Fresh device (no local account): pull the server
                    mailboxes back — this is the core restore flow. */
                 pullServerMailboxes();
+                /* v1.15: then move any password still held on this
+                   device to the server and wipe the local copy. */
+                migrateMailboxPasswordsToServer();
               }
               if (local && !localOk){
                 var salt = randomStr(24);
@@ -6985,6 +7065,9 @@ var I18N = {
                     setAuthBusy(false);
                     finishSignIn(local, false);
                     syncServerMailboxes();
+                    /* v1.15: wipe local mailbox passwords once the
+                       server has them (sync first, wipe on success). */
+                    migrateMailboxPasswordsToServer();
                   }).catch(function(){
                     /* Server unreachable: the local account still works. */
                     setAuthBusy(false);
@@ -7293,6 +7376,7 @@ var I18N = {
         function adoptRestoredCurrent(mb){
           state.address = mb.address;
           state.password = mb.password;
+          state.passwordSynced = !mb.password;
           state.token = mb.token || state.token;
           state.accountId = mb.accountId || state.accountId || "";
           state.messages = [];
@@ -7346,6 +7430,7 @@ var I18N = {
           };
           state.address = mb.address;
           state.password = mb.password;
+          state.passwordSynced = !mb.password;
           state.token = mb.token;
           addrText.textContent = mb.address;
           addrText.classList.add("loading");
@@ -7371,7 +7456,11 @@ var I18N = {
                   adoptRestoredCurrent(mb);
                 });
               } else {
-                reauthMailbox().then(function(res){
+                /* v1.15: dead token on an ordinary mailbox — heal it
+                   through the server token endpoint (fresh JWT, the
+                   password never leaves the server). No local
+                   password exists to fall back to, by design. */
+                reauthServerMailbox().then(function(res){
                   if (res && res.ok){ mb.token = res.token; adoptRestoredCurrent(mb); }
                   else { clearCurrentSession(); createAccount(); }
                 });
@@ -8019,6 +8108,7 @@ var I18N = {
           stopPolling();
           state.address = address;
           state.password = "";
+          state.passwordSynced = true;
           state.token = token;
           state.accountId = accountId || "";
           state.messages = [];
@@ -8362,6 +8452,10 @@ var I18N = {
              reinstall / clear-data) and refresh the server quota
              count; silent on failure. */
           pullServerMailboxes();
+          /* v1.15: after the pull, move any mailbox password still
+             held on this device to the server and wipe the local
+             copy (sync first, wipe only on success). */
+          migrateMailboxPasswordsToServer();
           startGiftPolling();
         }
         applyLang(lang);
