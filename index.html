@@ -921,7 +921,21 @@
       }
       /* ---------- Email Account Shop (v1.2, public) ---------- */
       .shop{margin-top:22px}
-      .shop-note{font-size:13.5px;color:var(--muted);margin:0 0 12px}
+      .shop-warn{margin:0 0 12px;border:1px solid #f59e0b;background:rgba(245,158,11,.10);border-radius:12px;overflow:hidden}
+      .shop-warn-head{display:block;width:100%;text-align:left;background:none;border:0;padding:10px 12px;cursor:pointer;font:inherit;color:var(--text)}
+      .shop-warn-headrow{display:flex;align-items:center;gap:8px}
+      .shop-warn-ico{font-size:16px;line-height:1}
+      .shop-warn-title{font-weight:800;font-size:14px;color:#b45309}
+      .shop-warn-toggle{margin-left:auto;font-size:12.5px;font-weight:700;color:#b45309;white-space:nowrap}
+      .shop-warn-less{display:none}
+      .shop-warn.open .shop-warn-less{display:inline}
+      .shop-warn.open .shop-warn-more{display:none}
+      .shop-warn-chev{display:inline-block;transition:transform .18s ease;font-size:14px;color:#b45309}
+      .shop-warn.open .shop-warn-chev{transform:rotate(180deg)}
+      .shop-warn-preview{display:block;margin-top:5px;font-size:13px;line-height:1.5;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .shop-warn.open .shop-warn-preview{display:none}
+      .shop-warn-body{padding:2px 12px 12px;font-size:13.5px;line-height:1.7;color:var(--text)}
+      html[data-theme="dark"] .shop-warn-title,html[data-theme="dark"] .shop-warn-toggle,html[data-theme="dark"] .shop-warn-chev{color:#fbbf24}
       .shop-card{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:10px}
       .shop-main{flex:1 1 160px;min-width:0}
       .shop-title{font-weight:800;font-size:15.5px;line-height:1.3;overflow-wrap:anywhere}
@@ -1129,7 +1143,19 @@
             </button>
           </div>
           <div style="padding:16px 18px 18px">
-            <p class="shop-note" data-i18n="shopPublicNote">គ្រប់គ្នាអាចមើលបាន — មិនបាច់ចុះឈ្មោះក៏បាន។ អ៊ីមែលត្រូវបានបិទបាំងមុនពេលទិញ។</p>
+            <div class="shop-warn" id="shopWarn">
+              <button type="button" class="shop-warn-head" id="shopWarnToggle" aria-expanded="false" aria-controls="shopWarnBody">
+                <span class="shop-warn-headrow">
+                  <span class="shop-warn-ico">⚠️</span>
+                  <span class="shop-warn-title" data-i18n="shopWarnTitle">បម្រាមពេលប្រើប្រាស់</span>
+                  <span class="shop-warn-toggle"><span class="shop-warn-more" data-i18n="shopWarnMore">មើលបន្ថែម</span><span class="shop-warn-less" data-i18n="shopWarnLess">បង្រួម</span> <span class="shop-warn-chev">⌄</span></span>
+                </span>
+                <span class="shop-warn-preview" data-i18n="shopWarnPreview">អាខោន MuseAi ដែលបង្កើតរួច ត្រូវភ្ជាប់ VPN Server…</span>
+              </button>
+              <div class="shop-warn-body" id="shopWarnBody" hidden>
+                <div data-i18n-html="shopWarnBody">អាខោន MuseAi ដែលបង្កើតរួច <b>ត្រូវភ្ជាប់ VPN Server</b> មុនពេលប្រើប្រាស់។<br>✅ <b>On VPN៖</b> Video, Image, All ដំណើរការទាំងអស់<br>❌ <b>No VPN៖</b> Video ប្រើមិនបាន · ✅ Image, All ដំណើរការធម្មតា<br>🌍 <b>ប្រទេសដែលប្រើបាន៖</b> សូមភ្ជាប់ VPN Server របស់ប្រទេសដែល MuseAi គាំទ្រ</div>
+              </div>
+            </div>
             <div class="my-orders" id="myOrdersBox" hidden>
               <h3 data-i18n="myOrdersTitle">ការបញ្ជាទិញរបស់ខ្ញុំ</h3>
               <div id="myOrdersList"></div>
@@ -2639,7 +2665,11 @@ var I18N = {
     "featSpeedYearly": "ល្បឿនដូចរន្ទះ — រៀងរាល់ 2 វិនាទី",
     "navShop": "លក់ Email Account",
     "shopTitle": "ហាងលក់ Email Account",
-    "shopPublicNote": "គ្រប់គ្នាអាចមើលបាន — មិនបាច់ចុះឈ្មោះក៏បាន។ អ៊ីមែលត្រូវបានបិទបាំងមុនពេលទិញ។",
+    "shopWarnTitle": "បម្រាមពេលប្រើប្រាស់",
+    "shopWarnPreview": "អាខោន MuseAi ដែលបង្កើតរួច ត្រូវភ្ជាប់ VPN Server…",
+    "shopWarnMore": "មើលបន្ថែម",
+    "shopWarnLess": "បង្រួម",
+    "shopWarnBody": "អាខោន MuseAi ដែលបង្កើតរួច <b>ត្រូវភ្ជាប់ VPN Server</b> មុនពេលប្រើប្រាស់។<br>✅ <b>On VPN៖</b> Video, Image, All ដំណើរការទាំងអស់<br>❌ <b>No VPN៖</b> Video ប្រើមិនបាន · ✅ Image, All ដំណើរការធម្មតា<br>🌍 <b>ប្រទេសដែលប្រើបាន៖</b> សូមភ្ជាប់ VPN Server របស់ប្រទេសដែល MuseAi គាំទ្រ",
     "shopLoading": "កំពុងផ្ទុកហាង…",
     "shopEmpty": "មិនទាន់មានអ៊ីមែលលក់ទេ",
     "shopEmptyText": "អ៊ីមែលដែលដាក់លក់នឹងបង្ហាញនៅទីនេះ។",
@@ -3002,7 +3032,11 @@ var I18N = {
     "featSpeedYearly": "Lightning speed — every 2 seconds",
     "navShop": "Email Shop",
     "shopTitle": "Email Account Shop",
-    "shopPublicNote": "Public — everyone can browse without signing in. Emails stay masked until purchase.",
+    "shopWarnTitle": "Warning before use",
+    "shopWarnPreview": "Created MuseAi accounts must connect to a VPN Server…",
+    "shopWarnMore": "See more",
+    "shopWarnLess": "Show less",
+    "shopWarnBody": "MuseAi accounts that are already created <b>must connect to a VPN Server</b> before use.<br>✅ <b>VPN On:</b> Video, Image, All work<br>❌ <b>No VPN:</b> Video does not work · ✅ Image, All work<br>🌍 <b>Countries:</b> connect to a VPN Server in a country supported by MuseAi",
     "shopLoading": "Loading shop…",
     "shopEmpty": "No emails for sale yet",
     "shopEmptyText": "Emails listed for sale will appear here.",
@@ -6872,6 +6906,17 @@ var I18N = {
           loadMarketOrders();
           setTimeout(function(){ if (ic) ic.classList.remove("spin"); }, 900);
         });
+        /* Shop usage warning (v1.6): collapsed preview with "…" — tap the
+           header to expand the full VPN rules, tap again to collapse. */
+        (function(){
+          var box = $("shopWarn"), btn = $("shopWarnToggle"), body = $("shopWarnBody");
+          if (!box || !btn || !body) return;
+          btn.addEventListener("click", function(){
+            var open = box.classList.toggle("open");
+            body.hidden = !open;
+            btn.setAttribute("aria-expanded", open ? "true" : "false");
+          });
+        })();
         startMarketOrderPolling();
         loadMarketOrders();
 
