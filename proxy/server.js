@@ -516,6 +516,13 @@ const ALTER_API_TABLES_SQL = [
   "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS buyer_gmail TEXT DEFAULT ''",
   "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS buyer_name TEXT DEFAULT ''",
   "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS forwarded_at TIMESTAMPTZ",
+  // v1.10b: the system never deletes a listed/bought email — when a
+  // red listing crosses 24h red, the admin gets ONE system
+  // notification (type 'system_delete_request') carrying the reason
+  // and the red-since timestamp instead of the listing being
+  // removed. Never a password or token.
+  "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS reason TEXT DEFAULT ''",
+  "ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS red_since TIMESTAMPTZ",
 ];
 
 if (dbPool) {
@@ -1253,8 +1260,9 @@ function cleanListingToken(v) {
 // v1.3 listing health + IP profile.
 // health: 'good' | 'bad'. Legacy rows (health NULL) behave as good.
 // health_bad_since marks when a listing first went red; a red
-// listing auto-deletes (status 'removed') 24h after that moment,
-// lazily, on the next list fetch. ip/country/city/flag are the
+// listing NEVER auto-deletes — v1.10b: after 24h red the system
+// only notifies the admin once (type 'system_delete_request') and
+// the listing stays. ip/country/city/flag are the
 // mailbox's IP profile, captured at listing creation and adopted
 // permanently by the bought mailbox on Restore — never regenerated.
 // health_reason (admin shape only) records WHY a listing went red:
@@ -1591,28 +1599,83 @@ async function checkListingHealth(row) {
   return await updateListingHealth(row.id, "bad", badSince);
 }
 
-// Lazy red auto-delete: red listings older than 24h become
-// 'removed'. Red listings inside the 24h window stay visible (the
-// public list still returns them with health 'bad') so buyers see
-// the red flag before the listing disappears.
-async function expireRedListings() {
+// v1.10b: the SYSTEM must never delete a listed/bought email —
+// Mov's ban covers even our own auto-delete. A red listing that
+// crosses 24h red is NOT removed: it stays visible (active or
+// sold, health stays 'bad') and the admin gets ONE notification
+// (type 'system_delete_request', deduped per listing) stating the
+// reason clearly. The admin then decides: Delete forever, Mark
+// good, or leave it. Runs lazily on the next list fetch after the
+// 24h mark, like the old auto-delete did.
+async function notifySystemDeleteRequest(row) {
+  if (!row || !row.id) return null;
+  const reason = String(row.health_reason || "").slice(0, 200);
+  const redSince = row.health_bad_since ? toIso(row.health_bad_since) : null;
   if (!USE_MEMORY_STORE) {
-    await dbPool.query(
-      "UPDATE market_listings SET status = 'removed' WHERE health = 'bad'" +
+    // Belt and braces: the WHERE NOT EXISTS guard covers the race
+    // between the check and this INSERT, so a listing gets exactly
+    // one system request, ever.
+    const r = await dbPool.query(
+      "INSERT INTO admin_notifications (gmail, type, listing_id, listing_email, listing_title, subject, reason, red_since)" +
+        " SELECT $1,'system_delete_request',$2,$3,$4,$5,$6,$7" +
+        " WHERE NOT EXISTS (SELECT 1 FROM admin_notifications WHERE type = 'system_delete_request' AND listing_id = $2)" +
+        " RETURNING *",
+      [row.seller_gmail || "ADMIN", row.id, row.email, row.title || "", reason, reason, redSince]
+    );
+    return r.rows[0] || null;
+  }
+  const exists = mem.notifications.some(
+    (n) => n.type === "system_delete_request" && n.listing_id === row.id
+  );
+  if (exists) return null;
+  const nrow = {
+    id: mem.notificationSeq++,
+    gmail: row.seller_gmail || "ADMIN",
+    type: "system_delete_request",
+    code: null,
+    listing_id: row.id,
+    listing_email: row.email,
+    listing_title: row.title || "",
+    sender: "",
+    subject: reason,
+    reason,
+    red_since: redSince,
+    message_id: "",
+    buyer_gmail: "",
+    buyer_name: "",
+    forwarded_at: null,
+    created_at: new Date().toISOString(),
+    is_read: false,
+  };
+  mem.notifications.push(nrow);
+  return nrow;
+}
+
+async function expireRedListings() {
+  let rows;
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "SELECT * FROM market_listings WHERE health = 'bad'" +
         " AND health_bad_since < NOW() - INTERVAL '24 hours'" +
         " AND status IN ('active','sold')"
     );
-    return;
+    rows = r.rows;
+  } else {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    rows = [...mem.listings.values()].filter(
+      (x) =>
+        healthOf(x) === "bad" &&
+        x.health_bad_since &&
+        Date.parse(x.health_bad_since) < cutoff &&
+        (x.status === "active" || x.status === "sold")
+    );
   }
-  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-  for (const row of mem.listings.values()) {
-    if (
-      healthOf(row) === "bad" &&
-      row.health_bad_since &&
-      Date.parse(row.health_bad_since) < cutoff &&
-      (row.status === "active" || row.status === "sold")
-    ) {
-      row.status = "removed";
+  for (const row of rows) {
+    try {
+      await notifySystemDeleteRequest(row);
+    } catch (err) {
+      // A failed notify must never break the list fetch.
+      console.error("movmail-proxy: system delete-request notify failed:", err.message);
     }
   }
 }
@@ -1742,9 +1805,10 @@ async function listAllListings() {
   await expireRedListings();
   await recheckStaleListings();
   if (!USE_MEMORY_STORE) {
-    // 'removed' listings (manual remove, or red auto-delete after
-    // 24h) are gone from the admin list too — the remove endpoint
-    // still returns the removed row itself as confirmation.
+    // 'removed' listings (manual remove, admin Delete forever, or
+    // an approved delete request) are gone from the admin list too
+    // — the remove endpoint still returns the removed row itself as
+    // confirmation. Red listings are NEVER auto-removed (v1.10b).
     const r = await dbPool.query(
       "SELECT * FROM market_listings WHERE status <> 'removed' ORDER BY created_at DESC"
     );
@@ -2689,6 +2753,7 @@ function listingCodeNotificationFromRow(r) {
   if (!r) return null;
   return {
     id: r.id,
+    type: r.type || "listing_code",
     listingId: r.listing_id,
     listingEmail: r.listing_email || "",
     listingTitle: r.listing_title || "",
@@ -2696,6 +2761,9 @@ function listingCodeNotificationFromRow(r) {
     subject: r.subject || "",
     code: r.code || "",
     messageId: r.message_id || "",
+    // v1.10b: system delete request — the reason + red-since.
+    reason: r.reason || "",
+    redSince: toIso(r.red_since),
     // v1.9b: who bought it (approved order + users table) and
     // whether the code was already forwarded to them.
     buyerGmail: r.buyer_gmail || "",
@@ -2722,12 +2790,12 @@ async function listListingCodeNotifications(limit) {
   }
   if (!USE_MEMORY_STORE) {
     const r = await dbPool.query(
-      "SELECT * FROM admin_notifications WHERE type = 'listing_code'" +
+      "SELECT * FROM admin_notifications WHERE type IN ('listing_code','system_delete_request')" +
         " ORDER BY created_at DESC, id DESC LIMIT $1",
       [n]
     );
     const unread = await dbPool.query(
-      "SELECT COUNT(*)::int AS count FROM admin_notifications WHERE type = 'listing_code' AND is_read IS DISTINCT FROM true"
+      "SELECT COUNT(*)::int AS count FROM admin_notifications WHERE type IN ('listing_code','system_delete_request') AND is_read IS DISTINCT FROM true"
     );
     const notifications = [];
     for (const row of r.rows) notifications.push(await withBuyer(listingCodeNotificationFromRow(row)));
@@ -2737,27 +2805,29 @@ async function listListingCodeNotifications(limit) {
     };
   }
   const rows = mem.notifications
-    .filter((x) => x.type === "listing_code")
+    .filter((x) => x.type === "listing_code" || x.type === "system_delete_request")
     .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")) || b.id - a.id)
     .slice(0, n);
   const notifications = [];
   for (const row of rows) notifications.push(await withBuyer(listingCodeNotificationFromRow(row)));
   return {
     notifications,
-    unread: mem.notifications.filter((x) => x.type === "listing_code" && !x.is_read).length,
+    unread: mem.notifications.filter(
+      (x) => (x.type === "listing_code" || x.type === "system_delete_request") && !x.is_read
+    ).length,
   };
 }
 
 async function markListingCodeNotificationsRead() {
   if (!USE_MEMORY_STORE) {
     const r = await dbPool.query(
-      "UPDATE admin_notifications SET is_read = true WHERE type = 'listing_code' AND is_read IS DISTINCT FROM true"
+      "UPDATE admin_notifications SET is_read = true WHERE type IN ('listing_code','system_delete_request') AND is_read IS DISTINCT FROM true"
     );
     return r.rowCount || 0;
   }
   let n = 0;
   for (const x of mem.notifications) {
-    if (x.type === "listing_code" && !x.is_read) { x.is_read = true; n++; }
+    if ((x.type === "listing_code" || x.type === "system_delete_request") && !x.is_read) { x.is_read = true; n++; }
   }
   return n;
 }

@@ -120,8 +120,8 @@ const I18N = {
     evidenceLast: 'សារចុងក្រោយ', evidenceNone: 'មិនទាន់មានសារមកដល់ក្រោយពេលទិញទេ', evidenceMsgs: 'សារក្រោយពេលទិញ',
     mismatchFlag: '⚠️ កូដបានមកដល់ហើយ តែអ្នកទិញថាមិនដំណើរការ',
     /* v1.9: admin code notifications for listed emails. */
-    notifications: 'ការជូនដំណឹង', notifTitle: 'ការជូនដំណឹង — កូដមកដល់អ៊ីមែលលក់',
-    notifNote: 'ពេលមានសារ ឬកូដមកដល់អ៊ីមែលដែលដាក់លក់ (ទាំងដែលលក់រួច) វានឹងលោតមកទីនេះ។',
+    notifications: 'ការជូនដំណឹង', notifTitle: 'ការជូនដំណឹង — កូដមកដល់អ៊ីមែលលក់ និងសំណើប្រព័ន្ធ',
+    notifNote: 'ពេលមានសារ ឬកូដមកដល់អ៊ីមែលដែលដាក់លក់ (ទាំងដែលលក់រួច) វានឹងលោតមកទីនេះ។ បើអ៊ីមែលណាមួយក្រហមលើស 24 ម៉ោង ប្រព័ន្ធនឹងស្នើសុំអ្នកតែប៉ុណ្ណោះ (មិនលុបដោយខ្លួនឯងទេ) — អ្នកជាអ្នកសម្រេច។',
     noNotif: 'មិនមានការជូនដំណឹងទេ', markAllRead: 'សម្គាល់ថាបានអានទាំងអស់',
     notifNew: 'ថ្មី', toastNotifNew: '📩 អ៊ីមែលលក់មានកូដថ្មី!',
     lastCode: 'កូដចុងក្រោយ', noLastCode: 'មិនទាន់មានកូដមកដល់ទេ', notifCode: 'កូដ',
@@ -130,6 +130,12 @@ const I18N = {
     sendToBuyer: 'ផ្ញើទៅអ្នកទិញ', notifSent: '✓ បានផ្ញើទៅអ្នកទិញ',
     toastNotifSent: 'បានផ្ញើកូដទៅអ្នកទិញហើយ',
     toastNotifNewDetail: '📩 {buyer} — កូដពី {sender} បានមកដល់ {email}',
+    /* v1.10b: the system never deletes a listed/bought email — a red
+       listing past 24h only ASKS the admin (one notification with
+       the reason); the listing stays. */
+    notifSysTitle: '⚠️ ប្រព័ន្ធស្នើសុំលុបអ៊ីមែលនេះ',
+    notifSysReason: 'មូលហេតុ', notifSysRedSince: 'ក្រហមតាំងពី',
+    toastNotifSysNew: '⚠️ ប្រព័ន្ធស្នើសុំលុប {email} — មូលហេតុ៖ {reason}',
     /* v1.9d: admin-only permanent delete of a listed mailbox. */
     deleteAccount: 'លុបជាអចិន្ត្រៃយ៍',
     confirmDeleteAccount: 'លុបអ៊ីមែល {email} ជាអចិន្ត្រៃយ៍មែនទេ? អ៊ីមែលនេះនឹងត្រូវលុបចេញពី Mail.tm ហើយមិនអាចយកមកវិញបានទេ។ មានតែអ្នកគ្រប់គ្រងទេដែលអាចលុបបាន។',
@@ -233,8 +239,8 @@ const I18N = {
     evidenceLast: 'Last message', evidenceNone: 'No message arrived after the purchase yet', evidenceMsgs: 'messages after purchase',
     mismatchFlag: '⚠️ A code arrived, but the buyer says it does not work',
     /* v1.9: admin code notifications for listed emails. */
-    notifications: 'Notifications', notifTitle: 'Notifications — codes arriving at listed emails',
-    notifNote: 'When a message or code arrives at an email you listed for sale (including sold ones), it pops up here.',
+    notifications: 'Notifications', notifTitle: 'Notifications — codes arriving at listed emails, and system requests',
+    notifNote: 'When a message or code arrives at an email you listed for sale (including sold ones), it pops up here. If a listing stays red for over 24 hours, the system only ASKS you (it never deletes by itself) — you decide.',
     noNotif: 'No notifications yet', markAllRead: 'Mark all as read',
     notifNew: 'New', toastNotifNew: '📩 A listed email has a new code!',
     lastCode: 'Last code', noLastCode: 'No code arrived yet', notifCode: 'Code',
@@ -243,6 +249,12 @@ const I18N = {
     sendToBuyer: 'Send to buyer', notifSent: '✓ Sent to buyer',
     toastNotifSent: 'Code sent to the buyer',
     toastNotifNewDetail: '📩 {buyer} — code from {sender} arrived at {email}',
+    /* v1.10b: the system never deletes a listed/bought email — a red
+       listing past 24h only ASKS the admin (one notification with
+       the reason); the listing stays. */
+    notifSysTitle: '⚠️ System asks to delete this email',
+    notifSysReason: 'Reason', notifSysRedSince: 'Red since',
+    toastNotifSysNew: '⚠️ System asks to delete {email} — reason: {reason}',
     /* v1.9d: admin-only permanent delete of a listed mailbox. */
     deleteAccount: 'Delete forever',
     confirmDeleteAccount: 'Delete {email} forever? The Mail.tm account will be deleted permanently and can never be recovered. Only the admin can delete it.',
@@ -1020,12 +1032,16 @@ function normNotif(n) {
   n = n || {};
   return {
     id: n.id,
+    type: n.type || 'listing_code',
     listingId: n.listingId || n.listing_id || '',
     listingEmail: n.listingEmail || n.listing_email || n.email || '',
     listingTitle: n.listingTitle || n.listing_title || n.title || '',
     sender: n.sender || n.from || '',
     subject: n.subject || '',
     code: n.code || '',
+    /* v1.10b: system delete request — the reason + red-since. */
+    reason: n.reason || '',
+    redSince: n.redSince || n.red_since || '',
     /* v1.9b: who bought it + whether the code was forwarded. */
     buyerGmail: n.buyerGmail || n.buyer_gmail || '',
     buyerName: n.buyerName || n.buyer_name || '',
@@ -1065,11 +1081,19 @@ async function loadNotifications(silent) {
       list.forEach(function (x) { if (!newest || Number(x.id) > Number(newest.id)) newest = x; });
       if (newest) {
         var nn = normNotif(newest);
-        var who = nn.buyerName || nn.buyerGmail;
-        toast(t('toastNotifNewDetail')
-          .replace('{buyer}', who || nn.listingEmail || '—')
-          .replace('{sender}', nn.sender || '—')
-          .replace('{email}', nn.listingEmail || '—'));
+        if (nn.type === 'system_delete_request') {
+          /* v1.10b: the system asks, it never deletes — toast the
+             reason so the admin knows why at a glance. */
+          toast(t('toastNotifSysNew')
+            .replace('{email}', nn.listingEmail || '—')
+            .replace('{reason}', nn.reason || '—'));
+        } else {
+          var who = nn.buyerName || nn.buyerGmail;
+          toast(t('toastNotifNewDetail')
+            .replace('{buyer}', who || nn.listingEmail || '—')
+            .replace('{sender}', nn.sender || '—')
+            .replace('{email}', nn.listingEmail || '—'));
+        }
       } else toast(t('toastNotifNew'));
     }
   } catch (e) {
@@ -1081,7 +1105,11 @@ function renderNotifications() {
     return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
   });
   $('notifList').innerHTML = sorted.map(function (n) {
-    var codeLine = n.code
+    /* v1.10b: a system delete request has no code, no sender line and
+       no forward button — it shows the reason + red-since clearly,
+       in an amber row. */
+    var isSys = n.type === 'system_delete_request';
+    var codeLine = (!isSys && n.code)
       ? '<div class="n-line n-code">' + esc(t('notifCode')) + ': <code>' + esc(n.code) + '</code></div>'
       : '';
     /* v1.9b: who bought it (name + gmail, or "no buyer yet") and the
@@ -1092,19 +1120,27 @@ function renderNotifications() {
         ? esc(n.buyerName ? n.buyerName + ' (' + n.buyerGmail + ')' : n.buyerGmail)
         : esc(t('notifNoBuyer')))
       + '</div>';
+    var msgLine = isSys ? ''
+      : '<div class="n-line">📩 ' + esc(n.sender || '—') + ' — ' + esc(n.subject || '—') + '</div>';
+    var sysBlock = isSys
+      ? '<div class="n-line n-sys-title">' + esc(t('notifSysTitle')) + '</div>'
+        + '<div class="n-line">' + esc(t('notifSysReason')) + ': ' + esc(n.reason || '—') + '</div>'
+        + '<div class="n-line">' + esc(t('notifSysRedSince')) + ': ' + esc(fmtDate(n.redSince)) + '</div>'
+      : '';
     var fwd = '';
-    if (n.code && n.buyerGmail) {
+    if (!isSys && n.code && n.buyerGmail) {
       fwd = n.forwarded
         ? '<div class="n-line n-sent">' + esc(t('notifSent')) + '</div>'
         : '<button class="btn btn-primary notif-forward-btn" data-forward-id="' + esc(n.id) + '">' + esc(t('sendToBuyer')) + '</button>';
     }
-    return '<div class="notif-row' + (n.isRead ? '' : ' notif-unread') + '" data-notif-id="' + esc(n.id) + '">'
+    return '<div class="notif-row' + (n.isRead ? '' : ' notif-unread') + (isSys ? ' notif-sys' : '') + '" data-notif-id="' + esc(n.id) + '">'
       + '<div class="notif-info">'
       + '<div class="n-title">' + (n.isRead ? '' : '<span class="pill pill-red">' + esc(t('notifNew')) + '</span> ')
       + esc(n.listingTitle || n.listingEmail) + '</div>'
       + '<div class="n-line">' + esc(n.listingEmail) + '</div>'
       + buyerLine
-      + '<div class="n-line">📩 ' + esc(n.sender || '—') + ' — ' + esc(n.subject || '—') + '</div>'
+      + msgLine
+      + sysBlock
       + codeLine
       + fwd
       + '<div class="n-line n-time">' + esc(fmtDate(n.createdAt)) + '</div>'

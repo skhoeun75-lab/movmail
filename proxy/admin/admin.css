@@ -379,6 +379,12 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
 .notif-forward-btn { margin-top: 8px; }
 .notif-info .n-line.n-sent { color: var(--accent); font-weight: 700; }
 
+/* v1.10b: system delete-request notifications — amber, distinct from
+   code notifications (no code, no forward button). */
+.notif-row.notif-sys { border-left: 4px solid #b45309; background: #fffbeb; }
+.notif-row.notif-sys.notif-unread { background: #fef3c7; }
+.notif-info .n-line.n-sys-title { color: #92400e; font-weight: 700; }
+
 /* ---------- v1.10: delete requests (BLOCKED) ---------- */
 .delreq-list { display: grid; gap: 10px; }
 .delreq-row {
