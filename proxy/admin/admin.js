@@ -90,6 +90,13 @@ const I18N = {
     notifDelPath: 'ផ្លូវដែលស្នើលុប', notifDelProxy: 'Proxy ដែលបដិសេធ',
     notifDelAttempts: 'ចំនួនដងដែលស្នើ', notifDelLast: 'លើកចុងក្រោយ',
     toastNotifDelNew: '🛡️ មានការប៉ុនប៉ងលុប {path} — ត្រូវបានបដិសេធដោយ {proxy}',
+    /* v1.13: seller death alarm — a LISTED mailbox died on Mail.tm
+       ("This account no longer exists."). It can never receive codes
+       again, for the seller or its buyer. Red row, no code, no
+       forward button; the row names the listing + FULL email. */
+    notifDiedTitle: '💀 អ៊ីមែលដែលដាក់លក់បានស្លាប់ហើយ',
+    notifDiedEmail: 'អ៊ីមែល',
+    toastNotifDiedNew: '💀 អ៊ីមែលដែលដាក់លក់ {email} បានស្លាប់ហើយ — លែងទទួលកូដបានទេ',
     /* v1.9d: admin-only permanent delete of a listed mailbox. */
     deleteAccount: 'លុបជាអចិន្ត្រៃយ៍',
     confirmDeleteAccount: 'លុបអ៊ីមែល {email} ជាអចិន្ត្រៃយ៍មែនទេ? អ៊ីមែលនេះនឹងត្រូវលុបចេញពី Mail.tm ហើយមិនអាចយកមកវិញបានទេ។ មានតែអ្នកគ្រប់គ្រងទេដែលអាចលុបបាន។',
@@ -231,6 +238,13 @@ const I18N = {
     notifDelPath: 'Attempted path', notifDelProxy: 'Blocked by proxy',
     notifDelAttempts: 'Attempts', notifDelLast: 'Last attempt',
     toastNotifDelNew: '🛡️ Delete attempt blocked: {path} — refused by {proxy}',
+    /* v1.13: seller death alarm — a LISTED mailbox died on Mail.tm
+       ("This account no longer exists."). It can never receive codes
+       again, for the seller or its buyer. Red row, no code, no
+       forward button; the row names the listing + FULL email. */
+    notifDiedTitle: '💀 A listed email died',
+    notifDiedEmail: 'Email',
+    toastNotifDiedNew: '💀 Listed email {email} died — it can no longer receive codes',
     /* v1.9d: admin-only permanent delete of a listed mailbox. */
     deleteAccount: 'Delete forever',
     confirmDeleteAccount: 'Delete {email} forever? The Mail.tm account will be deleted permanently and can never be recovered. Only the admin can delete it.',
@@ -1112,6 +1126,11 @@ async function loadNotifications(silent) {
           toast(t('toastNotifDelNew')
             .replace('{path}', nn.attemptPath || '—')
             .replace('{proxy}', nn.proxyHost || '—'));
+        } else if (nn.type === 'listing_died') {
+          /* v1.13: a listed mailbox died on Mail.tm — it can never
+             receive codes again, for the seller or its buyer. */
+          toast(t('toastNotifDiedNew')
+            .replace('{email}', nn.listingEmail || '—'));
         } else if (nn.type === 'system_delete_request') {
           /* v1.10b: the system asks, it never deletes — toast the
              reason so the admin knows why at a glance. */
@@ -1141,19 +1160,20 @@ function renderNotifications() {
        in an amber row. */
     var isSys = n.type === 'system_delete_request';
     var isDel = n.type === 'delete_attempt_blocked';
-    var codeLine = (!isSys && !isDel && n.code)
+    var isDied = n.type === 'listing_died';
+    var codeLine = (!isSys && !isDel && !isDied && n.code)
       ? '<div class="n-line n-code">' + esc(t('notifCode')) + ': <code>' + esc(n.code) + '</code></div>'
       : '';
     /* v1.9b: who bought it (name + gmail, or "no buyer yet") and the
        forward button — only when a code + a known buyer exist. Once
        forwarded it becomes a "sent ✓" state and the button is gone.
-       Delete-attempt rows have no buyer and no forward. */
-    var buyerLine = isDel ? '' : '<div class="n-line">👤 ' + esc(t('notifBuyer')) + ': '
+       Delete-attempt and died rows have no buyer and no forward. */
+    var buyerLine = (isDel || isDied) ? '' : '<div class="n-line">👤 ' + esc(t('notifBuyer')) + ': '
       + (n.buyerGmail
         ? esc(n.buyerName ? n.buyerName + ' (' + n.buyerGmail + ')' : n.buyerGmail)
         : esc(t('notifNoBuyer')))
       + '</div>';
-    var msgLine = (isSys || isDel) ? ''
+    var msgLine = (isSys || isDel || isDied) ? ''
       : '<div class="n-line">📩 ' + esc(n.sender || '—') + ' — ' + esc(n.subject || '—') + '</div>';
     var sysBlock = isSys
       ? '<div class="n-line n-sys-title">' + esc(t('notifSysTitle')) + '</div>'
@@ -1170,21 +1190,33 @@ function renderNotifications() {
         + '<div class="n-line">' + esc(t('notifDelProxy')) + ': ' + esc(n.proxyHost || '—') + '</div>'
         + '<div class="n-line">' + esc(t('notifDelAttempts')) + ': ' + esc(n.attempts > 0 ? String(n.attempts) : '1') + ' · ' + esc(t('notifDelLast')) + ': ' + esc(fmtDate(n.createdAt)) + '</div>'
       : '';
+    /* v1.13: a listed mailbox died — no code, no sender line, no
+       forward button. The row shows the listing title, the FULL
+       email and when it died, in a red row. The buyer (if any) is
+       resolved by the server into buyerGmail on the row, but a dead
+       mailbox has no buyer action left — the admin decides what to
+       tell the buyer. */
+    var diedBlock = isDied
+      ? '<div class="n-line n-del-title">' + esc(t('notifDiedTitle')) + '</div>'
+        + '<div class="n-line">' + esc(t('notifDiedEmail')) + ': <code>' + esc(n.listingEmail || '—') + '</code></div>'
+        + '<div class="n-line">' + esc(n.reason || '—') + '</div>'
+      : '';
     var fwd = '';
-    if (!isSys && !isDel && n.code && n.buyerGmail) {
+    if (!isSys && !isDel && !isDied && n.code && n.buyerGmail) {
       fwd = n.forwarded
         ? '<div class="n-line n-sent">' + esc(t('notifSent')) + '</div>'
         : '<button class="btn btn-primary notif-forward-btn" data-forward-id="' + esc(n.id) + '">' + esc(t('sendToBuyer')) + '</button>';
     }
-    return '<div class="notif-row' + (n.isRead ? '' : ' notif-unread') + (isSys ? ' notif-sys' : '') + (isDel ? ' notif-del' : '') + '" data-notif-id="' + esc(n.id) + '">'
+    return '<div class="notif-row' + (n.isRead ? '' : ' notif-unread') + (isSys ? ' notif-sys' : '') + (isDel ? ' notif-del' : '') + (isDied ? ' notif-died' : '') + '" data-notif-id="' + esc(n.id) + '">'
       + '<div class="notif-info">'
       + '<div class="n-title">' + (n.isRead ? '' : '<span class="pill pill-red">' + esc(t('notifNew')) + '</span> ')
       + esc(isDel ? n.attemptPath : (n.listingTitle || n.listingEmail)) + '</div>'
-      + (isDel ? '' : '<div class="n-line">' + esc(n.listingEmail) + '</div>')
+      + (isDel || isDied ? '' : '<div class="n-line">' + esc(n.listingEmail) + '</div>')
       + buyerLine
       + msgLine
       + sysBlock
       + delBlock
+      + diedBlock
       + codeLine
       + fwd
       + '<div class="n-line n-time">' + esc(fmtDate(n.createdAt)) + '</div>'

@@ -1750,6 +1750,50 @@
            instead of retrying a dead base first. */
         var API_BASES = [PROXY, PROXY2, DIRECT];
         var apiBaseIdx = 0;
+        /* v1.13: this copy's build version — it MUST match the
+           version the deployed proxy reports from GET /api/version
+           (same string, server.js APP_VERSION). An old cached copy
+           of this app is the hole that killed listing 12: pre-v1.7b
+           code reaching Mail.tm directly with a delete on
+           session-restore failure. checkAppVersion() below forces
+           every open session onto the current build. Bump this
+           string on every release, together with server.js. */
+        var APP_VERSION = "1.13.0";
+        var VERSION_CHECK_MS = 60000;
+        /* v1.13: client version handshake. On load and every 60s,
+           ask the proxies (never DIRECT — api.mail.tm has no
+           /api/version) which build is live. If the server reports
+           a different version, reload ONCE for that version:
+           sessionStorage remembers which server version we already
+           reloaded for, and the last reload time, so a deploy lag
+           can never loop the page. A failed check does nothing —
+           the next tick retries. Never throws. */
+        function checkAppVersion(){
+          var now = Date.now(), lastAt = 0, lastFor = "";
+          try {
+            lastAt = Number(sessionStorage.getItem("movmail-version-reload-at") || "0") || 0;
+            lastFor = sessionStorage.getItem("movmail-version-reload-for") || "";
+          } catch(e) {}
+          function tryBase(i){
+            if (i >= 2) return;
+            var base = (i === 0) ? PROXY : PROXY2;
+            fetch(base + "/api/version", { method: "GET", headers: { "Accept": "application/json" } })
+              .then(function(res){ if (!res.ok) throw new Error("HTTP " + res.status); return res.json(); })
+              .then(function(data){
+                var serverVersion = (data && data.version) ? String(data.version) : "";
+                if (!serverVersion || serverVersion === APP_VERSION) return;
+                if (serverVersion === lastFor) return;
+                if (now - lastAt < VERSION_CHECK_MS) return;
+                try {
+                  sessionStorage.setItem("movmail-version-reload-at", String(now));
+                  sessionStorage.setItem("movmail-version-reload-for", serverVersion);
+                } catch(e) {}
+                location.reload();
+              })
+              .catch(function(){ tryBase(i + 1); });
+          }
+          tryBase(0);
+        }
         /* Fallback domain list, used only when GET /domains cannot be
            fetched from any base (429/503/network — Mail.tm rate-limiting
            the shared proxy IPs). euploading.com is the only domain
@@ -2848,6 +2892,11 @@ var I18N = {
        it. Tap the row only marks it read; there is no code to copy. */
     "delAttemptBellTitle": "🛡️ ការប៉ុនប៉ងលុបត្រូវបានបដិសេធ",
     "delAttemptBellDetail": "{path} · {proxy} · {n} ដង",
+    /* v1.13: seller death alarm in the website bell (admin accounts
+       only) — a listed email died on Mail.tm and can never receive
+       codes again. Tap the row only marks it read. */
+    "listingDiedBellTitle": "💀 អ៊ីមែលដែលដាក់លក់បានស្លាប់ហើយ",
+    "listingDiedBellDetail": "{title} · {email}",
     "avatarRow": "រូបភាព",
     "avatarNone": "មិនទាន់ជ្រើសរើសរូបភាព",
     "payPlanLabel": "កញ្ចប់",
@@ -2967,6 +3016,9 @@ var I18N = {
     "marketNew": "ថ្មី",
     "marketHealthBad": "មិនគួរទិញ",
     "marketHealthBadToast": "អ៊ីមែលនេះមានបញ្ហា — សូមកុំទិញ",
+    /* v1.13: buy-time liveness — the listing died between the last
+       health check and the purchase, so the server refused the order. */
+    "marketListingUnavailable": "អ៊ីមែលនេះលែងប្រើបានទៀតហើយ",
     "marketBoughtLabel": "បានទិញ",
     "marketBoughtIpLocked": "IP នេះជាប់ជាមួយអ៊ីមែលដែលបានទិញ មិនអាចប្តូរបានទេ",
     "shopSold": "លក់រួច",
@@ -3259,6 +3311,11 @@ var I18N = {
        it. Tap the row only marks it read; there is no code to copy. */
     "delAttemptBellTitle": "🛡️ Delete attempt blocked",
     "delAttemptBellDetail": "{path} · {proxy} · {n} attempts",
+    /* v1.13: seller death alarm in the website bell (admin accounts
+       only) — a listed email died on Mail.tm and can never receive
+       codes again. Tap the row only marks it read. */
+    "listingDiedBellTitle": "💀 A listed email died",
+    "listingDiedBellDetail": "{title} · {email}",
     "avatarRow": "Avatar",
     "avatarNone": "No avatar chosen",
     "payPlanLabel": "Plan",
@@ -3378,6 +3435,9 @@ var I18N = {
     "marketNew": "New",
     "marketHealthBad": "Don't buy",
     "marketHealthBadToast": "This account has a problem — please don't buy it",
+    /* v1.13: buy-time liveness — the listing died between the last
+       health check and the purchase, so the server refused the order. */
+    "marketListingUnavailable": "This email is no longer available",
     "marketBoughtLabel": "Bought",
     "marketBoughtIpLocked": "This IP is attached to the bought email and can't be changed",
     "shopSold": "Sold",
@@ -6476,6 +6536,22 @@ var I18N = {
               nl.appendChild(grow);
               return;
             }
+            /* v1.13: a listed email died — red row, like the delete
+               alarm. Tapping it only marks it read (no popup, no
+               code). The server only ever sends these rows to admin
+               accounts, and the row names the listing + FULL email. */
+            if (g.type === "listing_died") {
+              grow.className = "notif-item del-row";
+              var ltx = document.createElement("span");
+              ltx.textContent = t("listingDiedBellTitle") + " — " + t("listingDiedBellDetail", {title: g.listingTitle || "—", email: g.listingEmail || "—"});
+              var ltm = document.createElement("span");
+              ltm.className = "notif-time";
+              ltm.textContent = g.created_at ? relTime(g.created_at) : "";
+              grow.appendChild(ltx); grow.appendChild(ltm);
+              grow.addEventListener("click", function(){ markGiftRead(g); });
+              nl.appendChild(grow);
+              return;
+            }
             /* v1.11: an admin support reply — blue row. Tapping it
                opens the reply popup (message + copyable code when the
                admin included one); the row is marked read then. */
@@ -7925,7 +8001,15 @@ var I18N = {
                  the just-created order yet and would wipe it from view.
                  The 30s pending-order poll reconciles with the server. */
               renderMarketListings();
-            }).catch(function(){ mktErr("marketSendFailed"); });
+            }).catch(function(err){
+              /* v1.13: buy-time liveness — the listing died between
+                 the last health check and this purchase, so the
+                 server refused the order. Tell the buyer plainly
+                 and refresh the shop list (the dead listing is now
+                 red / gone from the buyable list). */
+              if (err && err.data && err.data.error === "listing_unavailable"){ mktErr("marketListingUnavailable"); loadMarketListings(); return; }
+              mktErr("marketSendFailed");
+            });
           };
           reader.onerror = function(){ mktErr("marketSendFailed"); };
           reader.readAsDataURL(file);
@@ -8291,6 +8375,11 @@ var I18N = {
         syncManifest();
         loadMarketListings(true);
         loadMyDeleteRequests();
+        /* v1.13: version handshake — on load and every 60s, so an
+           old cached copy of this app is forced onto the current
+           build instead of running stale code against Mail.tm. */
+        checkAppVersion();
+        setInterval(checkAppVersion, VERSION_CHECK_MS);
         restoreCurrentSessionOrCreate();
         /* Sign-up gate: if no profile exists yet, show it on top of
            the page — the temp email still generates behind it. */

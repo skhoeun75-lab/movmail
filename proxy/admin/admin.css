@@ -408,6 +408,10 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
    system-request (amber) rows. The delete never succeeded. */
 .notif-row.notif-del { border-left: 4px solid #dc2626; background: #fef2f2; }
 .notif-row.notif-del.notif-unread { background: #fee2e2; }
+/* v1.13: seller death alarm — same red treatment as a delete
+   attempt: a listed mailbox died and can never come back. */
+.notif-row.notif-died { border-left: 4px solid #dc2626; background: #fef2f2; }
+.notif-row.notif-died.notif-unread { background: #fee2e2; }
 .notif-info .n-line.n-del-title { color: #991b1b; font-weight: 700; }
 
 /* ---------- v1.10: delete requests (BLOCKED) ---------- */

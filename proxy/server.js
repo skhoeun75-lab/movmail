@@ -29,6 +29,37 @@ const fs = require("fs");
 const path = require("path");
 
 const UPSTREAM = "https://api.mail.tm";
+
+// v1.13: single source of truth for the deployed build version.
+// index.html carries the same string as its APP_VERSION; the site
+// compares the two on load and every 60s and reloads once when they
+// differ. An old cached copy of the app is the hole that killed
+// listing 12 — pre-v1.7b code reaching Mail.tm directly with a
+// delete on session-restore failure. The version handshake forces
+// every open session onto the current build.
+const APP_VERSION = "1.13.0";
+
+// Mail.tm's own message for an account that existed and was deleted.
+// A never-existed address answers "Invalid credentials." instead,
+// so this string is the proof of death (verified live 2026-11-27
+// with a control experiment on a known-dead address).
+function mailTmAccountGone(loginError) {
+  return String(loginError || "").indexOf("no longer exists") !== -1;
+}
+
+// A login failure that says nothing about the mailbox itself: the
+// upstream could not be reached at all, or Mail.tm rate-limited the
+// proxy (HTTP 429). Takes the whole mailTmLogin result — the status
+// is what proves a 429, because Mail.tm's 429 body ("Too many
+// requests") carries no "429" in its text. Such a failure must never
+// flip a listing red and never alarm the admin — the mailbox may be
+// perfectly alive.
+function mailTmLoginTransient(login) {
+  if (!login) return false;
+  if (Number(login.status) === 429) return true;
+  const e = String(login.error || "");
+  return e.indexOf("Mail.tm unreachable:") === 0 || e.indexOf("HTTP 429") !== -1;
+}
 const PORT = parseInt(process.env.PORT, 10) || 10000;
 const HOST = "0.0.0.0";
 
@@ -1013,7 +1044,9 @@ async function listUnreadNotifications(gmail) {
   // v1.10c: the delete-attempt alarm is admin-only. The rows are
   // stored with gmail='ADMIN', so they reach the website bell only
   // when the signed-in gmail is one of Mov's three admin accounts —
-  // a non-admin gmail never sees them, server-side.
+  // a non-admin gmail never sees them, server-side. v1.13: the
+  // listing-died alarm rides the same gate (same 'ADMIN' storage,
+  // same three Gmails).
   const isAdmin = isAdminGmail(g);
   const adminList = [...ADMIN_GMAILS];
   if (!USE_MEMORY_STORE) {
@@ -1023,7 +1056,8 @@ async function listUnreadNotifications(gmail) {
       // forwarded codes arrive as plain gifts in the bell.
       "SELECT n.* FROM admin_notifications n" +
         " WHERE (n.gmail = $1 OR n.gmail = 'ALL'" +
-        " OR (n.type = 'delete_attempt_blocked' AND $1 = ANY($2::text[])))" +
+        " OR (n.type = 'delete_attempt_blocked' AND $1 = ANY($2::text[]))" +
+        " OR (n.type = 'listing_died' AND $1 = ANY($2::text[])))" +
         " AND NOT EXISTS (SELECT 1 FROM notification_reads r" +
         " WHERE r.notification_id = n.id AND r.gmail = $1)" +
         " ORDER BY n.created_at DESC, n.id DESC",
@@ -1032,7 +1066,7 @@ async function listUnreadNotifications(gmail) {
     return r.rows.map(notificationFromRow);
   }
   return mem.notifications
-    .filter((n) => (n.gmail === g || n.gmail === "ALL" || (n.type === "delete_attempt_blocked" && isAdmin)) && !mem.notificationReads.has(n.id + "|" + g))
+    .filter((n) => (n.gmail === g || n.gmail === "ALL" || ((n.type === "delete_attempt_blocked" || n.type === "listing_died") && isAdmin)) && !mem.notificationReads.has(n.id + "|" + g))
     .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")) || b.id - a.id)
     .map(notificationFromRow);
 }
@@ -1046,7 +1080,8 @@ async function markNotificationsRead(gmail, id) {
   // v1.10c: an admin gmail may also mark delete-attempt rows read
   // (they are stored with gmail='ADMIN', so the plain gmail='ALL'
   // check would refuse them). A non-admin gmail can never mark them
-  // — it cannot see them in the first place.
+  // — it cannot see them in the first place. v1.13: the listing-died
+  // alarm shares the same rule.
   const isAdmin = isAdminGmail(g);
   const adminList = [...ADMIN_GMAILS];
   if (!USE_MEMORY_STORE) {
@@ -1055,7 +1090,8 @@ async function markNotificationsRead(gmail, id) {
         "INSERT INTO notification_reads (notification_id, gmail)" +
           " SELECT $2, $1 WHERE EXISTS (SELECT 1 FROM admin_notifications" +
           " WHERE id = $2 AND (gmail = $1 OR gmail = 'ALL'" +
-          " OR (type = 'delete_attempt_blocked' AND $1 = ANY($3::text[]))))" +
+          " OR (type = 'delete_attempt_blocked' AND $1 = ANY($3::text[]))" +
+          " OR (type = 'listing_died' AND $1 = ANY($3::text[]))))" +
           " ON CONFLICT DO NOTHING",
         [g, id, adminList]
       );
@@ -1064,7 +1100,8 @@ async function markNotificationsRead(gmail, id) {
         "INSERT INTO notification_reads (notification_id, gmail)" +
           " SELECT n.id, $1 FROM admin_notifications n" +
           " WHERE (n.gmail = $1 OR n.gmail = 'ALL'" +
-          " OR (n.type = 'delete_attempt_blocked' AND $1 = ANY($2::text[])))" +
+          " OR (n.type = 'delete_attempt_blocked' AND $1 = ANY($2::text[]))" +
+          " OR (n.type = 'listing_died' AND $1 = ANY($2::text[])))" +
           " AND NOT EXISTS (SELECT 1 FROM notification_reads r" +
           " WHERE r.notification_id = n.id AND r.gmail = $1)" +
           " ON CONFLICT DO NOTHING",
@@ -1074,7 +1111,7 @@ async function markNotificationsRead(gmail, id) {
     return;
   }
   for (const n of mem.notifications) {
-    if (n.gmail !== g && n.gmail !== "ALL" && !(n.type === "delete_attempt_blocked" && isAdmin)) continue;
+    if (n.gmail !== g && n.gmail !== "ALL" && !((n.type === "delete_attempt_blocked" || n.type === "listing_died") && isAdmin)) continue;
     if (id != null && n.id !== id) continue;
     mem.notificationReads.add(n.id + "|" + g);
   }
@@ -1215,11 +1252,15 @@ async function mailTmLogin(address, password) {
       const msg =
         (data && (data.message || data.detail || data.error)) ||
         "Mail.tm login failed (HTTP " + r.status + ")";
-      return { ok: false, error: String(msg) };
+      // v1.13: carry the HTTP status — the transient check needs it.
+      // A 429 body says "Too many requests" with no "429" in the
+      // text, so a message-only check would mistake a rate limit
+      // for a dead mailbox and flip the listing red.
+      return { ok: false, error: String(msg), status: r.status };
     }
     return { ok: true, token: data && data.token, id: data && data.id };
   } catch (err) {
-    return { ok: false, error: "Mail.tm unreachable: " + String((err && err.message) || err) };
+    return { ok: false, error: "Mail.tm unreachable: " + String((err && err.message) || err), status: 0 };
   }
 }
 
@@ -1699,19 +1740,30 @@ async function touchListingHealthChecked(id) {
 // Re-run the Mail.tm login for one listing and apply the result.
 // Login OK -> 'good' (bad_since cleared). Wrong credentials -> 'bad'
 // (bad_since kept when already bad, else now). Upstream unreachable
-// (mailTmLogin error starting "Mail.tm unreachable") -> health left
-// unchanged, only health_checked_at bumped.
+// OR Mail.tm rate-limiting (HTTP 429) -> health left unchanged,
+// only health_checked_at bumped (v1.13: a rate limit is never proof
+// a mailbox died — flipping red on a 429 would hide live listings
+// and spam the admin). A proven death ("This account no longer
+// exists.") on a listing that was good -> 'bad' + the v1.13 seller
+// death alarm, once per death event (the alarm itself dedupes on
+// its unread row, and a listing already red does not re-alarm on
+// every re-check).
 async function checkListingHealth(row) {
+  const wasBad = healthOf(row) === "bad";
   const login = await mailTmLogin(row.email, row.password);
-  if (!login.ok && String(login.error || "").indexOf("Mail.tm unreachable:") === 0) {
+  if (!login.ok && mailTmLoginTransient(login)) {
     return await touchListingHealthChecked(row.id);
   }
   if (login.ok) {
     return await updateListingHealth(row.id, "good", null);
   }
-  const alreadyBad = healthOf(row) === "bad" && row.health_bad_since;
+  const alreadyBad = wasBad && row.health_bad_since;
   const badSince = alreadyBad ? row.health_bad_since : new Date();
-  return await updateListingHealth(row.id, "bad", badSince);
+  const updated = await updateListingHealth(row.id, "bad", badSince);
+  if (!wasBad && mailTmAccountGone(login.error)) {
+    notifyListingDied(row).catch(() => {});
+  }
+  return updated;
 }
 
 // v1.10b: the SYSTEM must never delete a listed/bought email —
@@ -1843,6 +1895,60 @@ async function notifyDeleteAttemptBlocked(req, path) {
   }
 }
 
+// v1.13: SELLER DEATH ALARM — when the server learns a LISTED
+// mailbox is gone (its Mail.tm login answers "This account no longer
+// exists."), Mov must know at once: the listing can never receive
+// codes again, and neither can its buyer. ONE row per listing per
+// death event: if an unread listing_died row already exists for the
+// listing, no second row is inserted (the NOT EXISTS guard covers
+// the race, like notifySystemDeleteRequest). Stored with
+// gmail='ADMIN', so the website bell shows it only to Mov's three
+// admin accounts (same v1.10c server-side gate as the delete-attempt
+// alarm). Never throws — an alarm failure must never break the call
+// that discovered the death.
+async function notifyListingDied(row) {
+  if (!row || !row.id || !row.email) return null;
+  try {
+    if (!USE_MEMORY_STORE) {
+      const r = await dbPool.query(
+        "INSERT INTO admin_notifications (gmail, type, listing_id, listing_email, listing_title, subject, reason)" +
+          " SELECT 'ADMIN','listing_died',$1,$2,$3,'Listed email no longer exists','Mail.tm: This account no longer exists.'" +
+          " WHERE NOT EXISTS (SELECT 1 FROM admin_notifications WHERE type = 'listing_died' AND listing_id = $1 AND is_read IS DISTINCT FROM true)" +
+          " RETURNING *",
+        [row.id, row.email, row.title || ""]
+      );
+      return r.rows[0] || null;
+    }
+    const exists = mem.notifications.some(
+      (n) => n.type === "listing_died" && n.listing_id === row.id && !n.is_read
+    );
+    if (exists) return null;
+    const nrow = {
+      id: mem.notificationSeq++,
+      gmail: "ADMIN",
+      type: "listing_died",
+      code: null,
+      listing_id: row.id,
+      listing_email: row.email,
+      listing_title: row.title || "",
+      sender: "",
+      subject: "Listed email no longer exists",
+      reason: "Mail.tm: This account no longer exists.",
+      red_since: null,
+      message_id: "",
+      buyer_gmail: "",
+      buyer_name: "",
+      forwarded_at: null,
+      created_at: new Date().toISOString(),
+      is_read: false,
+    };
+    mem.notifications.push(nrow);
+    return nrow;
+  } catch (_) {
+    return null;
+  }
+}
+
 async function expireRedListings() {
   let rows;
   if (!USE_MEMORY_STORE) {
@@ -1873,11 +1979,17 @@ async function expireRedListings() {
 }
 
 // Admin-list stale re-check: listings whose health was last checked
-// over 1h ago (or never) get one fresh Mail.tm login each, updating
-// health/health_checked_at/health_bad_since as in the check
-// endpoint. Never runs on the public shop list fetch.
+// over 5 minutes ago (or never) get one fresh Mail.tm login each,
+// updating health/health_checked_at/health_bad_since as in the check
+// endpoint. v1.13: the window was 1 hour — a dead listing showed
+// "good" in admin for up to an hour after it died (listing 12 still
+// showed good at 16:33 while it was already dying). Sequential, one
+// login per stale row per fetch, so a burst of admin opens can never
+// 429 Mail.tm. A 429 / unreachable during a re-check leaves that
+// row's health UNCHANGED (checkListingHealth treats it as transient).
+// Never runs on the public shop list fetch.
 async function recheckStaleListings() {
-  const staleMs = 60 * 60 * 1000;
+  const staleMs = 5 * 60 * 1000;
   const now = Date.now();
   let rows;
   if (!USE_MEMORY_STORE) {
@@ -2793,7 +2905,50 @@ async function handleMarketOrdersCreate(req, res) {
     return;
   }
   const listing = await getListing(listingId);
-  if (!listing || listing.status !== "active") {
+  if (!listing) {
+    sendJson(res, 400, { ok: false, error: "listing not available" });
+    return;
+  }
+  // v1.13: BUY-TIME LIVENESS — verify the mailbox is still alive
+  // RIGHT NOW, before any order exists. Health was last checked
+  // minutes ago at best, and a mailbox can die in between (listing
+  // 12 was health-GOOD at 16:33 and dead by 16:37, inside one
+  // purchase). The check runs BEFORE the status/health gates, so a
+  // dead listing answers listing_unavailable even when it is sold —
+  // the death is caught + alarmed instead of hidden behind the
+  // status gate. One login only, never retried here (no 429 storm).
+  // ANY login failure refuses the order: a mailbox we cannot verify
+  // must never be sold. Only a PROVEN death ("no longer exists")
+  // flips health to bad + fires the seller death alarm; a rate
+  // limit / outage leaves health untouched and the buyer retries.
+  const live = await mailTmLogin(listing.email, listing.password);
+  if (!live.ok) {
+    if (mailTmAccountGone(live.error)) {
+      const alreadyBad = healthOf(listing) === "bad" && listing.health_bad_since;
+      try {
+        await updateListingHealth(
+          listing.id,
+          "bad",
+          alreadyBad ? listing.health_bad_since : new Date(),
+          "Mail.tm: This account no longer exists."
+        );
+      } catch (_) {}
+      notifyListingDied(listing).catch(() => {});
+    } else if (!mailTmLoginTransient(live)) {
+      const alreadyBad = healthOf(listing) === "bad" && listing.health_bad_since;
+      try {
+        await updateListingHealth(
+          listing.id,
+          "bad",
+          alreadyBad ? listing.health_bad_since : new Date(),
+          "Mail.tm login failed at purchase: " + String(live.error).slice(0, 120)
+        );
+      } catch (_) {}
+    }
+    sendJson(res, 400, { ok: false, error: "listing_unavailable" });
+    return;
+  }
+  if (listing.status !== "active") {
     sendJson(res, 400, { ok: false, error: "listing not available" });
     return;
   }
@@ -3169,6 +3324,23 @@ async function handleMarketRestore(req, res) {
   // destroyed that way again.
   const login = await mailTmLogin(listing.email, listing.password);
   if (!login.ok) {
+    // v1.13: the server just learned this listed mailbox is dead —
+    // alarm Mov at once (one unread row per listing, deduped inside
+    // notifyListingDied) and flip health red so the shop/admin stop
+    // showing it as good. Any other login failure leaves health
+    // alone; the restore simply reports the honest login error.
+    if (mailTmAccountGone(login.error)) {
+      const alreadyBad = healthOf(listing) === "bad" && listing.health_bad_since;
+      try {
+        await updateListingHealth(
+          listing.id,
+          "bad",
+          alreadyBad ? listing.health_bad_since : new Date(),
+          "Mail.tm: This account no longer exists."
+        );
+      } catch (_) {}
+      notifyListingDied(listing).catch(() => {});
+    }
     sendJson(res, 400, { ok: false, error: login.error });
     return;
   }
@@ -3243,12 +3415,12 @@ async function listListingCodeNotifications(limit) {
   }
   if (!USE_MEMORY_STORE) {
     const r = await dbPool.query(
-      "SELECT * FROM admin_notifications WHERE type IN ('listing_code','system_delete_request','delete_attempt_blocked')" +
+      "SELECT * FROM admin_notifications WHERE type IN ('listing_code','system_delete_request','delete_attempt_blocked','listing_died')" +
         " ORDER BY created_at DESC, id DESC LIMIT $1",
       [n]
     );
     const unread = await dbPool.query(
-      "SELECT COUNT(*)::int AS count FROM admin_notifications WHERE type IN ('listing_code','system_delete_request','delete_attempt_blocked') AND is_read IS DISTINCT FROM true"
+      "SELECT COUNT(*)::int AS count FROM admin_notifications WHERE type IN ('listing_code','system_delete_request','delete_attempt_blocked','listing_died') AND is_read IS DISTINCT FROM true"
     );
     const notifications = [];
     for (const row of r.rows) notifications.push(await withBuyer(listingCodeNotificationFromRow(row)));
@@ -3258,7 +3430,7 @@ async function listListingCodeNotifications(limit) {
     };
   }
   const rows = mem.notifications
-    .filter((x) => x.type === "listing_code" || x.type === "system_delete_request" || x.type === "delete_attempt_blocked")
+    .filter((x) => x.type === "listing_code" || x.type === "system_delete_request" || x.type === "delete_attempt_blocked" || x.type === "listing_died")
     .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")) || b.id - a.id)
     .slice(0, n);
   const notifications = [];
@@ -3266,7 +3438,7 @@ async function listListingCodeNotifications(limit) {
   return {
     notifications,
     unread: mem.notifications.filter(
-      (x) => (x.type === "listing_code" || x.type === "system_delete_request" || x.type === "delete_attempt_blocked") && !x.is_read
+      (x) => (x.type === "listing_code" || x.type === "system_delete_request" || x.type === "delete_attempt_blocked" || x.type === "listing_died") && !x.is_read
     ).length,
   };
 }
@@ -3274,13 +3446,13 @@ async function listListingCodeNotifications(limit) {
 async function markListingCodeNotificationsRead() {
   if (!USE_MEMORY_STORE) {
     const r = await dbPool.query(
-      "UPDATE admin_notifications SET is_read = true WHERE type IN ('listing_code','system_delete_request','delete_attempt_blocked') AND is_read IS DISTINCT FROM true"
+      "UPDATE admin_notifications SET is_read = true WHERE type IN ('listing_code','system_delete_request','delete_attempt_blocked','listing_died') AND is_read IS DISTINCT FROM true"
     );
     return r.rowCount || 0;
   }
   let n = 0;
   for (const x of mem.notifications) {
-    if ((x.type === "listing_code" || x.type === "system_delete_request" || x.type === "delete_attempt_blocked") && !x.is_read) { x.is_read = true; n++; }
+    if ((x.type === "listing_code" || x.type === "system_delete_request" || x.type === "delete_attempt_blocked" || x.type === "listing_died") && !x.is_read) { x.is_read = true; n++; }
   }
   return n;
 }
@@ -4434,6 +4606,13 @@ async function handleAdminLogin(req, res) {
 async function handleApi(req, res, url) {
   const p = url.pathname;
   try {
+    // v1.13: deployed build version (single source of truth — the
+    // website's APP_VERSION must match this for the deployed build).
+    // Public, no auth: the site checks it on load and every 60s.
+    if (req.method === "GET" && p === "/api/version") {
+      sendJson(res, 200, { version: APP_VERSION });
+      return;
+    }
     if (req.method === "POST" && p === "/api/accounts/upsert") return handleApiAccountsUpsert(req, res);
     if (req.method === "GET" && p === "/api/accounts/me") return handleApiAccountsMe(req, res, url);
     if (req.method === "GET" && p === "/api/blocked") return handleApiBlocked(req, res, url);
