@@ -28,6 +28,11 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
+// v1.24: the ONLY direct api.mail.tm call left in this file is the
+// admin Delete-forever (DELETE /accounts/:id, admin-token-gated) —
+// Hercules exposes no delete endpoint. Every other Mail.tm call goes
+// through HERCULES_BASE. If you add a new UPSTREAM use, you are
+// breaking Mov's rule: Render must never talk to api.mail.tm.
 const UPSTREAM = "https://api.mail.tm";
 
 // v1.13: single source of truth for the deployed build version.
@@ -40,8 +45,8 @@ const UPSTREAM = "https://api.mail.tm";
 // v1.15: the forwarder also refuses Mail.tm-bound calls from any
 // client older than MIN_CLIENT_VERSION (kill-switch, see the gate
 // below the DELETE /accounts block). Bump both strings together.
-const APP_VERSION = "1.22.0";
-const MIN_CLIENT_VERSION = "1.15.0"; // v1.21: stays — 1.15+ clients hold no passwords and never call DIRECT, so no kill-switch bump is needed; the handshake reloads them to 1.22.0.
+const APP_VERSION = "1.24.0";
+const MIN_CLIENT_VERSION = "1.15.0"; // v1.21: stays — 1.15+ clients hold no passwords and never call DIRECT, so no kill-switch bump is needed; the handshake reloads them to 1.24.0.
 // True when a client version string is at least the minimum (numeric
 // per-part compare; missing, malformed or older versions fail).
 function clientVersionOk(v) {
@@ -59,27 +64,15 @@ function clientVersionOk(v) {
   return true;
 }
 
-// Mail.tm's own message for an account that existed and was deleted.
-// A never-existed address answers "Invalid credentials." instead,
-// so this string is the proof of death (verified live 2026-11-27
-// with a control experiment on a known-dead address).
-function mailTmAccountGone(loginError) {
-  return String(loginError || "").indexOf("no longer exists") !== -1;
-}
-
-// A login failure that says nothing about the mailbox itself: the
-// upstream could not be reached at all, or Mail.tm rate-limited the
-// proxy (HTTP 429). Takes the whole mailTmLogin result — the status
-// is what proves a 429, because Mail.tm's 429 body ("Too many
-// requests") carries no "429" in its text. Such a failure must never
-// flip a listing red and never alarm the admin — the mailbox may be
-// perfectly alive.
-function mailTmLoginTransient(login) {
-  if (!login) return false;
-  if (Number(login.status) === 429) return true;
-  const e = String(login.error || "");
-  return e.indexOf("Mail.tm unreachable:") === 0 || e.indexOf("HTTP 429") !== -1;
-}
+// v1.24: DELETED — mailTmLogin, mailTmAccountGone and
+// mailTmLoginTransient are gone with the last direct calls. Their
+// job (alive / dead / transient) is now done by
+// herculesVerifyMailbox() in the Hercules section, which proves the
+// same three outcomes through Mov's Hercules API: a live mailbox
+// answers 200, a deleted account's token answers 401 "This account
+// no longer exists." (probed live 2026-11-28), and a Hercules
+// 429/5xx/unreachable is transient. Nothing in this file may call
+// api.mail.tm directly anymore except the admin Delete-forever.
 const PORT = parseInt(process.env.PORT, 10) || 10000;
 const HOST = "0.0.0.0";
 
@@ -607,6 +600,23 @@ const CREATE_API_TABLES_SQL = [
     "  last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()",
     ")",
   ].join("\n"),
+  [
+    // v1.24: mailbox JWTs persisted server-side (one row per Mail.tm
+    // address). The token IS the Mail.tm JWT itself (Hercules returns
+    // Mail.tm's own JWT at creation). It is NEVER sent to a browser
+    // except through the existing restore endpoints (which already
+    // return a token to the mailbox's rightful owner) and NEVER
+    // logged. The account id rides with it so the admin delete never
+    // needs a login. Rows are written at creation and harvested from
+    // live reads (see harvestMailboxToken); a mailbox created before
+    // v1.24 has no row until its owner reads it once in the site.
+    "CREATE TABLE IF NOT EXISTS mailbox_tokens (",
+    "  address TEXT PRIMARY KEY,",
+    "  token TEXT NOT NULL DEFAULT '',",
+    "  account_id TEXT DEFAULT '',",
+    "  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+    ")",
+  ].join("\n"),
 ];
 
 // v1.3 columns added to tables that already exist on Render: CREATE
@@ -716,6 +726,7 @@ const mem = {
   sessions: new Map(), // v1.12: session token -> {token, gmail, created_at, expires_at}
   userMailboxes: [], // v1.12: server mailbox rows (per gmail)
   guerrillaSessions: new Map(), // v1.18: address -> {address, sid_token, email_timestamp, created_at, last_seen}
+  mailboxTokens: new Map(), // v1.24: address -> {token, accountId} (mailbox JWT, server-side only)
   adminAuth: null, // v1.12: {password_hash} single-row admin password
   listingSeq: 1,
   orderSeq: 1,
@@ -1270,49 +1281,14 @@ function maskEmail(email) {
   return local.charAt(0) + "......." + local.slice(-2) + domain;
 }
 
-// Verify the caller controls a Mail.tm mailbox: POST /token to
-// Mail.tm directly. v1.22: this is the ONE remaining direct call
-// family, and it stays on purpose — Hercules exposes no /token
-// (login) endpoint, so a JWT for an EXISTING mailbox (a restore, a
-// listing health check, the admin delete) can only come from
-// Mail.tm /token. Fresh creates do NOT use it (the forwarded
-// POST /token serves the JWT from the Hercules pending row). These
-// calls are infrequent — one per restore, one per periodic health
-// check — never the 2–10s polling path that Mail.tm rate-limited,
-// and /token was observed answering 200 while /messages was 429.
-// Returns { ok:true, token, id } on success,
-// { ok:false, error } on wrong credentials / upstream failure.
-async function mailTmLogin(address, password) {
-  try {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 15000);
-    const r = await fetch(UPSTREAM + "/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ address, password }),
-      signal: ctl.signal,
-    });
-    clearTimeout(timer);
-    const text = await r.text();
-    let data = null;
-    try {
-      data = JSON.parse(text);
-    } catch (_) {}
-    if (!r.ok) {
-      const msg =
-        (data && (data.message || data.detail || data.error)) ||
-        "Mail.tm login failed (HTTP " + r.status + ")";
-      // v1.13: carry the HTTP status — the transient check needs it.
-      // A 429 body says "Too many requests" with no "429" in the
-      // text, so a message-only check would mistake a rate limit
-      // for a dead mailbox and flip the listing red.
-      return { ok: false, error: String(msg), status: r.status };
-    }
-    return { ok: true, token: data && data.token, id: data && data.id };
-  } catch (err) {
-    return { ok: false, error: "Mail.tm unreachable: " + String((err && err.message) || err), status: 0 };
-  }
-}
+// v1.24: mailTmLogin is DELETED — see the note above (E3). A JWT
+// for an existing mailbox cannot be minted through Hercules
+// (POST /mailboxes answers 422 for an existing address; there is
+// no /token endpoint — probed live 2026-11-28), so the proxy
+// keeps the JWT it got at creation (mailbox_tokens table, plus
+// the harvest) and verifies with it instead. The password stays
+// stored as the credential record, but it is never sent to
+// api.mail.tm anymore.
 
 // Row mappers. The password NEVER leaves the server in any of these
 // shapes; public shapes carry only the masked email.
@@ -1797,33 +1773,35 @@ async function touchListingHealthChecked(id) {
   return row;
 }
 
-// Re-run the Mail.tm login for one listing and apply the result.
-// Login OK -> 'good' (bad_since cleared). Wrong credentials -> 'bad'
-// (bad_since kept when already bad, else now). Upstream unreachable
-// OR Mail.tm rate-limiting (HTTP 429) -> health left unchanged,
-// only health_checked_at bumped (v1.13: a rate limit is never proof
-// a mailbox died — flipping red on a 429 would hide live listings
-// and spam the admin). A proven death ("This account no longer
-// exists.") on a listing that was good -> 'bad' + the v1.13 seller
+// Re-verify one listing through Hercules and apply the result.
+// Alive -> 'good' (bad_since cleared). Proven death ("This account
+// no longer exists.", answered by Hercules for a deleted account's
+// token) on a listing that was good -> 'bad' + the v1.13 seller
 // death alarm, once per death event (the alarm itself dedupes on
 // its unread row, and a listing already red does not re-alarm on
-// every re-check).
+// every re-check). Anything else (Hercules busy/unreachable, an
+// unrecognised token failure, or no stored token yet) proves
+// NOTHING: health is left unchanged, only health_checked_at is
+// bumped (v1.13: a rate limit is never proof a mailbox died —
+// flipping red on ambiguity would hide live listings and spam the
+// admin). v1.24: the check is herculesVerifyMailbox, never a
+// direct login.
 async function checkListingHealth(row) {
   const wasBad = healthOf(row) === "bad";
-  const login = await mailTmLogin(row.email, row.password);
-  if (!login.ok && mailTmLoginTransient(login)) {
-    return await touchListingHealthChecked(row.id);
-  }
-  if (login.ok) {
+  const v = await herculesVerifyMailbox(row.email);
+  if (v.ok) {
     return await updateListingHealth(row.id, "good", null);
   }
-  const alreadyBad = wasBad && row.health_bad_since;
-  const badSince = alreadyBad ? row.health_bad_since : new Date();
-  const updated = await updateListingHealth(row.id, "bad", badSince);
-  if (!wasBad && mailTmAccountGone(login.error)) {
-    notifyListingDied(row).catch(() => {});
+  if (v.kind === "dead") {
+    const alreadyBad = wasBad && row.health_bad_since;
+    const badSince = alreadyBad ? row.health_bad_since : new Date();
+    const updated = await updateListingHealth(row.id, "bad", badSince);
+    if (!wasBad) {
+      notifyListingDied(row).catch(() => {});
+    }
+    return updated;
   }
-  return updated;
+  return await touchListingHealthChecked(row.id);
 }
 
 // v1.10b: the SYSTEM must never delete a listed/bought email —
@@ -2887,8 +2865,7 @@ async function handleMarketListingsCreate(req, res) {
   // v1.22: a mailbox just created through Hercules carries its TRUE
   // Mail.tm password in the pending record — the website generated a
   // different one that Hercules never saw. Use the true one, or the
-  // mailTmLogin verification below (and the listing itself) would
-  // fail with the wrong password.
+  // listing row would store the wrong password.
   const pendingSell = herculesPendingPeek(address);
   if (pendingSell) password = pendingSell.herculesPassword;
   const price = Number(body.price);
@@ -2937,9 +2914,27 @@ async function handleMarketListingsCreate(req, res) {
     return;
   }
   // Verify the seller controls the mailbox before listing it.
-  const login = await mailTmLogin(address, password);
-  if (!login.ok) {
-    sendJson(res, 400, { ok: false, error: login.error });
+  // v1.24: through Hercules with the stored mailbox token — never
+  // direct (see herculesVerifyMailbox). A mailbox with no stored
+  // token yet (created before v1.24) cannot be verified: the seller
+  // must open it once in the site so its token is harvested, then
+  // list it. The admin-only gate above is unchanged, and all three
+  // admin gmails are Mov's own.
+  const v = await herculesVerifyMailbox(address);
+  if (!v.ok) {
+    if (v.kind === "dead") {
+      sendJson(res, 400, { ok: false, error: "This account no longer exists." });
+      return;
+    }
+    if (v.kind === "transient") {
+      sendJson(res, 503, { ok: false, error: "hercules_busy" });
+      return;
+    }
+    if (v.kind === "noToken") {
+      sendJson(res, 400, { ok: false, error: "This mailbox has no stored token yet — open it once in the site, then list it." });
+      return;
+    }
+    sendJson(res, 400, { ok: false, error: v.error || "mailbox verification failed" });
     return;
   }
   const row = await createListing(address, password, price, title, sellerGmail, logoDataUrl, token, ipProfile);
@@ -3013,9 +3008,9 @@ async function handleMarketOrdersCreate(req, res) {
   // must never be sold. Only a PROVEN death ("no longer exists")
   // flips health to bad + fires the seller death alarm; a rate
   // limit / outage leaves health untouched and the buyer retries.
-  const live = await mailTmLogin(listing.email, listing.password);
+  const live = await herculesVerifyMailbox(listing.email);
   if (!live.ok) {
-    if (mailTmAccountGone(live.error)) {
+    if (live.kind === "dead") {
       const alreadyBad = healthOf(listing) === "bad" && listing.health_bad_since;
       try {
         await updateListingHealth(
@@ -3026,17 +3021,10 @@ async function handleMarketOrdersCreate(req, res) {
         );
       } catch (_) {}
       notifyListingDied(listing).catch(() => {});
-    } else if (!mailTmLoginTransient(live)) {
-      const alreadyBad = healthOf(listing) === "bad" && listing.health_bad_since;
-      try {
-        await updateListingHealth(
-          listing.id,
-          "bad",
-          alreadyBad ? listing.health_bad_since : new Date(),
-          "Mail.tm login failed at purchase: " + String(live.error).slice(0, 120)
-        );
-      } catch (_) {}
     }
+    // v1.24: transient / unknown / noToken prove nothing — health
+    // is left untouched, but the order is still refused: a mailbox
+    // we cannot verify must never be sold.
     sendJson(res, 400, { ok: false, error: "listing_unavailable" });
     return;
   }
@@ -3404,24 +3392,25 @@ async function handleMarketRestore(req, res) {
     sendJson(res, 403, { ok: false, error: "no approved order for this listing" });
     return;
   }
-  // Log in with the stored credentials server-side; only the Mail.tm
-  // token (never the password) goes back to the browser.
+  // Verify through Hercules with the stored mailbox token
+  // server-side; only the token (never the password) goes back to
+  // the browser. v1.24: no direct login anymore.
   // NOTE (verified live 2026-11-27): a deleted Mail.tm account can
   // NEVER be brought back — POST /accounts with the same address
   // always answers 422 "This value is already used". So there is no
-  // re-create fallback here on purpose: if this login fails, the
-  // mailbox is permanently gone and the restore reports it honestly.
-  // The real protection is on the website: Delete never deletes a
-  // Mail.tm account at all (v1.7b), so a bought mailbox cannot be
-  // destroyed that way again.
-  const login = await mailTmLogin(listing.email, listing.password);
-  if (!login.ok) {
+  // re-create fallback here on purpose: if this verification fails,
+  // the mailbox is permanently gone and the restore reports it
+  // honestly. The real protection is on the website: Delete never
+  // deletes a Mail.tm account at all (v1.7b), so a bought mailbox
+  // cannot be destroyed that way again.
+  const v = await herculesVerifyMailbox(listing.email);
+  if (!v.ok) {
     // v1.13: the server just learned this listed mailbox is dead —
     // alarm Mov at once (one unread row per listing, deduped inside
     // notifyListingDied) and flip health red so the shop/admin stop
-    // showing it as good. Any other login failure leaves health
-    // alone; the restore simply reports the honest login error.
-    if (mailTmAccountGone(login.error)) {
+    // showing it as good. Any other verification failure leaves
+    // health alone; the restore simply reports the honest error.
+    if (v.kind === "dead") {
       const alreadyBad = healthOf(listing) === "bad" && listing.health_bad_since;
       try {
         await updateListingHealth(
@@ -3432,8 +3421,14 @@ async function handleMarketRestore(req, res) {
         );
       } catch (_) {}
       notifyListingDied(listing).catch(() => {});
+      sendJson(res, 400, { ok: false, error: "This account no longer exists." });
+      return;
     }
-    sendJson(res, 400, { ok: false, error: login.error });
+    if (v.kind === "transient") {
+      sendJson(res, 503, { ok: false, error: "hercules_busy" });
+      return;
+    }
+    sendJson(res, 400, { ok: false, error: v.error || "mailbox verification failed" });
     return;
   }
   // A successful restore proves the stored credentials work — a listing
@@ -3444,8 +3439,8 @@ async function handleMarketRestore(req, res) {
   } catch (_) {}
   sendJson(res, 200, {
     ok: true,
-    token: login.token,
-    accountId: login.id,
+    token: v.token,
+    accountId: v.accountId,
     address: listing.email,
     // v1.3: the bought mailbox's logo + IP profile travel with it so
     // the frontend can adopt them permanently on Restore.
@@ -3722,9 +3717,23 @@ async function handleAdminMarketListingsCreate(req, res) {
     sendJson(res, 413, { ok: false, error: "listing logo too large (max ~5MB)" });
     return;
   }
-  const login = await mailTmLogin(email, password);
-  if (!login.ok) {
-    sendJson(res, 400, { ok: false, error: login.error });
+  // v1.24: verify through Hercules with the stored mailbox token —
+  // never direct (see herculesVerifyMailbox).
+  const v = await herculesVerifyMailbox(email);
+  if (!v.ok) {
+    if (v.kind === "dead") {
+      sendJson(res, 400, { ok: false, error: "This account no longer exists." });
+      return;
+    }
+    if (v.kind === "transient") {
+      sendJson(res, 503, { ok: false, error: "hercules_busy" });
+      return;
+    }
+    if (v.kind === "noToken") {
+      sendJson(res, 400, { ok: false, error: "This mailbox has no stored token yet — open it once in the site, then list it." });
+      return;
+    }
+    sendJson(res, 400, { ok: false, error: v.error || "mailbox verification failed" });
     return;
   }
   const row = await createListing(email, password, price, title, sellerGmail, logoDataUrl, token, ipProfile);
@@ -3743,9 +3752,9 @@ async function handleAdminMarketListingRemove(req, res, id) {
 // v1.7d: put a SOLD listing back in the shop with one click. The
 // password is the one MovMail generated when the mailbox was created
 // — Mov never set one himself and never needs to type one: the
-// server reuses the stored credentials. The Mail.tm login is re-run
-// first, so a dead mailbox (deleted account) can never be re-listed
-// — it answers 400 with the honest login error instead. On success
+// server reuses the stored credentials. The Hercules verification
+// is re-run first, so a dead mailbox (deleted account) can never
+// be re-listed — it answers 400 with the honest error instead. On success
 // the listing is 'active' again at the same price / title / token /
 // logo, health 'good', and created_at refreshed so it shows the
 // "New" badge in the shop like a fresh listing.
@@ -3759,9 +3768,16 @@ async function handleAdminMarketListingRelist(req, res, id) {
     sendJson(res, 400, { ok: false, error: "only a sold listing can be put back in the shop" });
     return;
   }
-  const login = await mailTmLogin(listing.email, listing.password);
-  if (!login.ok) {
-    sendJson(res, 400, { ok: false, error: login.error });
+  // v1.24: verify through Hercules with the stored mailbox token —
+  // never direct (see herculesVerifyMailbox). A dead mailbox can
+  // never be re-listed.
+  const v = await herculesVerifyMailbox(listing.email);
+  if (!v.ok) {
+    if (v.kind === "transient") {
+      sendJson(res, 503, { ok: false, error: "hercules_busy" });
+      return;
+    }
+    sendJson(res, 400, { ok: false, error: v.kind === "dead" ? "This account no longer exists." : (v.error || "mailbox verification failed") });
     return;
   }
   let updated = null;
@@ -3970,20 +3986,29 @@ async function handleSellerMarketListingUpdate(req, res, id) {
   sendJson(res, 200, { ok: true, listing: pub });
 }
 
-// Decode the Mail.tm JWT payload (base64, no signature check — we
-// only read the account id claim) as a fallback when POST /token
-// does not return the id directly.
-function jwtAccountId(token) {
+// Decode a Mail.tm JWT payload (base64, no signature check — we
+// only read the address/id claims). The token is self-describing:
+// Hercules returns Mail.tm's own JWT at creation, and its payload
+// carries address + id (probed live 2026-11-28).
+function jwtClaims(token) {
   try {
     const parts = String(token || "").split(".");
-    if (parts.length !== 3) return "";
+    if (parts.length !== 3) return null;
     const payload = JSON.parse(
       Buffer.from(parts[1].replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8")
     );
-    return String(payload.sub || payload.id || "");
+    if (!payload || typeof payload !== "object") return null;
+    return {
+      address: String(payload.address || "").trim().toLowerCase(),
+      id: String(payload.sub || payload.id || ""),
+    };
   } catch (_) {
-    return "";
+    return null;
   }
+}
+function jwtAccountId(token) {
+  const c = jwtClaims(token);
+  return c ? c.id : "";
 }
 
 /* ---------- v1.10: delete requests (BLOCKED) ----------
@@ -4185,20 +4210,29 @@ async function getListingByEmail(email) {
 // logs by itself — the caller writes the security event (the two
 // paths have different types) — and it never touches request rows.
 async function deleteListingAccountNow(listing) {
-  const login = await mailTmLogin(listing.email, listing.password);
-  if (!login.ok) {
-    const err = String(login.error || "");
-    if (err.indexOf("no longer exists") !== -1) {
-      // Already dead on Mail.tm: nothing left to delete — just take
-      // the listing out of the shop.
-      await removeListing(listing.id);
-      return { ok: true, already: true };
+  // v1.24: the token comes from storage (pending row for a mailbox
+  // created moments ago, else the mailbox_tokens table) — the direct
+  // POST /token login is gone. The DELETE below stays direct: it is
+  // the ONE remaining direct call in the whole proxy, because
+  // Hercules exposes no delete endpoint. A listing with no stored
+  // token yet cannot be deleted this way — its token is captured
+  // automatically the next time the mailbox is read in the site.
+  const pendingDel = herculesPendingPeek(listing.email);
+  let delToken = pendingDel ? pendingDel.jwt : "";
+  let accountId = pendingDel ? pendingDel.id : "";
+  if (!delToken) {
+    const stored = await getStoredMailboxToken(listing.email).catch(() => null);
+    if (stored) {
+      delToken = stored.token;
+      accountId = stored.accountId;
     }
-    return { ok: false, error: login.error };
   }
-  // POST /token returns the account id as `id` (the site has always
-  // taken it from there); the JWT `sub` claim is the fallback.
-  const accountId = String(login.id || "") || jwtAccountId(login.token);
+  if (!delToken) {
+    return { ok: false, error: "no stored token for this mailbox — open it once in the site so its token is captured, then delete" };
+  }
+  // The account id rides with the stored token; the JWT payload is
+  // the fallback (same decoding the site has always used).
+  if (!accountId) accountId = jwtAccountId(delToken);
   if (!accountId) {
     return { ok: false, error: "could not determine Mail.tm account id" };
   }
@@ -4208,7 +4242,7 @@ async function deleteListingAccountNow(listing) {
     const timer = setTimeout(() => ctl.abort(), 15000);
     delRes = await fetch(UPSTREAM + "/accounts/" + encodeURIComponent(accountId), {
       method: "DELETE",
-      headers: { Authorization: "Bearer " + login.token, Accept: "application/json" },
+      headers: { Authorization: "Bearer " + delToken, Accept: "application/json" },
       signal: ctl.signal,
     });
     clearTimeout(timer);
@@ -4216,11 +4250,18 @@ async function deleteListingAccountNow(listing) {
     return { ok: false, error: "Mail.tm unreachable: " + String((err && err.message) || err) };
   }
   if (delRes.status !== 204 && delRes.status !== 200 && delRes.status !== 404) {
+    const delText = await delRes.text().catch(() => "");
     let msg = "Mail.tm delete failed (HTTP " + delRes.status + ")";
     try {
-      const d = JSON.parse(await delRes.text());
+      const d = JSON.parse(delText);
       if (d && (d.message || d.detail || d.error)) msg = String(d.message || d.detail || d.error);
     } catch (_) {}
+    // A dead token proves the account is already gone — same
+    // outcome as a 404: just take the listing out of the shop.
+    if (delRes.status === 401 && (msg.indexOf("no longer exists") !== -1 || delText.indexOf("no longer exists") !== -1)) {
+      await removeListing(listing.id);
+      return { ok: true, already: true };
+    }
     return { ok: false, error: msg };
   }
   // 204/200 = deleted now; 404 = already gone — either way the
@@ -4348,14 +4389,16 @@ async function handleAdminDeleteRequestDecide(req, res, id, action) {
 // permanent): NO ONE may delete a MovMail email except Mov himself,
 // through this admin button. The website has no delete path (its
 // Delete is local-only) and the generic forwarder refuses every
-// DELETE /accounts, so this handler calls Mail.tm DIRECTLY (same
-// UPSTREAM + fetch path as mailTmLogin), never through the
-// forwarder. Requires {confirm:true} in the body, so an accidental
-// call can never delete. On success the listing becomes 'removed'
-// and a security event is written. If the account is already dead
-// on Mail.tm (login: "no longer exists") that is NOT an error: the
-// listing is just marked removed. Any other login failure, a missing
-// account id, or a failed DELETE answers 400 and deletes NOTHING.
+// DELETE /accounts, so this handler calls Mail.tm DIRECTLY — the
+// single remaining direct call in the whole proxy (v1.24), because
+// Hercules exposes no delete endpoint. The token for the DELETE
+// comes from storage, never from a direct login. Requires
+// {confirm:true} in the body, so an accidental call can never
+// delete. On success the listing becomes 'removed' and a security
+// event is written. If the account is already dead on Mail.tm
+// ("no longer exists") that is NOT an error: the listing is just
+// marked removed. Any other failure, a missing account id, or a
+// missing stored token answers 400 and deletes NOTHING.
 async function handleAdminMarketListingDeleteAccount(req, res, id) {
   const body = await readJsonBody(req, res, 64 * 1024);
   if (!body) return;
@@ -4386,9 +4429,9 @@ async function handleAdminMarketListingDeleteAccount(req, res, id) {
   sendJson(res, 200, { ok: true, already: done.already, listing: listingAdminFromRow(row || listing) });
 }
 
-// v1.3: re-run the Mail.tm login for one listing and apply the
-// result (good on success, bad on wrong credentials, unchanged on
-// upstream outage). Returns the updated listing (admin shape).
+// v1.3: re-verify one listing through Hercules and apply the
+// result (good on success, bad on proven death, unchanged on
+// anything else). Returns the updated listing (admin shape).
 async function handleAdminMarketListingCheck(req, res, id) {
   const listing = await getListing(id);
   if (!listing) {
@@ -4522,7 +4565,7 @@ function authFailReset(gmail) { authFailures.delete(gmail); }
    gmail per 10 minutes -> 429), but a SEPARATE counter — a mailbox
    token failure must never block the user's sign-in, and vice versa.
    Only hard failures count (unknown address, wrong owner, bad login);
-   a transient Mail.tm 429 (503 mailtm_busy) never counts. A success
+   a transient Hercules outage (503 hercules_busy) never counts. A success
    clears the counter. */
 const mailboxTokenFailures = new Map();
 function mailboxTokenFailBlocked(gmail) {
@@ -4868,14 +4911,19 @@ async function handleMailboxRestore(req, res) {
   const row = await getUserMailboxRow(sess.gmail, address);
   if (!row) { sendJson(res, 404, { ok: false, error: "mailbox not found" }); return; }
   if (!row.password) { sendJson(res, 400, { ok: false, error: "no stored credentials for this mailbox" }); return; }
-  // Log in with the stored password server-side; only the fresh Mail.tm
-  // token (never the password) goes back to the browser. A deleted
-  // Mail.tm account can never be brought back (422) — the login fails
-  // honestly and the website drops the row.
-  const login = await mailTmLogin(row.address, row.password);
-  if (!login.ok) { sendJson(res, 400, { ok: false, error: login.error }); return; }
+  // Verify through Hercules with the stored mailbox token
+  // server-side; only the token (never the password) goes back to
+  // the browser. A deleted Mail.tm account can never be brought
+  // back (422) — the verification fails honestly and the website
+  // drops the row. v1.24: no direct login anymore.
+  const v = await herculesVerifyMailbox(row.address);
+  if (!v.ok) {
+    if (v.kind === "transient") { sendJson(res, 503, { ok: false, error: "hercules_busy" }); return; }
+    sendJson(res, 400, { ok: false, error: v.kind === "dead" ? "This account no longer exists." : (v.error || "mailbox verification failed") });
+    return;
+  }
   sendJson(res, 200, {
-    ok: true, token: login.token, accountId: login.id || "", address: row.address,
+    ok: true, token: v.token, accountId: v.accountId, address: row.address,
     logo: row.logo || "", ip: row.ip_address || "", country: row.ip_country || "",
     city: row.ip_city || "", flag: "",
   });
@@ -4888,12 +4936,16 @@ async function handleMailboxRestore(req, res) {
    temp-mail app). Mail.tm has no password-change API, so a password
    already on a client can never be invalidated — it must live ONLY
    here, on the server. The website keeps no mailbox password after
-   the v1.15 migration; it fetches a fresh Mail.tm JWT here instead.
+   the v1.15 migration; v1.24 returns the mailbox's stored Hercules
+   JWT here instead (verified live through Hercules first).
    The JWT (never the password) is the only thing returned — the
    password never leaves this server in any response, and is never
    logged. Errors: bad/expired session 401; address owned by another
    gmail 403; unknown address 404; Mail.tm rate-limit/unreachable 503
-   {error:"mailtm_busy"} (retryable — NEVER read as a dead mailbox);
+   {error:"hercules_busy"} (retryable — NEVER read as a dead mailbox);
+   mailbox with no stored token yet 400 mailbox_token_missing (not a
+   death — the website keeps the row; the token is harvested on the
+   next successful read on a device that holds it);
    dead mailbox 400 with Mail.tm's "no longer exists" (the website
    drops the row). Rate-limited like signin: 10 hard failures per
    gmail per 10 minutes -> 429; transient 503s never count. */
@@ -4918,21 +4970,29 @@ async function handleMailboxToken(req, res) {
     sendJson(res, 400, { ok: false, error: "no stored credentials for this mailbox" });
     return;
   }
-  // Log in with the stored password server-side; only the fresh Mail.tm
-  // token (never the password) goes back to the browser.
-  const login = await mailTmLogin(row.address, row.password);
-  if (!login.ok) {
-    if (mailTmLoginTransient(login)) {
-      // 429 / unreachable: retryable, never a death, never counted.
-      sendJson(res, 503, { ok: false, error: "mailtm_busy" });
+  // Verify through Hercules with the stored mailbox token
+  // server-side; only the token (never the password) goes back to
+  // the browser. v1.24: no direct login anymore.
+  const v = await herculesVerifyMailbox(row.address);
+  if (!v.ok) {
+    if (v.kind === "transient") {
+      // Hercules busy / unreachable: retryable, never a death, never counted.
+      sendJson(res, 503, { ok: false, error: "hercules_busy" });
+      return;
+    }
+    if (v.kind === "noToken") {
+      // No stored token yet (pre-v1.24 mailbox, not harvested) — a
+      // server-state gap, not a wrong credential: never counts toward
+      // the brute-force guard, and the website keeps the row.
+      sendJson(res, 400, { ok: false, error: "mailbox_token_missing" });
       return;
     }
     mailboxTokenFailRecord(sess.gmail);
-    sendJson(res, 400, { ok: false, error: login.error });
+    sendJson(res, 400, { ok: false, error: v.kind === "dead" ? "This account no longer exists." : (v.error || "mailbox verification failed") });
     return;
   }
   mailboxTokenFailReset(sess.gmail);
-  sendJson(res, 200, { ok: true, token: login.token, accountId: login.id || "", address: row.address });
+  sendJson(res, 200, { ok: true, token: v.token, accountId: v.accountId, address: row.address });
 }
 
 /* --- v1.18: Guerrilla Mail automatic fallback -------------------
@@ -5290,6 +5350,11 @@ async function herculesCreateMailbox(opts) {
       return { ok: false, error: "hercules_failed", status: 500, transient: false };
     }
     if (!data || typeof data !== "object") return { ok: false, error: "hercules_failed", status: 500, transient: false };
+    // v1.24: persist the token + account id server-side
+    // (mailbox_tokens) so restores and liveness never need a login
+    // again. Fire-and-forget — a DB hiccup here must never fail the
+    // create; the harvest picks the token up on the first live read.
+    if (data.address && data.token) storeMailboxToken(String(data.address), String(data.token), String(data.id || "")).catch(() => {});
     return { ok: true, data: data };
   } catch (err) {
     return { ok: false, error: "hercules_unreachable", status: 503, transient: true };
@@ -5312,8 +5377,9 @@ async function handleHerculesMailboxes(req, res) {
   const token = String(r.data.token || "");
   if (!validGmail(address) || !password || !token) { sendJson(res, 500, { ok: false, error: "hercules_failed" }); return; }
   // Server-side only: store the password so the mailbox restores
-  // through POST /api/mailboxes/token (v1.15). The password is NEVER
-  // sent to a browser and NEVER logged.
+  // through POST /api/mailboxes/token (v1.15), and the token itself
+  // is persisted at creation (herculesCreateMailbox -> mailbox_tokens,
+  // v1.24). The password is NEVER sent to a browser and NEVER logged.
   await upsertUserMailbox(sess.gmail, {
     address: address, provider: "mailtm", password: password,
     name: "", logo: "", ipAddress: "", ipCountry: "", ipCity: "",
@@ -5355,7 +5421,8 @@ async function handleHerculesMailboxes(req, res) {
    normalises defensively (string `from`, text-only items, numeric
    dates); the detail keeps text + html[] exactly as Mail.tm
    returns them. If Hercules ever returns an unexpected shape, the
-   emergency fallback below still serves the real Mail.tm data.
+   call answers 500 hercules_failed (fail closed) — there is no
+   direct fallback anymore.
    CREATES: the website generates address+password and POSTs
    /accounts as before. The proxy passes {username, domain} to
    Hercules (which honours them — probe above) and records the
@@ -5375,14 +5442,25 @@ async function handleHerculesMailboxes(req, res) {
    at 240/hour; past the cap the proxy answers 503
    {error:"hercules_budget"} and the website waits. NOTE: the
    300/hour limit is per KEY, shared across both proxies.
-   EMERGENCY FALLBACK (disclosed safety net — Mov can veto it):
-   when Hercules itself errors (network/timeout/429/5xx/401-config)
-   the proxy falls back ONCE to direct api.mail.tm for that call
-   and logs it clearly ("hercules emergency fallback"). It NEVER
-   fires in normal operation. Budget exhaustion does NOT trigger
-   it (the website waits instead). GET /code has no direct
-   equivalent, so it never falls back — the website uses its
-   existing detail fetch instead.
+   NO EMERGENCY FALLBACK (v1.24 — Mov vetoed it): when Hercules
+   itself errors, the proxy FAILS CLOSED with 503 hercules_busy
+   (a Hercules 4xx passes through untouched) and the website waits
+   and retries. Render NEVER calls api.mail.tm directly anymore —
+   the only direct call left in this file is the admin
+   Delete-forever, because Hercules exposes no delete endpoint.
+   Budget exhaustion was never a fallback trigger either (the
+   website waits instead).
+   v1.24 TOKEN STORAGE + HARVEST: the mailbox JWT is persisted
+   server-side at creation (mailbox_tokens table) and harvested from
+   every successful inbox read (the JWT rides in the request's
+   Authorization header and is self-describing), so restores and
+   liveness checks use the stored token and never log in. A mailbox
+   created before v1.24 has no stored token until its owner reads it
+   once in the site — until then its server-side checks answer
+   honestly that it cannot be verified (never a direct call, never
+   a faked result). POST /mailboxes answers 422 for an existing
+   address and there is no /token endpoint (probed live 2026-11-28),
+   so a token can only come from creation or harvest.
    Errors: Convex 429/5xx/unreachable -> 503 {error:"hercules_busy"}
    (retryable); Convex 401 naming the API key -> 500
    {error:"hercules_config"}; Convex 4xx otherwise passes through
@@ -5453,23 +5531,9 @@ function herculesPendingPeek(address) {
   herculesPendingPrune();
   return herculesPending.get(address) || null;
 }
-function herculesLogEmergency(method, path, reason) {
-  console.error("hercules emergency fallback: " + method + " " + path + " — " + reason + " (direct api.mail.tm, once)");
-}
-async function fetchDirectUpstream(method, pathWithQuery, authHeader, body) {
-  const headers = { Accept: "application/json" };
-  if (authHeader) headers.Authorization = authHeader;
-  if (body && body.length) headers["Content-Type"] = "application/json";
-  const r = await fetch(UPSTREAM + pathWithQuery, {
-    method,
-    headers,
-    body: body && body.length ? body : undefined,
-  });
-  const text = await r.text();
-  let data = null;
-  try { data = JSON.parse(text); } catch (_) {}
-  return { status: r.status, text, data };
-}
+// v1.24: fetchDirectUpstream and herculesLogEmergency are DELETED
+// with the emergency fallback — there is no direct call left to
+// make or log (except the admin DELETE, which fetches inline).
 function sendForwarded(res, out) {
   if (out.data !== null && out.data !== undefined) {
     sendJson(res, out.status, out.data);
@@ -5631,14 +5695,139 @@ function herculesMapDetail(d) {
   base.html = html;
   return base;
 }
-async function herculesOrEmergency(r, req, body, method, path) {
-  // Hercules-side failure -> ONE emergency direct call (logged).
-  // Convex 4xx (hercules_upstream) passes through untouched, and a
-  // bad shape (hercules_failed) is treated as a Hercules failure.
-  if (r.ok) return null;
+// v1.24: Hercules failure FAILS CLOSED. The emergency direct
+// fallback is DELETED (Mov vetoed it — Render must never talk to
+// api.mail.tm directly). A 4xx from Hercules passes through
+// untouched; a config problem answers 500; anything else answers
+// 503 hercules_busy and the website waits and retries. There is no
+// direct call left to fall back to.
+function herculesFailClosed(r) {
   if (r.error === "hercules_upstream") return { status: r.status, text: "", data: { message: r.detail || "Bad request" } };
-  herculesLogEmergency(method, path, r.error + (r.detail ? " (" + r.detail + ")" : ""));
-  return fetchDirectUpstream(method, path, req.headers.authorization || "", body);
+  if (r.error === "hercules_config") return { status: 500, text: "", data: { ok: false, error: "hercules_config" } };
+  return { status: 503, text: "", data: { ok: false, error: "hercules_busy" } };
+}
+
+// v1.24: mailbox JWTs persisted server-side (Postgres mailbox_tokens,
+// in-memory Map when DATABASE_URL is unset). The token IS the Mail.tm
+// JWT itself (Hercules returns Mail.tm's own JWT at creation —
+// probed live 2026-11-28, and the admin DELETE works with it).
+// It is NEVER sent to a browser except through the existing restore
+// endpoints (which already return a token to the mailbox's rightful
+// owner) and NEVER logged. The account id rides with it so the
+// admin delete never needs a login. Written at creation
+// (herculesCreateMailbox) and harvested from live reads
+// (harvestMailboxToken); a mailbox created before v1.24 has no row
+// until its owner reads it once in the site.
+const harvestedTokenHashes = new Map(); // address -> sha256(token), this process: skip unchanged DB writes
+function mailboxTokenHash(t) {
+  return crypto.createHash("sha256").update(String(t || "")).digest("hex");
+}
+async function storeMailboxToken(address, token, accountId) {
+  const a = String(address || "").trim().toLowerCase();
+  const t = String(token || "");
+  if (!a || !t) return false;
+  const h = mailboxTokenHash(t);
+  if (harvestedTokenHashes.get(a) === h) return true; // already stored this exact token
+  if (!USE_MEMORY_STORE) {
+    await dbPool.query(
+      "INSERT INTO mailbox_tokens (address, token, account_id, updated_at) VALUES ($1,$2,$3,NOW())" +
+      " ON CONFLICT (address) DO UPDATE SET token = EXCLUDED.token, account_id = EXCLUDED.account_id, updated_at = NOW()",
+      [a, t, String(accountId || "")]
+    );
+  } else {
+    mem.mailboxTokens.set(a, { token: t, accountId: String(accountId || "") });
+  }
+  harvestedTokenHashes.set(a, h);
+  return true;
+}
+async function getStoredMailboxToken(address) {
+  const a = String(address || "").trim().toLowerCase();
+  if (!a) return null;
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query("SELECT token, account_id FROM mailbox_tokens WHERE address = $1", [a]);
+    if (!r.rows[0] || !r.rows[0].token) return null;
+    harvestedTokenHashes.set(a, mailboxTokenHash(r.rows[0].token));
+    return { token: r.rows[0].token, accountId: r.rows[0].account_id || "" };
+  }
+  const row = mem.mailboxTokens.get(a);
+  return row && row.token ? { token: row.token, accountId: row.account_id || "" } : null;
+}
+
+// v1.24 token harvest: every successful inbox read through this
+// proxy carries the mailbox's own JWT (Authorization: Bearer). The
+// JWT is self-describing (address + id in its payload, see
+// jwtClaims) and a 200 from Hercules proves it is valid right now
+// — so the proxy stores it, fire-and-forget, without ever delaying
+// or failing the reply. This is how mailboxes created before v1.24
+// (which have no stored token — only the browser that created them
+// holds one) regain a server-side token: the next successful read
+// on any device harvests it. Never logs the token.
+function harvestMailboxToken(jwt) {
+  try {
+    const c = jwtClaims(jwt);
+    if (!c || !c.address) return;
+    storeMailboxToken(c.address, jwt, c.id).catch(() => {});
+  } catch (_) {}
+}
+
+// v1.24: the ONLY mailbox verification in the proxy — Hercules-only.
+// Replaces mailTmLogin (deleted): the proxy NEVER calls api.mail.tm
+// directly anymore. A JWT for an EXISTING mailbox cannot be minted
+// through Hercules at all (POST /mailboxes answers 422 for an
+// existing address and there is no /token endpoint — probed live
+// 2026-11-28, all of /mailboxes, /token, /login, /accounts, /me
+// 404), so a mailbox with NO stored token (created before v1.24,
+// token not harvested yet) is UNVERIFIABLE — callers must fail
+// closed honestly, never silently, never via a direct call.
+// Returns:
+//   { ok:true, token, accountId } — Hercules answered 200.
+//   { ok:false, kind:"dead", error } — Hercules 401 "This account
+//     no longer exists." (proven live 2026-11-28: a deleted
+//     account's token answers exactly that through Hercules).
+//   { ok:false, kind:"transient", error:"hercules_busy" } — Hercules
+//     429/5xx/unreachable, or the read budget exhausted (retryable,
+//     never a death).
+//   { ok:false, kind:"unknown", error } — Hercules 401 "Invalid JWT
+//     Token" or another 4xx: the token proves nothing (never flip
+//     health red on this, never alarm).
+//   { ok:false, kind:"noToken", error:"mailbox_token_missing" } —
+//     no stored token at all (pre-v1.24 mailbox, not harvested yet).
+//   { ok:false, kind:"config", error:"hercules_config" } — the API
+//     key is missing/wrong (a config problem, not a mailbox problem).
+async function herculesVerifyMailbox(address) {
+  const a = String(address || "").trim().toLowerCase();
+  const pending = herculesPendingPeek(a);
+  let token = pending ? pending.jwt : "";
+  let accountId = pending ? pending.id : "";
+  if (!token) {
+    const stored = await getStoredMailboxToken(a).catch(() => null);
+    if (stored) {
+      token = stored.token;
+      accountId = stored.accountId;
+    }
+  }
+  if (!token) return { ok: false, kind: "noToken", error: "mailbox_token_missing" };
+  if (!accountId) accountId = jwtAccountId(token);
+  // Budget first — an exhausted budget is transient, never a death.
+  if (!herculesReadBudgetTake()) return { ok: false, kind: "transient", error: "hercules_busy" };
+  // One Hercules list read proves the mailbox object exists and the
+  // token works. A success re-persists the token (self-healing: a
+  // verified token is always stored).
+  const r = await herculesGetMessages(token, "");
+  if (r.ok) {
+    await storeMailboxToken(a, token, accountId).catch(() => {});
+    return { ok: true, token, accountId };
+  }
+  if (r.error === "hercules_upstream" && /no longer exists/i.test(r.detail || "")) {
+    return { ok: false, kind: "dead", error: "This account no longer exists." };
+  }
+  if (r.error === "hercules_busy" || r.error === "hercules_unreachable") {
+    return { ok: false, kind: "transient", error: "hercules_busy" };
+  }
+  if (r.error === "hercules_config") {
+    return { ok: false, kind: "config", error: "hercules_config" };
+  }
+  return { ok: false, kind: "unknown", error: String(r.detail || r.error || "hercules_failed") };
 }
 async function herculesCreateAccount(body) {
   let parsed = {};
@@ -5684,7 +5873,7 @@ async function herculesMessages(req) {
   if (!jwt) return { status: 401, text: "", data: { message: "Unauthorized" } };
   const key = herculesCacheKey(req, jwt);
   const cached = herculesCacheGet(herculesListCache, key, HERCULES_LIST_CACHE_TTL_MS);
-  if (cached) return { status: 200, text: "", data: cached };
+  if (cached) { harvestMailboxToken(jwt); return { status: 200, text: "", data: cached }; }
   if (!herculesReadBudgetTake()) return { status: 503, text: "", data: { ok: false, error: "hercules_budget" } };
   const search = new URL(req.url || "/", "http://localhost").search || "";
   const r = await herculesGetMessages(jwt, search);
@@ -5693,36 +5882,39 @@ async function herculesMessages(req) {
     r.messages.forEach((m) => { const x = herculesMapMessage(m); if (x) mapped.push(x); });
     const data = { "hydra:member": mapped, "hydra:totalItems": mapped.length };
     herculesCacheSet(herculesListCache, key, data, 500);
+    harvestMailboxToken(jwt);
     return { status: 200, text: "", data };
   }
-  return herculesOrEmergency(r, req, null, "GET", "/messages" + search);
+  return herculesFailClosed(r);
 }
 async function herculesMessageDetail(req, id) {
   const jwt = bearerJwt(req);
   if (!jwt) return { status: 401, text: "", data: { message: "Unauthorized" } };
   const cached = herculesCacheGet(herculesDetailCache, id, HERCULES_DETAIL_CACHE_TTL_MS);
-  if (cached) return { status: 200, text: "", data: cached };
+  if (cached) { harvestMailboxToken(jwt); return { status: 200, text: "", data: cached }; }
   if (!herculesReadBudgetTake()) return { status: 503, text: "", data: { ok: false, error: "hercules_budget" } };
   const r = await herculesGetMessage(jwt, id);
   if (r.ok) {
     const mapped = herculesMapDetail(r.message);
     if (!mapped) return { status: 500, text: "", data: { ok: false, error: "hercules_failed" } };
     herculesCacheSet(herculesDetailCache, id, mapped, 1000);
+    harvestMailboxToken(jwt);
     return { status: 200, text: "", data: mapped };
   }
-  return herculesOrEmergency(r, req, null, "GET", "/messages/" + id);
+  return herculesFailClosed(r);
 }
 async function herculesCode(req) {
   const jwt = bearerJwt(req);
   if (!jwt) return { status: 401, text: "", data: { message: "Unauthorized" } };
   const key = herculesCacheKey(req, jwt);
   const cached = herculesCacheGet(herculesCodeCache, key, HERCULES_CODE_CACHE_TTL_MS);
-  if (cached) return { status: 200, text: "", data: cached };
+  if (cached) { harvestMailboxToken(jwt); return { status: 200, text: "", data: cached }; }
   if (!herculesReadBudgetTake()) return { status: 503, text: "", data: { ok: false, error: "hercules_budget" } };
   const r = await herculesGetCode(jwt);
   if (r.ok) {
     const data = { code: r.code, messageId: r.messageId };
     herculesCacheSet(herculesCodeCache, key, data, 500);
+    harvestMailboxToken(jwt);
     return { status: 200, text: "", data };
   }
   if (r.error === "hercules_upstream") return { status: r.status, text: "", data: { message: r.detail || "Bad request" } };
@@ -5736,8 +5928,8 @@ async function herculesDomains() {
   const r = await herculesGetDomains();
   if (r.ok) return { status: 200, text: "", data: r.data };
   if (r.error === "hercules_upstream") return { status: r.status, text: "", data: { message: r.detail || "Bad request" } };
-  herculesLogEmergency("GET", "/domains", r.error);
-  return fetchDirectUpstream("GET", "/domains", "", null);
+  // v1.24: fail closed — no direct fallback anymore.
+  return herculesFailClosed(r);
 }
 
 /* --- admin panel password, server-side (token-gated like all /api/admin/*) --- */
@@ -6115,10 +6307,10 @@ const server = http.createServer((req, res) => {
         }
       }
 
-      // v1.22: Hercules-only routing. Every Mail.tm call goes through
-      // Mov's Hercules API (see the v1.22 block above); direct
-      // api.mail.tm is the emergency fallback only, inside the
-      // hercules* helpers. The website's calls are unchanged.
+      // v1.24: Hercules-only routing. Every Mail.tm call goes through
+      // Mov's Hercules API (see the v1.22/v1.24 blocks above); there
+      // is NO direct fallback anymore — a Hercules failure fails
+      // closed (503 hercules_busy). The website's calls are unchanged.
       if (req.method === "POST" && url.pathname === "/accounts") {
         const out = await herculesCreateAccount(body);
         sendJson(res, out.status, out.data);
@@ -6141,8 +6333,7 @@ const server = http.createServer((req, res) => {
         const out = await herculesMessages(req);
         sendForwarded(res, out);
         // Auto-save (fire-and-forget, never delays or fails the
-        // reply): only on a successful response, whether it came
-        // from Hercules or the emergency direct fallback.
+        // reply): only on a successful response from Hercules.
         if (out.data !== null && out.data !== undefined && out.status >= 200 && out.status < 300) {
           const address = addressFromRequest(req);
           const list = Array.isArray(out.data)

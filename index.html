@@ -498,6 +498,17 @@
       .mailbox-del-confirm.show{display:flex}
       .mailbox-del-confirm .btn-sm{margin-left:auto}
 
+      /* ---------- v1.23: mailbox stack (top of the page) ---------- */
+      .mailbox-stack{margin:0 0 22px}
+      .stack-hint{font-size:13px;color:var(--muted);margin:2px 0 14px}
+      .mailbox-row{cursor:pointer}
+      .mailbox-row.active{border-color:var(--accent);box-shadow:var(--shadow),0 0 0 1px var(--accent)}
+      .mailbox-stack-logo{width:28px;height:28px;border-radius:8px;object-fit:cover;flex:0 0 auto}
+      .active-chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:800;color:#fff;background:var(--accent);border-radius:999px;padding:3px 10px;white-space:nowrap}
+      @media (max-width:480px){
+        .mailbox-row{padding:12px}
+      }
+
       /* ---------- Mini modal (save / edit prompts) ---------- */
       .mini-overlay{
         position:fixed;inset:0;background:rgba(8,14,11,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:75;
@@ -1047,7 +1058,7 @@
         </a>
         <nav>
           <a href="#inbox" data-i18n="navInbox">ប្រអប់សារ</a>
-          <a href="#mailboxesBox" data-i18n="navMailboxes">អ៊ីមែលរក្សាទុក</a>
+          <a href="#mailboxStackBox" data-i18n="navMailboxes">អ៊ីមែលរបស់ខ្ញុំ</a>
           <a href="#shopBox" data-i18n="navShop">លក់ Email Account</a>
           <a href="#inbox" data-i18n="navSaved">សាររក្សាទុក</a>
           <a href="#how" data-i18n="navHow">របៀបប្រើ</a>
@@ -1066,6 +1077,30 @@
     </header>
 
     <main>
+      <!-- ===== v1.23: Your emails — ONE stack, newest on top ===== -->
+      <!-- Every mailbox lives here and nowhere else: no Save prompt,
+           no separate saved list, no tabs. Tap a row to use it; Generate adds
+           the new one to the top. -->
+      <div class="mailbox-stack" id="mailboxStackBox">
+        <div class="inbox" style="box-shadow:var(--shadow)">
+          <div class="inbox-head">
+            <h2>
+              <svg viewBox="0 0 24 24"><path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10v4z"/></svg>
+              <span data-i18n="mailboxesTitle">អ៊ីមែលរបស់ខ្ញុំ</span>
+            </h2>
+            <span class="count-badge" id="mailboxCountBadge">0</span>
+          </div>
+          <div style="padding:16px 18px 18px">
+            <p class="stack-hint" data-i18n="stackHint">ចុចអ៊ីមែលណាមួយដើម្បីប្រើវា — អ៊ីមែលថ្មីនឹងឡើងលើគេ</p>
+            <div id="mailboxList"></div>
+            <div class="empty-state" id="mailboxEmptyState" style="padding:28px 16px 30px">
+              <h3 id="mailboxEmptyTitle">មិនទាន់មានអ៊ីមែលទេ</h3>
+              <p id="mailboxEmptyText">ចុច «បង្កើតអ៊ីមែល» — អ៊ីមែលថ្មីនឹងបង្ហាញនៅទីនេះ ហើយនៅរស់ជារៀងរហូត។</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- ===== Email address card ===== -->
       <div class="mail-card">
         <h1 data-i18n="cardTitle">អ៊ីមែលបណ្តោះអាសន្នរបស់អ្នក</h1>
@@ -1095,10 +1130,6 @@
             <button class="btn pill" id="countryBtn" type="button" aria-haspopup="true" aria-expanded="false" data-i18n-aria="countryPickerLabel"><span id="countryBtnLabel">🇰🇭 Cambodia</span></button>
             <span class="country-dropdown" id="countryDropdown" role="listbox" aria-label="Country"></span>
           </span>
-          <button class="btn pill" id="saveBtn" disabled>
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10v4z"/></svg>
-            <span data-i18n="saveEmail">រក្សាទុក</span>
-          </button>
           <button class="btn primary" id="copyBtn" disabled>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>
             <span data-i18n="copy">ចម្លងអ៊ីមែល</span>
@@ -1156,30 +1187,7 @@
         </div>
       </div>
 
-      <!-- ===== Saved mailboxes (named, reusable) ===== -->
-      <div class="mailboxes" id="mailboxesBox">
-        <div class="inbox" style="box-shadow:var(--shadow)">
-          <div class="inbox-head">
-            <h2>
-              <svg viewBox="0 0 24 24"><path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10v4z"/></svg>
-              <span data-i18n="mailboxesTitle">អ៊ីមែលដែលបានរក្សាទុក</span>
-            </h2>
-            <span class="count-badge" id="mailboxCountBadge">0</span>
-          </div>
-          <div style="padding:16px 18px 18px">
-            <div class="mailbox-tabs" role="tablist">
-              <button type="button" class="mailbox-tab active" data-mbtab="free"><span data-i18n="tabFreeEmail">Free Email</span> <span class="tab-count" id="tabFreeCount">0</span></button>
-              <button type="button" class="mailbox-tab" data-mbtab="pro"><span data-i18n="tabProEmail">Pro Email</span> <span class="tab-count" id="tabProCount">0</span></button>
-            </div>
-            <div id="mailboxList"></div>
-            <div class="empty-state" id="mailboxEmptyState" style="padding:28px 16px 30px">
-              <h3 id="mailboxEmptyTitle">មិនទាន់មានអ៊ីមែលដែលបានរក្សាទុក</h3>
-              <p id="mailboxEmptyText">ចុច «រក្សាទុក» នៅខាងលើ ដើម្បីរក្សាអ៊ីមែលនេះទុកប្រើម្តងទៀត — វានឹងមានឈ្មោះ និង Logo របស់វា។</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
+      <!-- v1.23: the mailbox stack moved to the top of the page (mailboxStackBox). -->
       <!-- ===== Email Account Shop (public — browse without sign-in) ===== -->
       <div class="shop" id="shopBox">
         <div class="inbox" style="box-shadow:var(--shadow)">
@@ -1403,7 +1411,7 @@
               <span class="plan-feat" data-i18n="featProtectFull">ការពារពេញលេញ៖ IP + ប្រទេស + ជ្រើស Proxy</span>
               <span class="plan-feat" data-i18n="featCustomNames">ដាក់ឈ្មោះផ្ទាល់ខ្លួន</span>
               <span class="plan-feat" data-i18n="featSavedMailboxes">រក្សាទុកអ៊ីមែល</span>
-              <span class="plan-feat" data-i18n="featRestore">ស្តារអ៊ីមែលឡើងវិញ</span>
+              <span class="plan-feat" data-i18n="featStack">អ៊ីមែលទាំងអស់នៅកន្លែងតែមួយ</span>
               <span class="plan-feat" data-i18n="featSpeedMonthly">ល្បឿនលឿន — រៀងរាល់ 5 វិនាទី</span>
             </span>
           </button>
@@ -1453,20 +1461,6 @@
             <div class="pay-sent-title">✓ <span data-i18n="paySent">បានផ្ញើ — សូមរង់ចាំក្នុងរយៈពេល 24 ម៉ោង</span></div>
             <p data-i18n="paySentNote">Admin ជាធម្មតាអនុម័តក្នុងរយៈពេល 4–5 នាទី, យឺតបំផុត 1 ម៉ោង។ សំណើនេះនឹងផុតកំណត់បន្ទាប់ពី 24 ម៉ោងបើមិនបានអនុម័ត។</p>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ===== Save prompt modal ===== -->
-    <div class="mini-overlay" id="savePromptOverlay" role="dialog" aria-modal="true">
-      <div class="mini-modal">
-        <h3 data-i18n="savePromptTitle">រក្សាអ៊ីមែលនេះទុក?</h3>
-        <p data-i18n="savePromptText">ដាក់ឈ្មោះឲ្យអ៊ីមែលនេះ ដើម្បីងាយស្រួលចាំ និងប្រើម្តងទៀត។</p>
-        <label for="saveNameInput" data-i18n="nameLabel">ឈ្មោះ</label>
-        <input type="text" id="saveNameInput" maxlength="40" data-i18n-placeholder="namePlaceholder" placeholder="ឧ. Google, Muse Ai" />
-        <div class="mini-actions">
-          <button class="btn" id="saveSkipBtn" data-i18n="skipBtn">រំលង</button>
-          <button class="btn primary" id="saveConfirmBtn" data-i18n="saveBtn">រក្សាទុក</button>
         </div>
       </div>
     </div>
@@ -1802,7 +1796,7 @@
            v1.15: the proxy ALSO refuses Mail.tm-bound calls without
            X-MovMail-Version >= 1.15.0 (kill-switch), and the phone
            must never hold a mailbox password again (token endpoint). */
-        var APP_VERSION = "1.22.0";
+        var APP_VERSION = "1.24.0";
         var VERSION_CHECK_MS = 60000;
         /* v1.13: client version handshake. On load and every 60s,
            ask the proxies (never DIRECT — api.mail.tm has no
@@ -2391,16 +2385,15 @@
           var local = loadMailboxes(), changed = false;
           rows.forEach(function(r){
             if (!r || !r.address) return;
-            /* Rows with no name were never saved (synced at creation
-               only, so the daily quota counts them) — they stay off
-               the Saved list until the user saves them with a name. */
-            if (!r.name) return;
+            /* v1.23: rows with no name are stack rows too — every
+               mailbox created (synced at creation, name "") lives in
+               the stack now, on every device. */
             var found = null;
             for (var i = 0; i < local.length; i++){ if (local[i].address === r.address){ found = local[i]; break; } }
             if (found){
               /* Server wins on conflicts — but never touch the local
                  password/token: the server never sends a password. */
-              found.name = r.name;
+              if (r.name) found.name = r.name;
               if (r.logo) found.logo = r.logo;
               if (r.ipAddress) found.ip = r.ipAddress;
               if (r.ipCountry) found.country = r.ipCountry;
@@ -2414,7 +2407,7 @@
             } else {
               local.unshift({
                 id: "mb-" + Date.now().toString(36) + randomStr(6),
-                name: r.name, tier: "free", address: r.address,
+                name: r.name || "", tier: "free", address: r.address,
                 password: "", token: "", accountId: "",
                 ip: r.ipAddress || "", country: r.ipCountry || "", city: r.ipCity || "",
                 flag: "", proxy: "auto", bought: !!r.bought, logo: r.logo || "",
@@ -2913,26 +2906,22 @@ var I18N = {
     "savedLoading": "កំពុងផ្ទុកសារដែលបានរក្សាទុក…",
     "savedLoadFailed": "ផ្ទុកសារដែលបានរក្សាទុកមិនបានសម្រេច។ សូមព្យាយាមម្តងទៀត។",
     "savedRefreshLabel": "ធ្វើឱ្យសារដែលបានរក្សាទុកស្រស់",
-    "navMailboxes": "អ៊ីមែលរក្សាទុក",
+    "navMailboxes": "អ៊ីមែលរបស់ខ្ញុំ",
     "generateIp": "បង្កើត IP",
-    "saveEmail": "រក្សាទុក",
     "openPanel": "បើកផ្ទាំង",
     "ipLabel": "IP",
     "colon": "៖",
     "ipLabel2": "IP / ទីតាំង",
     "ipDisplayNote": "IP សម្រាប់បង្ហាញតែប៉ុណ្ណោះ",
-    "mailboxesTitle": "អ៊ីមែលដែលបានរក្សាទុក",
-    "mailboxEmptyTitle": "មិនទាន់មានអ៊ីមែលដែលបានរក្សាទុក",
-    "mailboxEmptyText": "ចុច «រក្សាទុក» នៅខាងលើ ដើម្បីរក្សាអ៊ីមែលនេះទុកប្រើម្តងទៀត — វានឹងមានឈ្មោះ និង Logo របស់វា។",
-    "savePromptTitle": "រក្សាអ៊ីមែលនេះទុក?",
-    "savePromptText": "ដាក់ឈ្មោះឲ្យអ៊ីមែលនេះ ដើម្បីងាយស្រួលចាំ និងប្រើម្តងទៀត។",
+    "mailboxesTitle": "អ៊ីមែលរបស់ខ្ញុំ",
+    "mailboxEmptyTitle": "មិនទាន់មានអ៊ីមែលទេ",
+    "mailboxEmptyText": "ចុច «បង្កើតអ៊ីមែល» — អ៊ីមែលថ្មីនឹងបង្ហាញនៅទីនេះ ហើយនៅរស់ជារៀងរហូត។",
+    "useBtn": "ប្រើ",
+    "stackHint": "ចុចអ៊ីមែលណាមួយដើម្បីប្រើវា — អ៊ីមែលថ្មីនឹងឡើងលើគេ",
+    "activeChip": "កំពុងប្រើ",
     "nameLabel": "ឈ្មោះ",
-    "namePlaceholder": "ឧ. Google, Muse Ai",
     "saveBtn": "រក្សាទុក",
-    "skipBtn": "រំលង",
-    "restoreBtn": "ប្រើវិញ",
     "editBtn": "កែ",
-    "openBtn": "បើក",
     "deleteMailbox": "លុប",
     "deleteConfirm": "លុបអ៊ីមែលនេះជាអចិន្ត្រៃយ៍? សាររបស់វាក៏នឹងបាត់ដែរ។",
     "deleteYes": "លុប",
@@ -2944,7 +2933,7 @@ var I18N = {
     "proxyAuto": "ស្វ័យប្រវត្តិ",
     "cancelBtn": "បោះបង់",
     "toastSaved": "បានរក្សាអ៊ីមែលទុកហើយ",
-    "toastRestored": "បានយកអ៊ីមែលមកប្រើវិញហើយ",
+    "toastActivated": "បានជ្រើសរើសអ៊ីមែលនេះហើយ",
     "toastDeletedMailbox": "បានលុបអ៊ីមែលជាអចិន្ត្រៃយ៍",
     /* v1.10: delete requests (BLOCKED) — the literal word BLOCKED
        stays in the waiting badge in both languages. */
@@ -2954,7 +2943,7 @@ var I18N = {
     "toastDeleteAlreadyWaiting": "សំណើលុបកំពុងរង់ចាំ admin រួចហើយ",
     "toastDeleteRequestFailed": "ផ្ញើសំណើលុបមិនបានសម្រេច",
     "toastDeletedByAdmin": "Admin បានអនុម័តលុបអ៊ីមែលនេះហើយ",
-    "toastRestoreFailed": "យកអ៊ីមែលមកប្រើវិញមិនបានសម្រេច",
+    "toastActivateFailed": "ជ្រើសរើសអ៊ីមែលនេះមិនបានសម្រេច",
     "toastIpGenerated": "បានបង្កើត IP ថ្មីហើយ",
     "toastNameNeeded": "សូមដាក់ឈ្មោះជាមុន",
     "toastAlreadySaved": "អ៊ីមែលនេះបានរក្សាទុករួចហើយ",
@@ -2999,7 +2988,7 @@ var I18N = {
     /* v1.12: server accounts */
     "authErrTooMany": "ព្យាយាមចូលច្រើនដងពេក។ សូមរង់ចាំប៉ុន្មាននាទីហើយព្យាយាមម្តងទៀត។",
     "authErrNetwork": "មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេបានទេ។ សូមពិនិត្យអ៊ីនធឺណិតហើយព្យាយាមម្តងទៀត។",
-    "toastAccountRestored": "ស្វាគមន៍ត្រឡប់មកវិញ! អ៊ីមែលដែលបានរក្សាទុករបស់អ្នកត្រឡប់មកវិញហើយ។",
+    "toastAccountBack": "ស្វាគមន៍ត្រឡប់មកវិញ! អ៊ីមែលរបស់អ្នកត្រឡប់មកវិញហើយ។",
     "authErrWrongPass": "ពាក្យសម្ងាត់មិនត្រឹមត្រូវ។ សូមព្យាយាមម្តងទៀត។",
     "toastWelcomeBack": "ស្វាគមន៍ត្រឡប់មកវិញ!",
     "comingSoon": "មកដល់ឆាប់ៗនេះ",
@@ -3034,16 +3023,11 @@ var I18N = {
     "probGenFailed": "បង្កើតអ៊ីមែលបរាជ័យ",
     "notifAccountCreated": "បានបង្កើតគណនី",
     "notifEmailGenerated": "បានបង្កើតអ៊ីមែល {addr}",
-    "notifEmailSaved": "បានរក្សាអ៊ីមែល {name} ទុក",
-    "notifRestored": "បានស្តារអ៊ីមែល {addr} ឡើងវិញ",
+    "notifActivated": "កំពុងប្រើអ៊ីមែល {addr}",
     "notifIpGenerated": "បានបង្កើត IP ថ្មី {ip}",
     "limitReachedFree": "ដល់កំណត់ Free ហើយ៖ 10 អ៊ីមែលក្នុងមួយថ្ងៃ — ទិញ Pro ដើម្បីបានគ្មានកំណត់",
     "limitReachedPro": "ដល់កំណត់ Pro ហើយ៖ 100 អ៊ីមែលក្នុងមួយថ្ងៃ — ទិញ Yearly ដើម្បីបានគ្មានកំណត់",
     "countryLocked": "ជាប់សោ — ទិញ Pro ដើម្បីដោះសោប្រទេសទាំងអស់",
-    "tabFreeEmail": "Free Email",
-    "tabProEmail": "Pro Email",
-    "noProEmails": "មិនទាន់មានអ៊ីមែល Pro ទេ",
-    "noProEmailsText": "អ៊ីមែល Pro នឹងបង្ហាញនៅទីនេះ — ទិញ Pro ដើម្បីរក្សាទុកអ៊ីមែល Pro",
     "off50": "បញ្ចុះ 50%",
     "feat10Day": "10 អ៊ីមែលក្នុងមួយថ្ងៃ",
     "feat100Day": "100 អ៊ីមែលក្នុងមួយថ្ងៃ",
@@ -3056,8 +3040,8 @@ var I18N = {
     "featOneMailbox": "អ៊ីមែលសកម្ម 1",
     "featStdDomains": "Domain ធម្មតា",
     "featCustomNames": "ដាក់ឈ្មោះផ្ទាល់ខ្លួន",
-    "featSavedMailboxes": "រក្សាទុកអ៊ីមែល",
-    "featRestore": "ស្តារអ៊ីមែលឡើងវិញ",
+    "featSavedMailboxes": "អ៊ីមែលនៅរស់ជារៀងរហូត",
+    "featStack": "អ៊ីមែលទាំងអស់នៅកន្លែងតែមួយ",
     "featAdminSupport": "ជំនួយពី Admin",
     "featPriority": "អាទិភាព",
     "featAllMonthly": "គ្រប់យ៉ាងនៅក្នុង Pro ប្រចាំខែ",
@@ -3199,7 +3183,7 @@ var I18N = {
     "marketOrderPending": "កំពុងរង់ចាំ Admin អនុម័ត",
     "marketOrderApproved": "បានអនុម័ត",
     "myOrdersTitle": "ការបញ្ជាទិញរបស់ខ្ញុំ",
-    "restoreBoughtBtn": "យកមកប្រើ",
+    "useBoughtBtn": "ប្រើ",
     "reportTitle": "តើអ៊ីមែលនេះប្រើបានទេ?",
     "reportWorks": "✅ ដំណើរការ",
     "reportFailed": "❌ មិនដំណើរការ",
@@ -3225,8 +3209,8 @@ var I18N = {
     "supportYou": "អ្នក",
     "supportAdmin": "Admin",
     "supportReplyBellTitle": "💬 ចម្លើយពី admin",
-    "restoreBoughtSuccess": "បានយកអ៊ីមែលដែលទិញមកប្រើហើយ",
-    "restoreBoughtFailed": "យកអ៊ីមែលមកប្រើវិញមិនបានសម្រេច",
+    "useBoughtSuccess": "បានយកអ៊ីមែលដែលទិញមកប្រើហើយ",
+    "useBoughtFailed": "យកអ៊ីមែលមកប្រើវិញមិនបានសម្រេច",
     "marketRevealing": "កំពុងបង្ហាញអ៊ីមែល…",
     "marketHealthGood": "ដំណើរការល្អ",
     "marketNew": "ថ្មី",
@@ -3354,26 +3338,22 @@ var I18N = {
     "savedLoading": "Loading saved messages…",
     "savedLoadFailed": "Could not load saved messages. Please try again.",
     "savedRefreshLabel": "Refresh saved messages",
-    "navMailboxes": "Saved emails",
+    "navMailboxes": "My emails",
     "generateIp": "Generate IP",
-    "saveEmail": "Save",
     "openPanel": "Open panel",
     "ipLabel": "IP",
     "colon": ":",
     "ipLabel2": "IP / Location",
     "ipDisplayNote": "Display only",
-    "mailboxesTitle": "Saved emails",
-    "mailboxEmptyTitle": "No saved emails yet",
-    "mailboxEmptyText": "Click “Save” above to keep this email for later — it will have a name and its own logo.",
-    "savePromptTitle": "Save this email?",
-    "savePromptText": "Give this email a name so you can find and reuse it later.",
+    "mailboxesTitle": "My emails",
+    "mailboxEmptyTitle": "No emails yet",
+    "mailboxEmptyText": "Tap “Generate Email” — new emails appear here and stay alive forever.",
+    "useBtn": "Use",
+    "stackHint": "Tap any email to use it — new emails go on top",
+    "activeChip": "In use",
     "nameLabel": "Name",
-    "namePlaceholder": "e.g. Google, Muse Ai",
     "saveBtn": "Save",
-    "skipBtn": "Skip",
-    "restoreBtn": "Restore",
     "editBtn": "Edit",
-    "openBtn": "Open",
     "deleteMailbox": "Delete",
     "deleteConfirm": "Delete this email forever? Its messages will be gone too.",
     "deleteYes": "Delete",
@@ -3385,7 +3365,7 @@ var I18N = {
     "proxyAuto": "Auto",
     "cancelBtn": "Cancel",
     "toastSaved": "Email saved",
-    "toastRestored": "Email restored",
+    "toastActivated": "Now using this email",
     "toastDeletedMailbox": "Email deleted permanently",
     /* v1.10: delete requests (BLOCKED) — the literal word BLOCKED
        stays in the waiting badge in both languages. */
@@ -3395,7 +3375,7 @@ var I18N = {
     "toastDeleteAlreadyWaiting": "A delete request is already waiting for the admin",
     "toastDeleteRequestFailed": "Could not send the delete request",
     "toastDeletedByAdmin": "The admin approved deleting this email",
-    "toastRestoreFailed": "Could not restore this email",
+    "toastActivateFailed": "Could not switch to this email",
     "toastIpGenerated": "New IP generated",
     "toastNameNeeded": "Please enter a name first",
     "toastAlreadySaved": "This email is already saved",
@@ -3440,7 +3420,7 @@ var I18N = {
     /* v1.12: server accounts */
     "authErrTooMany": "Too many failed attempts. Try again in a few minutes.",
     "authErrNetwork": "Could not reach the server. Check your connection and try again.",
-    "toastAccountRestored": "Welcome back! Your saved emails are back.",
+    "toastAccountBack": "Welcome back! Your emails are back.",
     "authErrWrongPass": "Wrong password. Please try again.",
     "toastWelcomeBack": "Welcome back!",
     "comingSoon": "Coming soon",
@@ -3475,16 +3455,11 @@ var I18N = {
     "probGenFailed": "Email generation failed",
     "notifAccountCreated": "Account created",
     "notifEmailGenerated": "Email created: {addr}",
-    "notifEmailSaved": "Email saved: {name}",
-    "notifRestored": "Mailbox restored: {addr}",
+    "notifActivated": "Now using {addr}",
     "notifIpGenerated": "New IP generated: {ip}",
     "limitReachedFree": "Free limit reached: 10 emails per day — upgrade to Pro for unlimited",
     "limitReachedPro": "Pro limit reached: 100 emails per day — upgrade to Yearly for unlimited",
     "countryLocked": "Locked — upgrade to Pro to unlock all countries",
-    "tabFreeEmail": "Free Email",
-    "tabProEmail": "Pro Email",
-    "noProEmails": "No Pro emails yet",
-    "noProEmailsText": "Pro emails will appear here — upgrade to Pro to save Pro emails",
     "off50": "50% off",
     "feat10Day": "10 emails per day",
     "feat100Day": "100 emails per day",
@@ -3497,8 +3472,8 @@ var I18N = {
     "featOneMailbox": "1 active mailbox",
     "featStdDomains": "Standard domains",
     "featCustomNames": "Custom names",
-    "featSavedMailboxes": "Saved mailboxes",
-    "featRestore": "Restore mailboxes",
+    "featSavedMailboxes": "Emails stay alive forever",
+    "featStack": "All your emails in one place",
     "featAdminSupport": "Admin support",
     "featPriority": "Priority",
     "featAllMonthly": "Everything in Pro Monthly",
@@ -3640,7 +3615,7 @@ var I18N = {
     "marketOrderPending": "Waiting for admin approval",
     "marketOrderApproved": "Approved",
     "myOrdersTitle": "My orders",
-    "restoreBoughtBtn": "Restore",
+    "useBoughtBtn": "Use",
     "reportTitle": "Did this email work for you?",
     "reportWorks": "✅ It works",
     "reportFailed": "❌ It doesn't work",
@@ -3666,8 +3641,8 @@ var I18N = {
     "supportYou": "You",
     "supportAdmin": "Admin",
     "supportReplyBellTitle": "💬 Reply from admin",
-    "restoreBoughtSuccess": "Bought email restored",
-    "restoreBoughtFailed": "Could not restore this email",
+    "useBoughtSuccess": "Now using your bought email",
+    "useBoughtFailed": "Could not use this email",
     "marketRevealing": "Revealing email…",
     "marketHealthGood": "Working",
     "marketNew": "New",
@@ -3775,7 +3750,7 @@ var I18N = {
           /* v1.20.1 (auto-restore on limit): true once sign-in has
              auto-restored the newest saved mailbox because creation
              was refused by the daily limit — at most once per sign-in. */
-          autoRestoredOnLimit: false,
+          autoActivatedOnLimit: false,
           /* v1.21 (Hercules fallback): true once the proxy has
              answered "hercules_config" (no/bad API key on the
              server) — later retry cycles skip Hercules instead of
@@ -3957,7 +3932,7 @@ var I18N = {
           }
         }
         function setBusy(busy){
-          // Only copy/QR/delete/save need a live mailbox. Refresh
+          // Only copy/QR/delete need a live mailbox. Refresh
           // only needs an address on screen: v1.20.1 — a token-less
           // mailbox can still be refreshed (manualRefresh heals the
           // token with one reauth attempt), so the button must stay
@@ -3966,9 +3941,9 @@ var I18N = {
           // again must stay clickable at all times so the user can
           // always retry after a failure — except when the plan's
           // daily quota is used up, when Generate is disabled
-          // (restoring a saved mailbox still works, and the quota
+          // (switching to another mailbox in the stack still works, and the quota
           // resets at local midnight).
-          ["copyBtn","qrBtn","deleteBtn","saveBtn"].forEach(function(id){
+          ["copyBtn","qrBtn","deleteBtn"].forEach(function(id){
             $(id).disabled = busy || !hasLiveMailbox();
           });
           $("inboxRefreshBtn").disabled = busy || !state.address;
@@ -4101,8 +4076,8 @@ var I18N = {
             return;
           }
           /* Plan daily limit: block a new address once the day's
-             quota is used up. Restores do not call createAccount,
-             so they are never counted or blocked. */
+             quota is used up. Activating a stack mailbox does not
+             call createAccount, so it is never counted or blocked. */
           if (state.blocked){
             state.creating = false;
             if (!state.address) addrText.textContent = "—";
@@ -4215,21 +4190,14 @@ var I18N = {
             /* A new address was created: count it against the daily
                quota and log it in the bell. */
             recordEmailCreated();
-            /* v1.12: push the new address to the server at creation
-               (unsaved, name "") so the daily quota counts it on
-               every device; a fresh device sees the same count.
-               v1.15: once the server confirms it holds the password,
-               wipe the local copy at once (state + session + any
-               saved row) — the phone must never keep it. Until the
-               server confirms, the password stays local: it is the
-               only copy, and losing it would orphan the mailbox. */
-            syncOneMailbox({
-              address: state.address, password: state.password, name: "",
-              ip: currentIp ? currentIp.ip : "", country: currentIp ? currentIp.country : "",
-              city: currentIp ? currentIp.city : "", flag: currentIp ? currentIp.flag : "",
-              bought: false, logo: "", listingId: "", createdAt: state.createdAt || new Date().toISOString(),
-              provider: state.provider || "mailtm", guerrillaExpiresAt: state.guerrillaExpiresAt || 0
-            }).then(function(data){
+            /* v1.23: the new mailbox joins the stack at the top at
+               once — no Save prompt, no Restore. autoAddCurrentToStack
+               syncs the row to the server (name "", so the daily
+               quota counts it on every device); once the server
+               confirms it holds the password (v1.15), the local copy
+               is wiped — the phone must never keep it. */
+            var _stackSync = autoAddCurrentToStack();
+            if (_stackSync && _stackSync.then) _stackSync.then(function(data){
               if (data && data.ok) wipeLocalMailboxPassword(state.address);
             });
             addNotification("notifEmailGenerated", {addr: state.address});
@@ -4294,11 +4262,11 @@ var I18N = {
                transfers to the buyer, it is not the seller's any
                more), so deleting the account from one device would
                destroy the other side's purchased mailbox: no new
-               codes, Refresh failed, Restore failed. Delete only
+               codes, Refresh failed, switch failed. Delete only
                takes the mailbox off THIS screen — the token is
                discarded locally and its saved messages are deleted
                above; the Mail.tm account itself stays alive, unpolled,
-               so the buyer can always bring it back with Restore. */
+               so the buyer can always use it again from the stack. */
             showToast(t("toastDeleted"));
             createAccount();
           });
@@ -4664,35 +4632,37 @@ var I18N = {
           }
           return null;
         }
-        function saveCurrentMailbox(name){
+        /* ---------- v1.23: the stack owns every mailbox ----------
+           Creating a mailbox adds it to the stack at once — no Save
+           prompt, no name, no Restore. The row is synced to the
+           server (v1.12) so a fresh device restores the whole stack.
+           Returns the sync promise (or null when there is no live
+           mailbox); callers chain the v1.15 password wipe on it. */
+        function autoAddCurrentToStack(){
           if (!state.address || !hasLiveMailbox()) return null;
-          name = String(name || "").trim();
-          if (!name) return null;
           var list = loadMailboxes();
+          var existing = null;
           for (var i = 0; i < list.length; i++){
-            if (list[i].address === state.address){
-              list[i].name = name;
-              if (state.accountId) list[i].accountId = state.accountId;
-              list[i].provider = state.provider || "mailtm";
-              list[i].guerrillaExpiresAt = state.guerrillaExpiresAt || 0;
-              if (!list[i].tier) list[i].tier = "free";
-              if (currentIp) list[i].ip = currentIp.ip, list[i].country = currentIp.country, list[i].city = currentIp.city, list[i].flag = currentIp.flag;
-              /* v1.3: a saved bought mailbox keeps its listing logo +
-                 bought flag, so its IP is never regenerated later.
-                 v1.7b: keep its listing id too (server re-login). */
-              if (currentBought){ list[i].bought = true; if (currentBoughtLogo) list[i].logo = currentBoughtLogo; if (currentBoughtListingId) list[i].listingId = currentBoughtListingId; }
-              saveMailboxes(list);
-              syncOneMailbox(list[i]); /* v1.12: push the saved row to the server */
-              renderMailboxes();
-              return list[i];
-            }
+            if (list[i].address === state.address){ existing = list[i]; break; }
+          }
+          if (existing){
+            existing.provider = state.provider || "mailtm";
+            existing.guerrillaExpiresAt = state.guerrillaExpiresAt || 0;
+            if (state.accountId) existing.accountId = state.accountId;
+            if (state.token) existing.token = state.token;
+            if (currentIp){ existing.ip = currentIp.ip; existing.country = currentIp.country; existing.city = currentIp.city; existing.flag = currentIp.flag; }
+            /* v1.3: a bought mailbox keeps its listing logo + IP. */
+            if (currentBought){ existing.bought = true; if (currentBoughtLogo) existing.logo = currentBoughtLogo; if (currentBoughtListingId) existing.listingId = currentBoughtListingId; }
+            saveMailboxes(list);
+            renderMailboxes();
+            return syncOneMailbox(existing);
           }
           var mb = {
             id: "mb-" + Date.now().toString(36) + randomStr(6),
-            name: name,
+            name: "",
             tier: getCurrentPlan() === "free" ? "free" : "pro",
             address: state.address,
-            /* v1.15: never write a mailbox password to a saved row
+            /* v1.15: never write a mailbox password to a stack row
                once the server confirmed it holds it (passwordSynced).
                Until then the password is stored — it is the only
                copy, and the migration uploads + wipes it on the next
@@ -4709,25 +4679,27 @@ var I18N = {
             bought: currentBought,
             logo: currentBoughtLogo || "",
             listingId: currentBoughtListingId || "",
-            createdAt: new Date().toISOString()
+            createdAt: state.createdAt || new Date().toISOString()
           };
           list.unshift(mb);
           saveMailboxes(list);
-          syncOneMailbox(mb); /* v1.12: push the saved row to the server */
           renderMailboxes();
-          return mb;
+          return syncOneMailbox(mb);
         }
-        /* Saved mailboxes are split into Free / Pro tabs. A mailbox
-           keeps the tier it was saved with ("free" or "pro");
-           mailboxes saved before tiers existed count as Free. */
-        var mailboxTab = "free";
-        function mailboxTier(mb){ return mb && mb.tier === "pro" ? "pro" : "free"; }
+        /* ---------- v1.23: ONE mailbox stack, newest on top ----------
+           No Save prompt, no Restore, no Free/Pro tabs. Every mailbox
+           the user ever created lives here — temp, bought, Guerrilla —
+           in one list, newest first. Tap a row (or Use) to make it the
+           active mailbox; the inbox switches to its messages. A row
+           never leaves the stack except on an explicit Delete tap:
+           temp rows delete locally (the Mail.tm account stays alive),
+           shop/bought rows file a v1.10 delete REQUEST instead. */
         function renderMailboxes(){
           var listEl = $("mailboxList"), empty = $("mailboxEmptyState");
           if (!listEl || !empty) return;
           var list = loadMailboxes();
-          /* A saved mailbox must never show an empty profile: fill in
-             a missing IP automatically and persist it. */
+          /* A mailbox must never show an empty profile: fill in a
+             missing IP automatically and persist it. */
           var mbChanged = false;
           list.forEach(function(mb){
             if (!mb.ip){
@@ -4737,50 +4709,47 @@ var I18N = {
             }
           });
           if (mbChanged) saveMailboxes(list);
-          var freeCount = 0, proCount = 0;
-          list.forEach(function(mb){ if (mailboxTier(mb) === "pro") proCount++; else freeCount++; });
-          var tf = $("tabFreeCount"), tp = $("tabProCount");
-          if (tf) tf.textContent = freeCount;
-          if (tp) tp.textContent = proCount;
           $("mailboxCountBadge").textContent = list.length;
-          var shown = list.filter(function(mb){ return mailboxTier(mb) === mailboxTab; });
+          /* Newest first by creation date; rows without a date keep
+             their stored order (stable sort). */
+          var shown = list.slice().sort(function(a, b){
+            var ta = Date.parse(a.createdAt || "") || 0;
+            var tb = Date.parse(b.createdAt || "") || 0;
+            return tb - ta;
+          });
           listEl.innerHTML = "";
           empty.style.display = shown.length ? "none" : "block";
           if (!shown.length){
-            if (mailboxTab === "pro"){
-              $("mailboxEmptyTitle").textContent = t("noProEmails");
-              $("mailboxEmptyText").textContent = t("noProEmailsText");
-            } else {
-              $("mailboxEmptyTitle").textContent = t("mailboxEmptyTitle");
-              $("mailboxEmptyText").textContent = t("mailboxEmptyText");
-            }
+            $("mailboxEmptyTitle").textContent = t("mailboxEmptyTitle");
+            $("mailboxEmptyText").textContent = t("mailboxEmptyText");
             return;
           }
           shown.forEach(function(mb){
+            var isActive = !!state.address && mb.address === state.address;
             var row = document.createElement("div");
-            row.className = "mailbox-row";
-            row.appendChild(avatarForMailboxName(mb.name));
+            row.className = "mailbox-row" + (isActive ? " active" : "");
+            /* Bought rows keep their listing logo (v1.3) so a shop
+               email is recognisable at a glance. */
+            if (mb.bought && mb.logo){
+              var lg = document.createElement("img");
+              lg.className = "mailbox-stack-logo";
+              lg.src = mb.logo;
+              lg.alt = "";
+              row.appendChild(lg);
+            }
             var main = document.createElement("div");
             main.className = "mailbox-main";
-            var nm = document.createElement("div");
-            nm.className = "mailbox-name";
-            nm.textContent = mb.name;
-            var tb = document.createElement("span");
-            tb.className = "tier-badge " + mailboxTier(mb);
-            tb.textContent = mailboxTier(mb) === "pro" ? "Pro" : "Free";
-            nm.appendChild(tb);
             var ad = document.createElement("div");
             ad.className = "mailbox-addr mono";
             ad.textContent = mb.address;
-            var ip = document.createElement("div");
-            ip.className = "mailbox-ip";
-            var ipTxt = document.createElement("span");
-            ipTxt.innerHTML = "<b>" + escapeHtml(mb.ip || "—") + "</b> · " + escapeHtml((mb.flag ? mb.flag + " " : "") + (mb.country || "") + (mb.city ? ", " + mb.city : ""));
-            ip.appendChild(ipTxt);
             var meta = document.createElement("div");
             meta.className = "mailbox-ip";
+            var pb = document.createElement("span");
+            pb.className = "saved-chip provider-badge";
+            pb.textContent = mb.provider === "guerrilla" ? "Guerrilla" : "Mail.tm";
+            meta.appendChild(pb);
             var metaTxt = document.createElement("span");
-            metaTxt.textContent = t("proxyLabel") + t("colon") + " " + proxyLabelText(mb.proxy || "auto") + " · " + t("createdLabel") + t("colon") + " " + shortDate(mb.createdAt);
+            metaTxt.textContent = " · " + t("createdLabel") + t("colon") + " " + shortDate(mb.createdAt);
             meta.appendChild(metaTxt);
             if (profileComplete(mb, mb.proxy || "auto")){
               var vb = document.createElement("span");
@@ -4789,7 +4758,21 @@ var I18N = {
               vb.textContent = "✓ " + t("verifiedBadge");
               meta.appendChild(vb);
             }
-            main.appendChild(nm); main.appendChild(ad); main.appendChild(ip); main.appendChild(meta);
+            if (isActive){
+              var ac = document.createElement("span");
+              ac.className = "active-chip";
+              ac.style.marginLeft = "6px";
+              ac.textContent = "● " + t("activeChip");
+              meta.appendChild(ac);
+            }
+            main.appendChild(ad);
+            main.appendChild(meta);
+            if (mb.bought){
+              var bc = document.createElement("span");
+              bc.className = "bought-chip";
+              bc.textContent = t("marketBoughtLabel");
+              main.appendChild(bc);
+            }
             /* v1.10: a pending delete request shows the BLOCKED
                waiting badge — the mailbox stays alive and usable
                while the admin decides. */
@@ -4813,8 +4796,9 @@ var I18N = {
               actions.appendChild(b);
               return b;
             }
-            smBtn(t("restoreBtn"), "primary", function(){ restoreMailbox(mb); });
-            smBtn(t("openBtn"), "", function(){ openFloatPanel(mb); });
+            var useBtn = smBtn(t("useBtn"), "primary", function(){ activateMailbox(mb); });
+            if (isActive) useBtn.disabled = true;
+            smBtn(t("copy"), "", function(){ if (mb.address) copyText(mb.address, t("toastCopiedEmail")); });
             smBtn(t("editBtn"), "", function(){ openEditModal(mb); });
             if (isCurrentUserAdmin()) smBtn(t("sellBtn"), "", function(){ openSellModal(mb); });
             smBtn(t("deleteMailbox"), "danger", function(){ showDeleteConfirm(row, mb); });
@@ -4844,17 +4828,14 @@ var I18N = {
             del.appendChild(delTxt); del.appendChild(noBtn); del.appendChild(yesBtn);
             row.appendChild(del);
             row._delConfirm = del;
+            /* Tap the row itself (not a button) to use this mailbox. */
+            row.addEventListener("click", function(e){
+              if (e.target.closest("button") || e.target.closest(".mailbox-del-confirm")) return;
+              if (!isActive) activateMailbox(mb);
+            });
             listEl.appendChild(row);
           });
         }
-        /* Free / Pro mailbox tabs. */
-        Array.prototype.forEach.call(document.querySelectorAll(".mailbox-tab"), function(btn){
-          btn.addEventListener("click", function(){
-            mailboxTab = btn.getAttribute("data-mbtab");
-            Array.prototype.forEach.call(document.querySelectorAll(".mailbox-tab"), function(b){ b.classList.toggle("active", b === btn); });
-            renderMailboxes();
-          });
-        });
         function showDeleteConfirm(row, mb){
           if (row._delConfirm) row._delConfirm.classList.add("show");
         }
@@ -4862,14 +4843,13 @@ var I18N = {
           return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
         }
         function deleteMailbox(mb){
-          /* Permanent delete: the mailbox AND its saved messages.
-             v1.2: the server rows go too (best-effort DELETE
-             /saved?address= — never blocks the UI), and the Mail.tm
-             account is deleted when its id is known (current mailbox,
-             or a saved row that carries accountId — rows saved before
-             v1.2 carry none, so those accounts stay on Mail.tm and
-             only their saved rows are removed; no new proxy endpoint
-             is invented for that). */
+          /* Local-only delete: the stack row AND its saved messages
+             are removed (server rows go too — best-effort DELETE
+             /saved?address= and deleteServerMailbox, never blocking
+             the UI). The Mail.tm account itself is NEVER deleted here
+             (v1.7b / v1.9c): it stays alive on Mail.tm, so the same
+             address can never be re-created, and a bought mailbox
+             keeps working for its buyer. */
           var wasCurrent = mb.address === state.address;
           var list = loadMailboxes().filter(function(m){ return m.address !== mb.address; });
           saveMailboxes(list);
@@ -4884,7 +4864,7 @@ var I18N = {
           /* v1.7b: the Mail.tm account itself is never deleted here
              either — see deleteAndRecreate. Removing a saved row
              only removes it from this device; the account stays
-             alive so it can be Restored again. */
+             alive so it stays usable in the stack. */
           renderMailboxes();
           renderSavedMessages();
           showToast(t("toastDeletedMailbox"));
@@ -5128,8 +5108,8 @@ var I18N = {
               return {ok:true, token: res.token, accountId: res.accountId || ""};
             }).catch(function(err){
               /* v1.10: surface a permanently-gone account (the admin
-                 deleted it for real) so restoreMailbox can drop the
-                 saved row instead of retrying forever. The server
+                 deleted it for real) so activateMailbox can drop the
+                 stack row instead of retrying forever. The server
                  error carries Mail.tm's "no longer exists". */
               var msg = "";
               if (err && err.data && err.data.error) msg = String(err.data.error);
@@ -5206,12 +5186,12 @@ var I18N = {
           return state.reauthServering;
         }
 
-        function restoreMailbox(mb){
+        function activateMailbox(mb){
           /* v1.7b: a bought saved row has no password (the server
-             holds it) — it restores through the server instead. */
+             holds it) — it activates through the server instead. */
           if (!mb || !mb.address) return;
           /* v1.12: a server-pulled row has no password on this device —
-             it restores through the server (reauthServerMailbox below)
+             it activates through the server (reauthServerMailbox below)
              instead of the local password path. */
           /* Re-read the freshest copy from storage first — the row's
              closure may hold a stale token. */
@@ -5258,8 +5238,8 @@ var I18N = {
             fetchSavedMessages(true);
             saveCurrentSession();
             renderMailboxes();
-            showToast(t("toastRestored"));
-            addNotification("notifRestored", {addr: mb.address});
+            showToast(t("toastActivated"));
+            addNotification("notifActivated", {addr: mb.address});
           }
           function fail(){
             state.address = old.address; state.password = old.password;
@@ -5272,7 +5252,7 @@ var I18N = {
             addrText.textContent = state.address || t("addrFailed");
             renderMessages();
             updateProviderBadge();
-            showToast(t("toastRestoreFailed"));
+            showToast(t("toastActivateFailed"));
           }
           /* v1.18: a Guerrilla saved row never touches Mail.tm — no
              /messages probe, no server re-login. Adopt it directly and
@@ -5283,7 +5263,7 @@ var I18N = {
             fetchMessages(true, true).then(function(res){
               if (res && res.ok === false && res.reason === "guerrilla-gone"){
                 dropDeletedMailbox(mb);
-                showToast(t("toastRestoreFailed"));
+                showToast(t("toastActivateFailed"));
               }
             });
             return;
@@ -5396,43 +5376,6 @@ var I18N = {
             }
           });
         }
-
-        /* ---------- save prompt (before generating a new email) ---------- */
-        var savePromptAfter = null;
-        function openSavePrompt(after){
-          savePromptAfter = after || null;
-          $("saveNameInput").value = "";
-          openAnimated($("savePromptOverlay"));
-          setTimeout(function(){ $("saveNameInput").focus(); }, 50);
-        }
-        function closeSavePrompt(){
-          closeAnimated($("savePromptOverlay"), ".mini-modal");
-          savePromptAfter = null;
-        }
-        function maybeSaveBeforeGenerate(after){
-          /* If the current address is not saved yet, ask once whether
-             to save it (with a name) before it is replaced. */
-          if (state.address && hasLiveMailbox() && !findMailbox(state.address)){
-            openSavePrompt(after);
-          } else if (after){
-            after();
-          }
-        }
-        $("saveConfirmBtn").addEventListener("click", function(){
-          var name = $("saveNameInput").value.trim();
-          if (!name){ showToast(t("toastNameNeeded")); $("saveNameInput").focus(); return; }
-          saveCurrentMailbox(name);
-          addNotification("notifEmailSaved", {name: name});
-          showToast(t("toastSaved"));
-          var after = savePromptAfter;
-          closeSavePrompt();
-          if (after) after();
-        });
-        $("saveSkipBtn").addEventListener("click", function(){
-          var after = savePromptAfter;
-          closeSavePrompt();
-          if (after) after();
-        });
 
         /* ---------- edit mailbox modal ---------- */
         var editingMailbox = null;
@@ -6792,7 +6735,7 @@ var I18N = {
             return b;
           }
           fBtn(t("copy"), "", function(){ if (mb.address) copyText(mb.address, t("toastCopiedEmail")); });
-          if (mb.address !== state.address) fBtn(t("restoreBtn"), "primary", function(){ closeFloatPanel(); restoreMailbox(mb); });
+          if (mb.address !== state.address) fBtn(t("useBtn"), "primary", function(){ closeFloatPanel(); activateMailbox(mb); });
           fBtn(t("editBtn"), "", function(){ openEditModal(mb); });
           floatBody.appendChild(acts);
           var msgsWrap = document.createElement("div");
@@ -7648,10 +7591,10 @@ var I18N = {
           else btn.innerHTML = '<span id="authSubmitLabel">' + (authMode === "signin" ? t("signInBtn") : t("createAccountBtn")) + '</span>';
         }
         function finishSignIn(profile, restored){
-          /* v1.20.1 (auto-restore on limit): each sign-in gets one
-             chance to auto-restore the newest saved mailbox if
+          /* v1.20.1 (auto-activate on limit): each sign-in gets one
+             chance to auto-activate the newest stack mailbox if
              creation is refused by the daily limit. */
-          state.autoRestoredOnLimit = false;
+          state.autoActivatedOnLimit = false;
           /* v1.20.1: only kill a pre-sign-in auto-create retry loop
              when the app ALREADY has a live mailbox. v1.20 cleared
              it unconditionally — and when the loop was between
@@ -7669,7 +7612,7 @@ var I18N = {
           syncAccountToServer();
           refreshAccountFromServer();
           updateAvatarUI();
-          showToast(t(restored ? "toastAccountRestored" : "toastWelcomeBack"));
+          showToast(t(restored ? "toastAccountBack" : "toastWelcomeBack"));
           resumePendingMarketBuy();
           loadMyDeleteRequests();
           /* v1.16: re-read the shop after sign-in — the server flags
@@ -7686,18 +7629,18 @@ var I18N = {
             try { curMb = acctData().currentMailbox || null; } catch(e) {}
             if (!curMb || !curMb.address) restoreCurrentSessionOrCreate();
           }
-          /* v1.20.1 (auto-restore on limit): if sign-in still left the
+          /* v1.20.1 (auto-activate on limit): if sign-in still left the
              app with no address because creation was refused by the
-             daily limit, restore the newest saved mailbox instead of
+             daily limit, activate the newest stack mailbox instead of
              leaving the inbox on "Preparing…" forever. A limit refusal
              is synchronous (no create in flight, state.creating is
              false, no retry timer), so this guard is exact — it never
-             fires while a create is running. Restores are never counted
+             fires while a create is running. Activations are never counted
              or blocked by the limit (createAccount's own comment), and
-             restoreMailbox carries the v1.20/v1.20.1 busy handling, so
+             activateMailbox carries the v1.20/v1.20.1 busy handling, so
              the wait line shows if Mail.tm is also limiting. At most
              once per sign-in (flag above). */
-          if (!state.address && !state.creating && !state.blocked && !state.autoRestoredOnLimit && dailyLimitReached()){
+          if (!state.address && !state.creating && !state.blocked && !state.autoActivatedOnLimit && dailyLimitReached()){
             var savedRows = [];
             try { savedRows = loadMailboxes() || []; } catch(e) { savedRows = []; }
             var newestSaved = null;
@@ -7706,7 +7649,7 @@ var I18N = {
               if (!sRow || !sRow.address) continue;
               if (!newestSaved || (sRow.createdAt || "") >= (newestSaved.createdAt || "")) newestSaved = sRow;
             }
-            if (newestSaved){ state.autoRestoredOnLimit = true; restoreMailbox(newestSaved); }
+            if (newestSaved){ state.autoActivatedOnLimit = true; activateMailbox(newestSaved); }
           }
         }
         /* Build/refresh the LOCAL account from the server user data.
@@ -8134,6 +8077,9 @@ var I18N = {
           rememberAddress();
           fetchSavedMessages(true);
           saveCurrentSession();
+          /* v1.23: the session mailbox joins the stack if it is not
+             there yet (legacy unsaved current mailbox). */
+          autoAddCurrentToStack();
         }
         function restoreCurrentSessionOrCreate(){
           var cur = null;
@@ -8465,8 +8411,8 @@ var I18N = {
               var rb = document.createElement("button");
               rb.type = "button";
               rb.className = "btn-sm primary";
-              rb.textContent = t("restoreBoughtBtn");
-              rb.addEventListener("click", function(){ restoreBoughtMailbox({ id: o.listingId }, o); });
+              rb.textContent = t("useBoughtBtn");
+              rb.addEventListener("click", function(){ useBoughtMailbox({ id: o.listingId }, o); });
               row.appendChild(rb);
               /* v1.8: activation report — two taps, plus a reason when
                  it failed. The reason picker toggles open/closed. */
@@ -8678,8 +8624,8 @@ var I18N = {
               var rb2 = document.createElement("button");
               rb2.type = "button";
               rb2.className = "btn-sm primary";
-              rb2.textContent = t("restoreBoughtBtn");
-              rb2.addEventListener("click", function(){ restoreBoughtMailbox(l, order); });
+              rb2.textContent = t("useBoughtBtn");
+              rb2.addEventListener("click", function(){ useBoughtMailbox(l, order); });
               acts.appendChild(rb2);
             } else if (order && order.status === "pending"){
               var pend = document.createElement("span");
@@ -9110,17 +9056,17 @@ var I18N = {
             saveMailboxes(list);
             renderMailboxes();
           })();
-          showToast(t("restoreBoughtSuccess"));
+          showToast(t("useBoughtSuccess"));
           try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch(e) { window.scrollTo(0, 0); }
         }
-        function restoreBoughtMailbox(listing, order){
+        function useBoughtMailbox(listing, order){
           var p = null;
           try { p = loadProfile(); } catch(e) {}
           if (!p || !p.email){ showToast(t("buyNeedSignin")); openAuthModal("signin"); return; }
           apiAdmin("/api/market/restore", { method: "POST", body: { listingId: listing.id, gmail: p.email } }).then(function(res){
-            if (!res || !res.token || !res.address){ showToast(t("restoreBoughtFailed")); return; }
+            if (!res || !res.token || !res.address){ showToast(t("useBoughtFailed")); return; }
             adoptBoughtMailbox(listing, res.token, res.accountId || "", res.address, res);
-          }).catch(function(){ showToast(t("restoreBoughtFailed")); });
+          }).catch(function(){ showToast(t("useBoughtFailed")); });
         }
         $("shopRefreshBtn").addEventListener("click", function(){
           var ic = $("shopRefreshIcon");
@@ -9213,10 +9159,10 @@ var I18N = {
         /* ---------- buttons ---------- */
         $("generateBtn").addEventListener("click", function(){
           if (!guardDailyLimit()) return;
-          maybeSaveBeforeGenerate(function(){
-            showToast(t("toastCreatingNew"));
-            createAccount();
-          });
+          /* v1.23: no Save prompt — the new mailbox joins the stack
+             at the top the moment it is created. */
+          showToast(t("toastCreatingNew"));
+          createAccount();
         });
         /* ---------- country picker (small dropdown, ~5 rows) ---------- */
         function updateCountryBtn(){
@@ -9314,12 +9260,6 @@ var I18N = {
           if (e.key === "Escape") closeCountryDropdown();
         });
 
-        $("saveBtn").addEventListener("click", function(){
-          if (!state.address) return;
-          var saved = findMailbox(state.address);
-          if (saved){ openEditModal(saved); return; }
-          openSavePrompt(null);
-        });
         $("copyBtn").addEventListener("click", function(){
           if (state.address) copyText(state.address, t("toastCopiedEmail"));
         });
