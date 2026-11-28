@@ -1796,7 +1796,7 @@
            v1.15: the proxy ALSO refuses Mail.tm-bound calls without
            X-MovMail-Version >= 1.15.0 (kill-switch), and the phone
            must never hold a mailbox password again (token endpoint). */
-        var APP_VERSION = "1.24.0";
+        var APP_VERSION = "1.25.0";
         var VERSION_CHECK_MS = 60000;
         /* v1.13: client version handshake. On load and every 60s,
            ask the proxies (never DIRECT — api.mail.tm has no
@@ -2267,8 +2267,38 @@
           if (!p) return Promise.resolve(null);
           var tok = sessionTokenFor(p.email);
           if (!tok) return Promise.resolve(null);
-          var list = loadMailboxes().map(mailboxToServerRow);
-          return apiAdmin("/api/mailboxes/sync", { method: "POST", body: { token: tok, mailboxes: list } }).catch(function(){ return null; });
+          var rows = loadMailboxes();
+          var list = rows.map(mailboxToServerRow);
+          /* v1.25 token-sync: also send the JWTs this browser
+             currently holds — the active mailbox's token plus any
+             stack row that has one — keyed by address, so the server
+             can store them in mailbox_tokens and later restores never
+             need a login. Tokens are never logged. */
+          var tokens = {};
+          try {
+            rows.forEach(function(m){ if (m && m.address && m.token) tokens[String(m.address).toLowerCase()] = String(m.token); });
+            if (state.address && state.token) tokens[String(state.address).toLowerCase()] = String(state.token);
+          } catch(e) {}
+          return apiAdmin("/api/mailboxes/sync", { method: "POST", body: { token: tok, mailboxes: list, tokens: tokens } }).then(function(data){
+            /* v1.25 cleanup: the server lists tombstoned addresses
+               found in this batch (wiped by the admin cleanup) — drop
+               those rows from the local stack/localStorage so a
+               re-sync never resurrects them. */
+            if (data && data.ok && Array.isArray(data.deleted) && data.deleted.length){
+              var del = {};
+              data.deleted.forEach(function(a){ del[String(a || "").toLowerCase()] = true; });
+              var rows2 = loadMailboxes().filter(function(m){ return m && m.address && !del[String(m.address).toLowerCase()]; });
+              saveMailboxes(rows2);
+              try {
+                var d = acctData();
+                if (d.currentMailbox && d.currentMailbox.address && del[String(d.currentMailbox.address).toLowerCase()]){ d.currentMailbox = null; }
+                if (Array.isArray(d.addresses)){ d.addresses = d.addresses.filter(function(a){ return !del[String(a || "").toLowerCase()]; }); }
+                saveAcctData(d);
+              } catch(e) {}
+              renderMailboxes();
+            }
+            return data;
+          }).catch(function(){ return null; });
         }
         /* v1.15: wipe ONE mailbox password off this device — in-memory
            state, the saved current-session row and the saved-mailbox

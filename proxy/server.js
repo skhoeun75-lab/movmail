@@ -28,11 +28,20 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-// v1.24: the ONLY direct api.mail.tm call left in this file is the
-// admin Delete-forever (DELETE /accounts/:id, admin-token-gated) —
-// Hercules exposes no delete endpoint. Every other Mail.tm call goes
-// through HERCULES_BASE. If you add a new UPSTREAM use, you are
-// breaking Mov's rule: Render must never talk to api.mail.tm.
+// v1.25: exactly TWO direct api.mail.tm calls exist in this file:
+// (1) the admin Delete-forever (DELETE /accounts/:id,
+// admin-token-gated) — Hercules exposes no delete endpoint. The
+// DELETE fetch lives in the shared deleteMailTmAccount helper, used
+// by the admin Delete-forever AND by the one-time admin cleanup
+// endpoint (POST /api/admin/cleanup-old-mailboxes) — no other direct
+// DELETE site may be added. (2) the scoped reauth login (POST
+// /token, mailTmLoginScoped) — used ONLY when a pre-v1.24 mailbox has
+// no stored token, ONLY from the two reauth endpoints (POST
+// /api/mailboxes/token and POST /api/market/restore), and stored
+// immediately so it happens at most once per old mailbox. Every
+// other Mail.tm call goes through HERCULES_BASE. If you add a new
+// UPSTREAM use, you are breaking Mov's rule: Render must never talk
+// to api.mail.tm.
 const UPSTREAM = "https://api.mail.tm";
 
 // v1.13: single source of truth for the deployed build version.
@@ -45,8 +54,8 @@ const UPSTREAM = "https://api.mail.tm";
 // v1.15: the forwarder also refuses Mail.tm-bound calls from any
 // client older than MIN_CLIENT_VERSION (kill-switch, see the gate
 // below the DELETE /accounts block). Bump both strings together.
-const APP_VERSION = "1.24.0";
-const MIN_CLIENT_VERSION = "1.15.0"; // v1.21: stays — 1.15+ clients hold no passwords and never call DIRECT, so no kill-switch bump is needed; the handshake reloads them to 1.24.0.
+const APP_VERSION = "1.25.0";
+const MIN_CLIENT_VERSION = "1.15.0"; // v1.21: stays — 1.15+ clients hold no passwords and never call DIRECT, so no kill-switch bump is needed; the handshake reloads them to 1.25.0.
 // True when a client version string is at least the minimum (numeric
 // per-part compare; missing, malformed or older versions fail).
 function clientVersionOk(v) {
@@ -617,6 +626,18 @@ const CREATE_API_TABLES_SQL = [
     "  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
     ")",
   ].join("\n"),
+  [
+    // v1.25 cleanup: tombstones for wiped mailboxes. One row per
+    // address ever deleted by the one-time cleanup endpoint — a later
+    // sync from any phone/browser that still holds the address can
+    // never resurrect it (handleMailboxesSync drops tombstoned
+    // addresses from the batch and reports them in `deleted`).
+    // Never a token or password — the address alone.
+    "CREATE TABLE IF NOT EXISTS deleted_mailboxes (",
+    "  address TEXT PRIMARY KEY,",
+    "  deleted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+    ")",
+  ].join("\n"),
 ];
 
 // v1.3 columns added to tables that already exist on Render: CREATE
@@ -727,6 +748,7 @@ const mem = {
   userMailboxes: [], // v1.12: server mailbox rows (per gmail)
   guerrillaSessions: new Map(), // v1.18: address -> {address, sid_token, email_timestamp, created_at, last_seen}
   mailboxTokens: new Map(), // v1.24: address -> {token, accountId} (mailbox JWT, server-side only)
+  deletedMailboxes: new Set(), // v1.25 cleanup: tombstoned addresses (wiped mailboxes) — a sync can never resurrect them
   adminAuth: null, // v1.12: {password_hash} single-row admin password
   listingSeq: 1,
   orderSeq: 1,
@@ -3394,7 +3416,9 @@ async function handleMarketRestore(req, res) {
   }
   // Verify through Hercules with the stored mailbox token
   // server-side; only the token (never the password) goes back to
-  // the browser. v1.24: no direct login anymore.
+  // the browser. v1.25: a listed mailbox with no stored token is
+  // healed by ONE scoped direct login (mailTmLoginScoped) instead of
+  // failing — see the noToken branch below.
   // NOTE (verified live 2026-11-27): a deleted Mail.tm account can
   // NEVER be brought back — POST /accounts with the same address
   // always answers 422 "This value is already used". So there is no
@@ -3403,7 +3427,7 @@ async function handleMarketRestore(req, res) {
   // honestly. The real protection is on the website: Delete never
   // deletes a Mail.tm account at all (v1.7b), so a bought mailbox
   // cannot be destroyed that way again.
-  const v = await herculesVerifyMailbox(listing.email);
+  let v = await herculesVerifyMailbox(listing.email);
   if (!v.ok) {
     // v1.13: the server just learned this listed mailbox is dead —
     // alarm Mov at once (one unread row per listing, deduped inside
@@ -3428,8 +3452,28 @@ async function handleMarketRestore(req, res) {
       sendJson(res, 503, { ok: false, error: "hercules_busy" });
       return;
     }
-    sendJson(res, 400, { ok: false, error: v.error || "mailbox verification failed" });
-    return;
+    if (v.kind === "noToken" && listing.password) {
+      // No stored token yet (pre-v1.24 listing, not harvested) — heal
+      // it with ONE scoped direct login. A failure behaves exactly
+      // like the old noToken path: 400 mailbox_token_missing (or 503
+      // when the login itself was limited/unreachable). Health is
+      // never flipped and no alarm fires here — nothing proved a death.
+      const sc = await mailTmLoginScoped(listing.email, listing.password);
+      if (sc.ok) {
+        // Verified — fall through to the success path below with the
+        // freshly minted token (which is already stored server-side).
+        v = { ok: true, token: sc.token, accountId: sc.accountId };
+      } else if (sc.transient) {
+        sendJson(res, 503, { ok: false, error: "hercules_busy" });
+        return;
+      } else {
+        sendJson(res, 400, { ok: false, error: "mailbox_token_missing" });
+        return;
+      }
+    } else {
+      sendJson(res, 400, { ok: false, error: v.error || "mailbox verification failed" });
+      return;
+    }
   }
   // A successful restore proves the stored credentials work — a listing
   // previously flagged red (bad) goes green again. Best-effort only;
@@ -4204,6 +4248,47 @@ async function getListingByEmail(email) {
   return rows[0] || null;
 }
 
+// The RAW delete of a Mail.tm account by token + account id — the
+// ONLY direct DELETE site in this file (the UPSTREAM "/accounts/"
+// fetch occurs here and nowhere else). Shared by the admin Delete-forever
+// path (deleteListingAccountNow, below) and by the one-time admin
+// cleanup endpoint (POST /api/admin/cleanup-old-mailboxes) — no other
+// caller may be added. Returns {ok:true, alreadyGone} on 200/204
+// (deleted now) and on 404 / 401-"no longer exists" (already gone);
+// {ok:false, error, transient} otherwise (429/5xx/unreachable are
+// transient; other 4xx carry Mail.tm's message). Never logs the
+// token — callers log the address only.
+async function deleteMailTmAccount(token, accountId) {
+  let res = null;
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 15000);
+    res = await fetch(UPSTREAM + "/accounts/" + encodeURIComponent(accountId), {
+      method: "DELETE",
+      headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+      signal: ctl.signal,
+    });
+    clearTimeout(timer);
+  } catch (err) {
+    return { ok: false, transient: true, error: "Mail.tm unreachable: " + String((err && err.message) || err) };
+  }
+  if (res.status === 204 || res.status === 200) return { ok: true, alreadyGone: false };
+  if (res.status === 404) return { ok: true, alreadyGone: true };
+  const delText = await res.text().catch(() => "");
+  let msg = "Mail.tm delete failed (HTTP " + res.status + ")";
+  try {
+    const d = JSON.parse(delText);
+    if (d && (d.message || d.detail || d.error)) msg = String(d.message || d.detail || d.error);
+  } catch (_) {}
+  // A dead token proves the account is already gone — same outcome
+  // as a 404.
+  if (res.status === 401 && (msg.indexOf("no longer exists") !== -1 || delText.indexOf("no longer exists") !== -1)) {
+    return { ok: true, alreadyGone: true };
+  }
+  if (res.status === 429 || res.status >= 500) return { ok: false, transient: true, error: msg };
+  return { ok: false, transient: false, error: msg };
+}
+
 // The REAL delete of a listed Mail.tm account, shared by the v1.9d
 // admin "Delete forever" button and by an approved v1.10 delete
 // request. Returns {ok:true, already} or {ok:false, error}. It never
@@ -4212,11 +4297,13 @@ async function getListingByEmail(email) {
 async function deleteListingAccountNow(listing) {
   // v1.24: the token comes from storage (pending row for a mailbox
   // created moments ago, else the mailbox_tokens table) — the direct
-  // POST /token login is gone. The DELETE below stays direct: it is
-  // the ONE remaining direct call in the whole proxy, because
-  // Hercules exposes no delete endpoint. A listing with no stored
-  // token yet cannot be deleted this way — its token is captured
-  // automatically the next time the mailbox is read in the site.
+  // POST /token login is gone for deletes. The DELETE itself lives in
+  // deleteMailTmAccount (the one direct DELETE site, shared with the
+  // one-time cleanup endpoint) because Hercules exposes no delete
+  // endpoint. A listing with no stored token yet cannot be deleted
+  // this way — its token is captured automatically the next time the
+  // mailbox is read in the site (or minted by the scoped reauth login
+  // on the next restore attempt).
   const pendingDel = herculesPendingPeek(listing.email);
   let delToken = pendingDel ? pendingDel.jwt : "";
   let accountId = pendingDel ? pendingDel.id : "";
@@ -4236,38 +4323,12 @@ async function deleteListingAccountNow(listing) {
   if (!accountId) {
     return { ok: false, error: "could not determine Mail.tm account id" };
   }
-  let delRes = null;
-  try {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 15000);
-    delRes = await fetch(UPSTREAM + "/accounts/" + encodeURIComponent(accountId), {
-      method: "DELETE",
-      headers: { Authorization: "Bearer " + delToken, Accept: "application/json" },
-      signal: ctl.signal,
-    });
-    clearTimeout(timer);
-  } catch (err) {
-    return { ok: false, error: "Mail.tm unreachable: " + String((err && err.message) || err) };
-  }
-  if (delRes.status !== 204 && delRes.status !== 200 && delRes.status !== 404) {
-    const delText = await delRes.text().catch(() => "");
-    let msg = "Mail.tm delete failed (HTTP " + delRes.status + ")";
-    try {
-      const d = JSON.parse(delText);
-      if (d && (d.message || d.detail || d.error)) msg = String(d.message || d.detail || d.error);
-    } catch (_) {}
-    // A dead token proves the account is already gone — same
-    // outcome as a 404: just take the listing out of the shop.
-    if (delRes.status === 401 && (msg.indexOf("no longer exists") !== -1 || delText.indexOf("no longer exists") !== -1)) {
-      await removeListing(listing.id);
-      return { ok: true, already: true };
-    }
-    return { ok: false, error: msg };
-  }
-  // 204/200 = deleted now; 404 = already gone — either way the
-  // account no longer exists, so the listing leaves the shop.
+  const del = await deleteMailTmAccount(delToken, accountId);
+  if (!del.ok) return { ok: false, error: del.error };
+  // Deleted now or already gone — either way the account no longer
+  // exists, so the listing leaves the shop.
   await removeListing(listing.id);
-  return { ok: true, already: delRes.status === 404 };
+  return { ok: true, already: del.alreadyGone };
 }
 
 async function handleMarketDeleteRequestsCreate(req, res) {
@@ -4875,6 +4936,207 @@ async function handleMailboxUpsert(req, res) {
   if (!mb) { sendJson(res, 400, { ok: false, error: "valid mailbox address required" }); return; }
   sendJson(res, 200, { ok: true, mailbox: await upsertUserMailbox(sess.gmail, mb) });
 }
+/* --- v1.25 one-time cleanup: wipe ALL old mailboxes ------------------
+   POST /api/admin/cleanup-old-mailboxes {confirm:true, before:"<ISO>"}
+   Admin-token-gated (same requireAdmin as every /api/admin/* route).
+   The owner's final order 2026-11-28 08:45-08:46: delete ALL old
+   emails, wipe clean everywhere — he only needs his own API now.
+   Scope: user_mailboxes rows for the owner's 3 admin Gmails + the 4
+   known test Gmails with created_at < before. For each row:
+   - Guerrilla: only local data is removed (no account to delete).
+   - Mail.tm: a token is minted first (stored mailbox_tokens token,
+     else ONE scoped login via mailTmLoginScoped), then the account is
+     deleted through the shared deleteMailTmAccount helper (the one
+     direct DELETE site — no new direct-call site is added here).
+   - A listing's account is NEVER deleted: a row that is bought, has
+     a listing_id, or whose address is a live listing's email gets
+     local-only removal (the listing row itself is never touched).
+   - The two keep-list addresses are NEVER deleted, even in scope:
+     wslgtz5kq4@euploading.com (owner's active working mailbox) and
+     66qc6mw6mn@euploading.com (listing 6, the only shop stock).
+   - Every deleted address is tombstoned (deleted_mailboxes): a later
+     sync from any phone/browser can never resurrect it.
+   - Without confirm:true NOTHING is deleted (400).
+   A Mail.tm delete that fails because the account is already dead
+   (404, or 401 "no longer exists", or the scoped login 401s because
+   there is nothing left to log into) still counts as cleaned: the
+   local data is removed and the address is recorded as already-gone,
+   not failed. A transient failure (429/5xx/unreachable, or a
+   reauth that itself went transient) is recorded as failed so the
+   parent can re-run. Returns
+   {deleted:[], kept:[], alreadyGone:[], failed:[{address, reason}]}.
+   Tokens and passwords are NEVER logged — only the address. */
+const CLEANUP_GMAILS = [
+  "sokhoeun7788@gmail.com",
+  "skhoeun75@gmail.com",
+  "hoeunsok138@gmail.com",
+  "v115livetest2026@gmail.com",
+  "v112browsertest2026@gmail.com",
+  "v111buyertest2026@gmail.com",
+  "v114buytest2026@gmail.com",
+];
+const CLEANUP_KEEP = [
+  "wslgtz5kq4@euploading.com", // owner's active working mailbox — NEVER deleted
+  "66qc6mw6mn@euploading.com", // listing 6, the only shop stock — NEVER deleted
+];
+
+async function listCleanupCandidates(gmails, beforeIso) {
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query(
+      "SELECT * FROM user_mailboxes WHERE gmail = ANY($1) AND created_at < $2 ORDER BY created_at ASC, id ASC",
+      [gmails, beforeIso]
+    );
+    return r.rows;
+  }
+  return mem.userMailboxes
+    .filter((x) => gmails.indexOf(x.gmail) !== -1 && String(x.created_at || "") < beforeIso)
+    .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")) || a.id - b.id);
+}
+
+async function recordDeletedMailbox(address) {
+  const a = String(address || "").trim().toLowerCase();
+  if (!a) return;
+  if (!USE_MEMORY_STORE) {
+    await dbPool.query(
+      "INSERT INTO deleted_mailboxes (address) VALUES ($1) ON CONFLICT (address) DO NOTHING",
+      [a]
+    ).catch(() => {});
+    return;
+  }
+  mem.deletedMailboxes.add(a);
+}
+
+async function isDeletedMailbox(address) {
+  const a = String(address || "").trim().toLowerCase();
+  if (!a) return false;
+  if (!USE_MEMORY_STORE) {
+    try {
+      const r = await dbPool.query("SELECT address FROM deleted_mailboxes WHERE address = $1", [a]);
+      return !!r.rows[0];
+    } catch (_) { return false; }
+  }
+  return mem.deletedMailboxes.has(a);
+}
+
+async function deleteSavedMessagesFor(address) {
+  const a = String(address || "").trim().toLowerCase();
+  if (!a) return 0;
+  if (!dbPool) return 0; // the in-memory store has no saved_messages table
+  try {
+    const r = await dbPool.query("DELETE FROM saved_messages WHERE account_address = $1", [a]);
+    return r.rowCount || 0;
+  } catch (_) { return 0; }
+}
+
+async function handleAdminCleanupOldMailboxes(req, res) {
+  const body = await readJsonBody(req, res, 64 * 1024);
+  if (!body) return;
+  if (body.confirm !== true) {
+    sendJson(res, 400, { ok: false, error: "confirm:true required — nothing deleted" });
+    return;
+  }
+  const before = body.before ? new Date(String(body.before)) : null;
+  if (!before || isNaN(before.getTime())) {
+    sendJson(res, 400, { ok: false, error: "valid ISO before timestamp required" });
+    return;
+  }
+  const beforeIso = before.toISOString();
+  let rows;
+  try {
+    rows = await listCleanupCandidates(CLEANUP_GMAILS, beforeIso);
+  } catch (err) {
+    console.error("movmail-proxy: cleanup candidates failed:", err.message);
+    sendJson(res, 500, { ok: false, error: "database unavailable" });
+    return;
+  }
+  const deleted = [], kept = [], alreadyGone = [], failed = [];
+  // Remove every trace of one mailbox row from this server: the row,
+  // its stored token, its saved messages and its Guerrilla session
+  // (a no-op for Mail.tm rows) — then tombstone the address so no
+  // later sync can resurrect it.
+  async function wipeLocal(row, addr) {
+    await deleteUserMailbox(row.gmail, addr).catch(() => {});
+    await deleteStoredMailboxToken(addr).catch(() => {});
+    await deleteSavedMessagesFor(addr).catch(() => {});
+    await deleteGuerrillaSession(addr).catch(() => {});
+    await recordDeletedMailbox(addr);
+  }
+  for (const row of rows) {
+    const addr = String(row.address || "").trim().toLowerCase();
+    if (!addr) continue;
+    if (CLEANUP_KEEP.indexOf(addr) !== -1) { kept.push(addr); continue; }
+    // A listing's account is NEVER deleted (sold listings belong to
+    // their buyers; the listing row itself is never touched): a row
+    // that is bought, carries a listing id, or whose address is a
+    // live listing's email gets local-only removal.
+    let isListingAccount = !!(row.bought || row.listing_id);
+    if (!isListingAccount) {
+      const listing = await getListingByEmail(addr).catch(() => null);
+      if (listing) isListingAccount = true;
+    }
+    if (isListingAccount) {
+      await wipeLocal(row, addr);
+      console.log("cleanup_old_mailbox " + addr + " listing account (local data removed, account kept)");
+      deleted.push(addr);
+      continue;
+    }
+    if (row.provider === "guerrilla") {
+      await wipeLocal(row, addr);
+      console.log("cleanup_old_mailbox " + addr + " guerrilla (local data removed)");
+      deleted.push(addr);
+      continue;
+    }
+    // Mail.tm row: mint a token (stored first, else ONE scoped login),
+    // then delete the account for real through the shared helper.
+    let token = "", accountId = "";
+    const stored = await getStoredMailboxToken(addr).catch(() => null);
+    if (stored && stored.token) {
+      token = stored.token;
+      accountId = stored.accountId || "";
+    } else if (row.password) {
+      const sc = await mailTmLoginScoped(addr, row.password);
+      if (sc.ok) {
+        token = sc.token;
+        accountId = sc.accountId || "";
+      } else if (sc.transient) {
+        failed.push({ address: addr, reason: "reauth transient (hercules_busy)" });
+        continue;
+      } else {
+        // The login 401s: there is nothing left to log into — the
+        // account is already gone (or its password is stale, in
+        // which case the mailbox is unusable through MovMail either
+        // way). Clean the local data and record it as already-gone.
+        await wipeLocal(row, addr);
+        console.log("cleanup_old_mailbox " + addr + " already gone (login failed, local data removed)");
+        alreadyGone.push(addr);
+        continue;
+      }
+    } else {
+      failed.push({ address: addr, reason: "no stored token and no stored password" });
+      continue;
+    }
+    if (!accountId) accountId = jwtAccountId(token);
+    if (!accountId) {
+      failed.push({ address: addr, reason: "could not determine Mail.tm account id" });
+      continue;
+    }
+    const del = await deleteMailTmAccount(token, accountId);
+    if (!del.ok) {
+      failed.push({ address: addr, reason: del.error || "Mail.tm delete failed" });
+      continue;
+    }
+    await wipeLocal(row, addr);
+    if (del.alreadyGone) {
+      console.log("cleanup_old_mailbox " + addr + " already gone (local data removed)");
+      alreadyGone.push(addr);
+    } else {
+      console.log("cleanup_old_mailbox " + addr + " deleted");
+      deleted.push(addr);
+    }
+  }
+  sendJson(res, 200, { ok: true, deleted, kept, alreadyGone, failed });
+}
+
 async function handleMailboxesSync(req, res) {
   const body = await readJsonBody(req, res, MAILBOX_BODY_MAX);
   if (!body) return;
@@ -4887,9 +5149,39 @@ async function handleMailboxesSync(req, res) {
     const mb = cleanMailboxInput(raw);
     if (mb) byAddr.set(mb.address, mb);
   }
+  // v1.25 cleanup: a tombstoned address (wiped by the admin
+  // cleanup) must NEVER be re-upserted — a phone that still holds it
+  // syncs it back otherwise. Tombstoned addresses leave the batch
+  // here (so the token-sync loop below never stores a token for
+  // them either) and are reported in `deleted` so the client drops
+  // its local rows.
+  const tombstoned = [];
+  for (const mb of byAddr.values()) {
+    if (await isDeletedMailbox(mb.address)) tombstoned.push(mb.address);
+  }
+  for (const a of tombstoned) byAddr.delete(a);
   const out = [];
   for (const mb of byAddr.values()) out.push(await upsertUserMailbox(sess.gmail, mb));
-  sendJson(res, 200, { ok: true, mailboxes: out, count: out.length });
+  // v1.25: the browser also sends the mailbox JWTs it currently holds
+  // (active mailbox + stack rows with a token), keyed by address, so
+  // the server can store them in mailbox_tokens and later restores
+  // never need a login. Only for addresses in this sync batch (rows
+  // this user owns), and only when the JWT's own address claim
+  // matches the key — a token is self-describing, so a mismatched
+  // entry is dropped, never stored. A failure here must never break
+  // the sync itself.
+  if (body.tokens && typeof body.tokens === "object") {
+    for (const [addr, tok] of Object.entries(body.tokens)) {
+      try {
+        const a = String(addr || "").trim().toLowerCase();
+        if (!a || !byAddr.has(a)) continue;
+        const c = jwtClaims(tok);
+        if (!c || c.address !== a) continue;
+        await storeMailboxToken(a, String(tok), c.id || "").catch(() => {});
+      } catch (_) {}
+    }
+  }
+  sendJson(res, 200, { ok: true, mailboxes: out, count: out.length, deleted: tombstoned });
 }
 async function handleMailboxDelete(req, res, url) {
   const token = (url.searchParams.get("token") || "").trim() || extractSessionToken(req, null);
@@ -4972,7 +5264,9 @@ async function handleMailboxToken(req, res) {
   }
   // Verify through Hercules with the stored mailbox token
   // server-side; only the token (never the password) goes back to
-  // the browser. v1.24: no direct login anymore.
+  // the browser. v1.25: a pre-v1.24 mailbox with no stored token is
+  // healed by ONE scoped direct login (mailTmLoginScoped) instead of
+  // failing — see the noToken branch below.
   const v = await herculesVerifyMailbox(row.address);
   if (!v.ok) {
     if (v.kind === "transient") {
@@ -4982,8 +5276,18 @@ async function handleMailboxToken(req, res) {
     }
     if (v.kind === "noToken") {
       // No stored token yet (pre-v1.24 mailbox, not harvested) — a
-      // server-state gap, not a wrong credential: never counts toward
+      // server-state gap, not a wrong credential: heal it with ONE
+      // scoped direct login. A failure behaves exactly like the old
+      // noToken path (400 mailbox_token_missing, or 503 when the
+      // login itself was limited/unreachable): never counts toward
       // the brute-force guard, and the website keeps the row.
+      const sc = await mailTmLoginScoped(row.address, row.password);
+      if (sc.ok) {
+        mailboxTokenFailReset(sess.gmail);
+        sendJson(res, 200, { ok: true, token: sc.token, accountId: sc.accountId, address: row.address });
+        return;
+      }
+      if (sc.transient) { sendJson(res, 503, { ok: false, error: "hercules_busy" }); return; }
       sendJson(res, 400, { ok: false, error: "mailbox_token_missing" });
       return;
     }
@@ -5163,6 +5467,19 @@ async function touchGuerrillaSession(address) {
   }
   const s = mem.guerrillaSessions.get(address);
   if (s) s.last_seen = now;
+}
+
+// v1.25 cleanup: forget a Guerrilla session (row wiped). Guerrilla
+// sessions live ~60 min anyway; this just removes the server's copy
+// immediately instead of letting it expire.
+async function deleteGuerrillaSession(address) {
+  address = String(address || "").trim().toLowerCase();
+  if (!address) return false;
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query("DELETE FROM guerrilla_sessions WHERE address = $1", [address]);
+    return (r.rowCount || 0) > 0;
+  }
+  return mem.guerrillaSessions.delete(address);
 }
 /* Re-attach a stale session to the SAME address: set_email_user with
    the address's local part returns a fresh sid_token for that address
@@ -5445,9 +5762,11 @@ async function handleHerculesMailboxes(req, res) {
    NO EMERGENCY FALLBACK (v1.24 — Mov vetoed it): when Hercules
    itself errors, the proxy FAILS CLOSED with 503 hercules_busy
    (a Hercules 4xx passes through untouched) and the website waits
-   and retries. Render NEVER calls api.mail.tm directly anymore —
-   the only direct call left in this file is the admin
-   Delete-forever, because Hercules exposes no delete endpoint.
+   and retries. Render NEVER calls api.mail.tm directly for reads,
+   creates, domains or health checks anymore — the only direct calls
+   left in this file are the admin Delete-forever and the v1.25
+   scoped reauth login (POST /token, only when a pre-v1.24 mailbox
+   has no stored token, only from the two reauth endpoints).
    Budget exhaustion was never a fallback trigger either (the
    website waits instead).
    v1.24 TOKEN STORAGE + HARVEST: the mailbox JWT is persisted
@@ -5457,10 +5776,15 @@ async function handleHerculesMailboxes(req, res) {
    liveness checks use the stored token and never log in. A mailbox
    created before v1.24 has no stored token until its owner reads it
    once in the site — until then its server-side checks answer
-   honestly that it cannot be verified (never a direct call, never
-   a faked result). POST /mailboxes answers 422 for an existing
+   honestly that it cannot be verified. v1.25: the two reauth
+   endpoints (POST /api/mailboxes/token, POST /api/market/restore)
+   heal that gap with ONE scoped direct login (mailTmLoginScoped)
+   instead of failing, and the browser also sends the JWTs it holds
+   in the /api/mailboxes/sync payload (token-sync) so the gap closes
+   for every mailbox the user actually opens. POST /mailboxes answers 422 for an existing
    address and there is no /token endpoint (probed live 2026-11-28),
-   so a token can only come from creation or harvest.
+   so a token can only come from creation, harvest, token-sync, or
+   the v1.25 scoped reauth login.
    Errors: Convex 429/5xx/unreachable -> 503 {error:"hercules_busy"}
    (retryable); Convex 401 naming the API key -> 500
    {error:"hercules_config"}; Convex 4xx otherwise passes through
@@ -5532,8 +5856,9 @@ function herculesPendingPeek(address) {
   return herculesPending.get(address) || null;
 }
 // v1.24: fetchDirectUpstream and herculesLogEmergency are DELETED
-// with the emergency fallback — there is no direct call left to
-// make or log (except the admin DELETE, which fetches inline).
+// with the emergency fallback. v1.25: the only direct calls left are
+// the admin DELETE and the scoped reauth login (mailTmLoginScoped),
+// both fetching inline.
 function sendForwarded(res, out) {
   if (out.data !== null && out.data !== undefined) {
     sendJson(res, out.status, out.data);
@@ -5753,6 +6078,20 @@ async function getStoredMailboxToken(address) {
   return row && row.token ? { token: row.token, accountId: row.account_id || "" } : null;
 }
 
+// v1.25 cleanup: forget a mailbox's stored token (row wiped). Also
+// clears the in-process hash cache so a later store of the same token
+// is not skipped as "already stored".
+async function deleteStoredMailboxToken(address) {
+  const a = String(address || "").trim().toLowerCase();
+  if (!a) return false;
+  harvestedTokenHashes.delete(a);
+  if (!USE_MEMORY_STORE) {
+    const r = await dbPool.query("DELETE FROM mailbox_tokens WHERE address = $1", [a]);
+    return (r.rowCount || 0) > 0;
+  }
+  return mem.mailboxTokens.delete(a);
+}
+
 // v1.24 token harvest: every successful inbox read through this
 // proxy carries the mailbox's own JWT (Authorization: Bearer). The
 // JWT is self-describing (address + id in its payload, see
@@ -5768,6 +6107,82 @@ function harvestMailboxToken(jwt) {
     if (!c || !c.address) return;
     storeMailboxToken(c.address, jwt, c.id).catch(() => {});
   } catch (_) {}
+}
+
+// v1.25: SCOPED reauth login — the second and last direct
+// api.mail.tm call in this file (the other is the admin
+// Delete-forever). Mov's decision 2026-11-28 08:39: MAKE IT WORK, no
+// more questions. The problem: a mailbox created before v1.24 has no
+// stored token (mailbox_tokens is empty for it), the browser does not
+// hold one either, and Hercules CANNOT mint a token for an existing
+// mailbox (probed live 2026-11-28: POST /mailboxes re-create answers
+// 422 "already used", GET /mailboxes/{address} 404, no /token
+// endpoint) — so switching to such a mailbox could never succeed.
+// This function mints a fresh JWT with the server-held TRUE password
+// (the pending record's Hercules password at creation, stored in
+// user_mailboxes / market_listings — never a website-generated one).
+// RULES, enforced here, not by convention:
+//  - Called ONLY from handleMailboxToken, handleMarketRestore, and
+//    handleAdminCleanupOldMailboxes (the one-time admin wipe), and
+//    ONLY when no stored token exists for the mailbox (the two
+//    reauth endpoints reach this after herculesVerifyMailbox answered
+//    noToken; the cleanup reaches it when mailbox_tokens is empty).
+//  - Re-checks mailbox_tokens first: if a token appeared since the
+//    verify (harvest / token-sync), it is returned with NO direct call.
+//  - On success the token is stored in mailbox_tokens IMMEDIATELY,
+//    so this direct call happens at most once per old mailbox, ever.
+//  - The password and the token are NEVER logged and NEVER returned
+//    except as the JWT the existing restore endpoints already return.
+//  - A failure behaves exactly like the old noToken path: callers
+//    answer 400 mailbox_token_missing (or 503 hercules_busy when the
+//    login itself was rate-limited/unreachable) — never a death, never
+//    a dropped row, never counted toward the brute-force guard.
+// Returns {ok:true, token, accountId} or {ok:false, transient}.
+async function mailTmLoginScoped(address, password) {
+  const a = String(address || "").trim().toLowerCase();
+  const pw = String(password || "");
+  if (!a || !pw) return { ok: false, transient: false };
+  // A token may have landed since the verify (harvest/token-sync) —
+  // never call out when storage already has one.
+  const stored = await getStoredMailboxToken(a).catch(() => null);
+  if (stored && stored.token) return { ok: true, token: stored.token, accountId: stored.accountId || "" };
+  let r = null;
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 15000);
+    r = await fetch(UPSTREAM + "/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ address: a, password: pw }),
+      signal: ctl.signal,
+    });
+    clearTimeout(timer);
+  } catch (err) {
+    console.log("scoped_reauth_login " + a + " unreachable: " + String((err && err.message) || err));
+    return { ok: false, transient: true };
+  }
+  if (r.status === 200) {
+    let d = null;
+    try { d = await r.json(); } catch (_) {}
+    const token = d && typeof d.token === "string" ? d.token : "";
+    if (!token) {
+      console.log("scoped_reauth_login " + a + " 200 without token");
+      return { ok: false, transient: false };
+    }
+    const accountId = (d && d.id) ? String(d.id) : jwtAccountId(token);
+    await storeMailboxToken(a, token, accountId).catch(() => {});
+    console.log("scoped_reauth_login " + a + " ok (token stored)");
+    return { ok: true, token, accountId };
+  }
+  if (r.status === 429 || r.status >= 500) {
+    console.log("scoped_reauth_login " + a + " transient HTTP " + r.status);
+    return { ok: false, transient: true };
+  }
+  // 401 (bad password / account gone) and any other 4xx: the login
+  // cannot prove anything — callers answer mailbox_token_missing,
+  // exactly as the old noToken path did.
+  console.log("scoped_reauth_login " + a + " failed HTTP " + r.status);
+  return { ok: false, transient: false };
 }
 
 // v1.24: the ONLY mailbox verification in the proxy — Hercules-only.
@@ -6035,6 +6450,8 @@ async function handleApi(req, res, url) {
       if (req.method === "GET" && p === "/api/admin/auth-status") return handleAdminAuthStatus(req, res);
       if (req.method === "POST" && p === "/api/admin/set-password") return handleAdminSetPassword(req, res);
       if (req.method === "POST" && p === "/api/admin/login") return handleAdminLogin(req, res);
+      /* v1.25: one-time wipe of ALL old mailboxes (owner's final order). */
+      if (req.method === "POST" && p === "/api/admin/cleanup-old-mailboxes") return handleAdminCleanupOldMailboxes(req, res);
       if (req.method === "POST" && p === "/api/admin/block") return handleAdminBlock(req, res);
       if (req.method === "POST" && p === "/api/admin/codes") return handleAdminCodesCreate(req, res);
       if (req.method === "GET" && p === "/api/admin/codes") return handleAdminCodesList(req, res);
